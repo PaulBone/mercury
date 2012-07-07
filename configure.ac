@@ -1182,6 +1182,9 @@ AC_SUBST(LINK_OPT_SEP)
 AC_SUBST(FIX_PATH_FOR_CC)
 AC_SUBST(CYGPATH)
 
+lispdir='${datarootdir}/emacs/site-lisp'
+AC_SUBST(lispdir)
+
 #-----------------------------------------------------------------------------#
 # Check for `-lm': some systems, e.g. MacOS X (Darwin), don't have it.
 # The result of this check may be overridden below.
