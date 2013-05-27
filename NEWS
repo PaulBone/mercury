@@ -4,6 +4,8 @@ NEWS for Mercury 13.05-mc1
 This version of Mercury includes backported features used at Mission
 Critical IT.
 
+* Backport the makeinfo compatibility fix d918a3b54815f4be792fa2a0995b102e6ac91bcd
+
 NEWS for Mercury 13.05
 ----------------------
 
