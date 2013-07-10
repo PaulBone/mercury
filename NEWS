@@ -4,9 +4,12 @@ NEWS for Mercury 13.05-mc1
 This version of Mercury includes backported features used at Mission
 Critical IT.
 
-* Backport the makeinfo compatibility fix d918a3b54815f4be792fa2a0995b102e6ac91bcd
-* Backport version_array fixes for constant stack usage
+* Backport: the makeinfo compatibility fix d918a3b54815f4be792fa2a0995b102e6ac91bcd
+* Backport: version_array fixes for constant stack usage
   470d6d868d99c76552c5e6ae8ffb4fd998dbde1c
+* Backport: We have added a workaround for a problem that was preventing the
+  asm_fast grades working with GCC 4.8.  (Bug #293)
+  3ba581ab286fc6c0f3fcee70f4511efb6dfb4747
 
 NEWS for Mercury 13.05
 ----------------------
