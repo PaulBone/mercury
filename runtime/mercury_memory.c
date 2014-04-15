@@ -2,7 +2,7 @@
 ** vim: ts=4 sw=4 expandtab
 */
 /*
-** Copyright (C) 1994-2000,2002-2004, 2006, 2008, 2011 The University of Melbourne.
+** Copyright (C) 1994-2000,2002-2004, 2006, 2008, 2011, 2014 The University of Melbourne.
 ** This file may only be copied under the terms of the GNU Library General
 ** Public License - see the file COPYING.LIB in the Mercury distribution.
 */
@@ -385,6 +385,23 @@ MR_GC_realloc(void *old_ptr, size_t num_bytes)
 
     return ptr;
 }
+
+#ifdef MR_BOEHM_GC
+void*
+MR_weak_ptr_read_unsafe(void* weak_ptr_) {
+    MR_weak_ptr *weak_ptr = weak_ptr_;
+
+    /*
+    ** Even though we check for NULL in the macro we must re-check here
+    ** while holding the GC's allocation lock.
+    */
+    if (MR_NULL_WEAK_PTR != *weak_ptr) {
+        return GC_REVEAL_POINTER(*weak_ptr);
+    } else {
+        return NULL;
+    }
+}
+#endif
 
 /*---------------------------------------------------------------------------*/
 
