@@ -5,6 +5,8 @@ This version of Mercury includes backported features used at Mission
 Critical IT.
 
 * Backport the makeinfo compatibility fix d918a3b54815f4be792fa2a0995b102e6ac91bcd
+* Backport version_array fixes for constant stack usage
+  470d6d868d99c76552c5e6ae8ffb4fd998dbde1c
 
 NEWS for Mercury 13.05
 ----------------------
