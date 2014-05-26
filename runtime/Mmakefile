@@ -74,6 +74,7 @@ HDRS		=	\
 			mercury_mm_own_stacks.h	\
 			mercury_overflow.h	\
 			mercury_par_builtin.h	\
+			mercury_par_profile.h	\
 			mercury_proc_id.h	\
 			mercury_prof.h		\
 			mercury_prof_mem.h	\
@@ -95,7 +96,6 @@ HDRS		=	\
 			mercury_tags.h		\
 			mercury_term_size.h	\
 			mercury_thread.h	\
-			mercury_threadscope.h	\
 			mercury_timing.h	\
 			mercury_trace_base.h	\
 			mercury_trace_term.h	\
@@ -189,6 +189,7 @@ CFILES		= 	\
 			mercury_mm_own_stacks.c	\
 			mercury_overflow.c	\
 			mercury_par_builtin.c		\
+			mercury_par_profile.c	\
 			mercury_prof.c		\
 			mercury_profiling_builtin.c	\
 			mercury_prof_mem.c	\
@@ -206,7 +207,6 @@ CFILES		= 	\
 			mercury_tabling.c	\
 			mercury_term_size.c	\
 			mercury_thread.c	\
-			mercury_threadscope.c	\
 			mercury_timing.c	\
 			mercury_trace_base.c	\
 			mercury_trace_term.c	\

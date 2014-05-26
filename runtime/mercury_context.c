@@ -53,7 +53,7 @@ ENDINIT
 #include "mercury_memory_handlers.h"
 #include "mercury_context.h"
 #include "mercury_engine.h"             /* for `MR_memdebug' */
-#include "mercury_threadscope.h"        /* for data types and posting events */
+#include "mercury_par_profile.h"        /* for data types and posting events */
 #include "mercury_reg_workarounds.h"    /* for `MR_fd*' stuff */
 
 #ifdef MR_PROFILE_PARALLEL_EXECUTION_SUPPORT

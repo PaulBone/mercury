@@ -13,7 +13,7 @@
 #include "mercury_memory.h"
 #include "mercury_context.h"    /* for MR_do_runnext */
 #include "mercury_thread.h"
-#include "mercury_threadscope.h"
+#include "mercury_par_profile.h"
 
 #include <stdio.h>
 #include <errno.h>
@@ -182,7 +182,7 @@ MR_init_thread(MR_when_to_use when_to_use)
     #ifdef MR_THREADSCOPE
     /*
     ** TSC Synchronization is not used, support is commented out.  See
-    ** runtime/mercury_threadscope.h for an explanation.
+    ** runtime/mercury_par_profiling.h for an explanation.
     **
     if (when_to_use == MR_use_later) {
         MR_threadscope_sync_tsc_slave();

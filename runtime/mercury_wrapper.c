@@ -65,7 +65,7 @@ ENDINIT
 #include    "mercury_memory.h"          /* for MR_copy_string() */
 #include    "mercury_memory_handlers.h" /* for MR_default_handler */
 #include    "mercury_thread.h"          /* for MR_debug_threads */
-#include    "mercury_threadscope.h"
+#include    "mercury_par_builtin.h"
 
 #if defined(MR_HAVE__SNPRINTF) && ! defined(MR_HAVE_SNPRINTF)
   #define snprintf	_snprintf
@@ -713,7 +713,7 @@ mercury_runtime_init(int argc, char **argv)
     #ifdef MR_THREADSCOPE
     /*
     ** TSC Synchronization is not used, support is commented out.
-    ** See runtime/mercury_threadscope.h for an explanation.
+    ** See runtime/mercury_par_profile.h for an explanation.
     **
         for (i = 1; i < MR_num_threads; i++) {
             MR_threadscope_sync_tsc_master();

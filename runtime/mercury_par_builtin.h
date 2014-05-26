@@ -20,7 +20,7 @@ vim: ft=c ts=4 sw=4 et
 
 #include "mercury_context.h"
 #include "mercury_thread.h"
-#include "mercury_threadscope.h"
+#include "mercury_par_profile.h"
 #include "mercury_atomic_ops.h"
 
 /***************************************************************************

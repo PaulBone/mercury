@@ -2,21 +2,21 @@
 ** vim:ts=4 sw=4 expandtab
 */
 /*
-** Copyright (C) 2009-2011 The University of Melbourne.
+** Copyright (C) 2009-2011,2013 The University of Melbourne.
 **
 ** This file may only be copied under the terms of the GNU Library General
 ** Public License - see the file COPYING.LIB in the Mercury distribution.
 */
 
 /*
-** mercury_threadscope.h - defines Mercury threadscope profiling support.
+** mercury_par_profile.h - defines Mercury threadscope profiling support.
 **
 ** See "Parallel Preformance Tuning for Haskell" - Don Jones Jr, Simon Marlow
 ** and Satnam Singh for information about threadscope.
 */
 
-#ifndef MERCURY_THREADSCOPE_H
-#define MERCURY_THREADSCOPE_H
+#ifndef MERCURY_PAR_PROFILE_H
+#define MERCURY_PAR_PROFILE_H
 
 #include "mercury_types.h"      /* for MR_Word, MR_Code, etc */
 #include "mercury_engine.h"
@@ -239,4 +239,4 @@ extern void MR_threadscope_post_log_msg(const char *message);
 
 #endif /* MR_THREADSCOPE */
 
-#endif /* not MERCURY_THREADSCOPE_H */
+#endif /* not MERCURY_PAR_PROFILE_H */
