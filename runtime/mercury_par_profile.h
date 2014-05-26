@@ -2,17 +2,28 @@
 ** vim:ts=4 sw=4 expandtab
 */
 /*
-** Copyright (C) 2009-2011,2013 The University of Melbourne.
+** Copyright (C) 2009-2011,2013-2014 The University of Melbourne.
 **
 ** This file may only be copied under the terms of the GNU Library General
 ** Public License - see the file COPYING.LIB in the Mercury distribution.
 */
 
 /*
-** mercury_par_profile.h - defines Mercury threadscope profiling support.
+** mercury_par_profile.h - defines Mercury parallel profiling support.
 **
-** See "Parallel Preformance Tuning for Haskell" - Don Jones Jr, Simon Marlow
-** and Satnam Singh for information about threadscope.
+** The code in this file and mercury_par_profile.c was originally designed
+** to be compatible with ThreadScope, see:
+**
+**   + Don Jones Jr, Simon Marlow and Satnam Singh: Parallel Preformance
+**     Tuning for Haskell.
+**
+**   + Paul Bone and Zoltan Somogyi: Profiling parallel Mercury programs
+**     with ThreadScope.
+**
+** Maintaining compatibility with ThreadScope has been problematic, we no
+** longer support compatibility with ThreadScope, however this code is
+** initially based off ThreadScope and GHC's runtime system support for
+** ThreadScope.
 */
 
 #ifndef MERCURY_PAR_PROFILE_H
@@ -71,9 +82,9 @@ extern void MR_parprof_finalize_engine(MercuryEngine *eng);
 
 #if 0
 /*
-** It looks like we don't need TSC synchronization code on modern x86(-64) CPUs
-** including multi-socket systems (tested on goliath and taura).  If we find
-** systems where this is needed we can enable it via a runtime check.
+** It looks like we don't need TSC synchronization code on modern x86(-64)
+** CPUs including multi-socket systems.  If we find systems where this is
+** needed we can uncomment this code and introduce runtime configuration.
 */
 /*
 ** Synchronize a slave thread's TSC offset to the master's.  The master thread
