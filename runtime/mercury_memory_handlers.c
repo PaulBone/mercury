@@ -56,7 +56,7 @@
 #include "mercury_memory_zones.h"
 #include "mercury_memory_handlers.h"
 #include "mercury_faultaddr.h"
-#include "mercury_threadscope.h"
+#include "mercury_par_profile.h"
 
 /*---------------------------------------------------------------------------*/
 

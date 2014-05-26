@@ -20,7 +20,7 @@ ENDINIT
 #include    "mercury_engine.h"
 #include    "mercury_memory_zones.h"    /* for MR_create_zone() */
 #include    "mercury_memory_handlers.h" /* for MR_default_handler() */
-#include    "mercury_threadscope.h"     /* for event posting */
+#include    "mercury_par_profile.h"     /* for event posting */
 
 #include    "mercury_dummy.h"
 

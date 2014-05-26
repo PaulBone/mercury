@@ -2,7 +2,7 @@
 ** vim: ts=4 sw=4 expandtab
 */
 /*
-** Copyright (C) 2009-2011 The University of Melbourne.
+** Copyright (C) 2009-2011,2013 The University of Melbourne.
 ** Copyright (C) 2008-2009 The GHC Team.
 **
 ** This file may only be copied under the terms of the GNU Library General
@@ -82,7 +82,7 @@
 */
 
 #include "mercury_imp.h"
-#include "mercury_threadscope.h"
+#include "mercury_par_profile.h"
 #include "mercury_atomic_ops.h"
 
 #include <stdio.h>
