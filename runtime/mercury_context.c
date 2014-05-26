@@ -1551,7 +1551,7 @@ MR_schedule_context(MR_Context *ctxt)
 
     notify_context_data.MR_ewa_context = ctxt;
 
-#ifdef MR_PROFILE_PARALLEL_EXECUTION_SUPPORT
+#ifdef MR_PARPROF
     MR_parprof_post_context_runnable(ctxt);
 #endif
 

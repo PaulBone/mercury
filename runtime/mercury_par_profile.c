@@ -2,11 +2,29 @@
 ** vim: ts=4 sw=4 expandtab
 */
 /*
-** Copyright (C) 2009-2011,2013 The University of Melbourne.
+** Copyright (C) 2009-2011,2013-2014 The University of Melbourne.
 ** Copyright (C) 2008-2009 The GHC Team.
 **
 ** This file may only be copied under the terms of the GNU Library General
 ** Public License - see the file COPYING.LIB in the Mercury distribution.
+*/
+
+/*
+** mercury_par_profile.c - defines Mercury parallel profiling support.
+**
+** The code in this file and mercury_par_profile.h was originally designed
+** to be compatible with ThreadScope, see:
+**
+**   + Don Jones Jr, Simon Marlow and Satnam Singh: Parallel Preformance
+**     Tuning for Haskell.
+**
+**   + Paul Bone and Zoltan Somogyi: Profiling parallel Mercury programs
+**     with ThreadScope.
+**
+** Maintaining compatibility with ThreadScope has been problematic, we no
+** longer support compatibility with ThreadScope, however this code is
+** initially based off ThreadScope and GHC's runtime system support for
+** ThreadScope.
 */
 
 /*
