@@ -475,7 +475,7 @@
   #define MR_GRADE_OPT_PART_17  MR_GRADE_OPT_PART_16
 #endif
 
-#if defined(MR_THREADSCOPE)
+#if defined(MR_PARALLEL_PROFILING)
   #define MR_GRADE_PART_18      MR_PASTE2(MR_GRADE_PART_17, _threadscope)
   #define MR_GRADE_OPT_PART_18  MR_GRADE_OPT_PART_17 ".threadscope"
 #else

@@ -71,8 +71,8 @@ static const char if_need_term_size[] =
 static const char if_need_deep_prof[] =
     "#if defined(MR_DEEP_PROFILING)\n";
 
-static const char if_need_threadscope[] =
-    "#if defined(MR_THREADSCOPE)\n";
+static const char if_need_parprof[] =
+    "#if defined(MR_PARALLEL_PROFILING)\n";
 
 typedef enum
 {
@@ -88,7 +88,7 @@ typedef enum
     PURPOSE_DEBUGGER = 2,
     PURPOSE_COMPLEXITY = 3,
     PURPOSE_PROC_STATIC = 4,
-    PURPOSE_THREADSCOPE_STRING_TABLE = 5,
+    PURPOSE_PARPROF_STRING_TABLE = 5,
     PURPOSE_REQ_INIT = 6,
     PURPOSE_REQ_FINAL = 7
 } Purpose;
@@ -100,7 +100,7 @@ const char  *main_func_name[] =
     "init_modules_debugger",
     "init_modules_complexity_procs",
     "write_out_proc_statics",
-    "init_modules_threadscope_string_table",
+    "init_modules_parprof_string_table",
     "init_modules_required",
     "final_modules_required"
 };
@@ -112,7 +112,7 @@ const char  *module_suffix[] =
     "init_debugger",
     "init_complexity_procs",
     "write_out_proc_statics",
-    "init_threadscope_string_table",
+    "init_parprof_string_table",
     "",
     "",
 };
@@ -136,7 +136,7 @@ const char  *bunch_function_guard[] =
     if_need_to_init,
     if_need_term_size,
     if_need_deep_prof,
-    if_need_threadscope,
+    if_need_parprof,
     NULL,
     NULL,
 };
@@ -148,7 +148,7 @@ const char  *main_func_guard[] =
     NULL,
     if_need_term_size,
     if_need_deep_prof,
-    if_need_threadscope,
+    if_need_parprof,
     NULL,
     NULL,
 };
@@ -421,9 +421,9 @@ static const char mercury_funcs2[] =
     "   MR_address_of_write_out_proc_statics =\n"
     "       write_out_proc_statics;\n"
     "#endif\n"
-    "#ifdef MR_THREADSCOPE\n"
-    "   MR_address_of_init_modules_threadscope_string_table =\n"
-    "       init_modules_threadscope_string_table;\n"
+    "#ifdef MR_PARALLEL_PROFILING\n"
+    "   MR_address_of_init_modules_parprof_string_table =\n"
+    "       init_modules_parprof_string_table;\n"
     "#endif\n"
     "   MR_address_of_init_modules_required = init_modules_required;\n"
     "   MR_address_of_final_modules_required = final_modules_required;\n"
@@ -802,9 +802,9 @@ output_init_program(void)
         std_and_special_modules, std_module_next + special_module_next);
     output_main_init_function(PURPOSE_PROC_STATIC, num_bunches);
 
-    num_bunches = output_sub_init_functions(PURPOSE_THREADSCOPE_STRING_TABLE,
+    num_bunches = output_sub_init_functions(PURPOSE_PARPROF_STRING_TABLE,
         std_modules, std_module_next);
-    output_main_init_function(PURPOSE_THREADSCOPE_STRING_TABLE, num_bunches);
+    output_main_init_function(PURPOSE_PARPROF_STRING_TABLE, num_bunches);
 
     num_bunches = output_sub_init_functions(PURPOSE_REQ_INIT,
         req_init_modules, req_init_module_next);

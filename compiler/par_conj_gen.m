@@ -227,7 +227,7 @@ generate_par_conj(Goals, GoalInfo, CodeModel, Code, !CI) :-
     EndLabelCode = from_list([
         llds_instr(label(EndLabel), "end of parallel conjunction"),
         llds_instr(ts_finish_par_conj_instr(SlotNum, SyncTermBaseSlot),
-            "finish parallel conjunction (ThreadScope instrumentation")
+            "finish parallel conjunction (parallel profiling instrumentation")
     ]),
     Code =
         MaybeSetParentSpCode ++
@@ -325,8 +325,8 @@ ts_finish_par_conj_instr(SyncTermBaseSlot, SyncTermBaseSlotLval) =
         proc_does_not_affect_liveness,
         live_lvals_info(set([SyncTermBaseSlotLval])),
         format(Code, [i(SyncTermBaseSlot)]))],
-    Code = "#ifdef MR_THREADSCOPE
-MR_threadscope_post_end_par_conj(&MR_sv(%d));
+    Code = "#ifdef MR_PARALLEL_PROFILING
+MR_parprof_post_end_par_conj(&MR_sv(%d));
 #endif
 ".
 
@@ -654,7 +654,7 @@ create_static_conj_id(GoalInfo, SlotNum, !CI) :-
     GoalPathString = goal_path_to_string(GoalPath),
 
     String = format("%s: %s", [s(ProcString), s(GoalPathString)]),
-    add_threadscope_string(String, SlotNum, !CI).
+    add_parprof_string(String, SlotNum, !CI).
 
 %----------------------------------------------------------------------------%
 :- end_module ll_backend.par_conj_gen.

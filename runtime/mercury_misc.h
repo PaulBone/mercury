@@ -153,8 +153,8 @@ MR_perform_registered_exception_cleanups(void);
 #define MR_proc_exec_traces(m)                      \
     MR_PASTE2(mercury_data__proc_exec_traces_array__, m)
 
-#define MR_threadscope_strings(m)                   \
-    MR_PASTE2(mercury_data__threadscope_string_table_array__, m)
+#define MR_parprof_strings(m)                   \
+    MR_PASTE2(mercury_data__parprof_string_table_array__, m)
 
 #define MR_alloc_sites(m)                           \
     MR_PASTE2(mercury_data__alloc_sites_array__, m)

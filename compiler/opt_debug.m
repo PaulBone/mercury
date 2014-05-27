@@ -588,8 +588,8 @@ dump_layout_array_name(ArrayName) = Str :-
         ArrayName = proc_table_io_decl_array,
         Str = "proc_table_io_decl_array"
     ;
-        ArrayName = threadscope_string_table_array,
-        Str = "threadscope_string_table_array"
+        ArrayName = parprof_string_table_array,
+        Str = "parprof_string_table_array"
     ;
         ArrayName = alloc_site_array,
         Str = "alloc_site_array"

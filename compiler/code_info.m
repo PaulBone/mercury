@@ -493,12 +493,12 @@
                 cip_used_env_vars           :: set(string),
 
                 % A counter and table for allocating and maintaining slots
-                % where string IDs will be placed at runtime for threadscope
+                % where string IDs will be placed at runtime for parallel
                 % profiling.  The actual string IDs are allocated at runtime
                 % and their IDs are placed in an array slot which can be
                 % referred to statically.
-                cip_ts_string_table_size    :: int,
-                cip_ts_rev_string_table     :: list(string),
+                cip_pp_string_table_size    :: int,
+                cip_pp_rev_string_table     :: list(string),
 
                 % Code that is part of this procedure, but that can be placed
                 % after the procedure without a cache penalty.  For example,
@@ -979,10 +979,10 @@ get_out_of_line_code(CI, CI ^ code_info_persistent ^ cip_out_of_line_code).
 :- pred add_closure_layout(closure_proc_id_data::in,
     code_info::in, code_info::out) is det.
 
-:- pred add_threadscope_string(string::in, int::out,
+:- pred add_parprof_string(string::in, int::out,
     code_info::in, code_info::out) is det.
 
-:- pred get_threadscope_rev_string_table(code_info::in,
+:- pred get_parprof_rev_string_table(code_info::in,
     list(string)::out, int::out) is det.
 
 :- pred add_scalar_static_cell(list(typed_rval)::in,
@@ -1254,18 +1254,18 @@ add_closure_layout(ClosureLayout, !CI) :-
     get_closure_layouts(!.CI, ClosureLayouts),
     set_closure_layouts([ClosureLayout | ClosureLayouts], !CI).
 
-add_threadscope_string(String, SlotNum, !CI) :-
-    Size0 = !.CI ^ code_info_persistent ^ cip_ts_string_table_size,
-    RevTable0 = !.CI ^ code_info_persistent ^ cip_ts_rev_string_table,
+add_parprof_string(String, SlotNum, !CI) :-
+    Size0 = !.CI ^ code_info_persistent ^ cip_pp_string_table_size,
+    RevTable0 = !.CI ^ code_info_persistent ^ cip_pp_rev_string_table,
     SlotNum = Size0,
     Size = Size0 + 1,
     RevTable = [String | RevTable0],
-    !CI ^ code_info_persistent ^ cip_ts_string_table_size := Size,
-    !CI ^ code_info_persistent ^ cip_ts_rev_string_table := RevTable.
+    !CI ^ code_info_persistent ^ cip_pp_string_table_size := Size,
+    !CI ^ code_info_persistent ^ cip_pp_rev_string_table := RevTable.
 
-get_threadscope_rev_string_table(CI, RevTable, TableSize) :-
-    RevTable = CI ^ code_info_persistent ^ cip_ts_rev_string_table,
-    TableSize = CI ^ code_info_persistent ^ cip_ts_string_table_size.
+get_parprof_rev_string_table(CI, RevTable, TableSize) :-
+    RevTable = CI ^ code_info_persistent ^ cip_pp_rev_string_table,
+    TableSize = CI ^ code_info_persistent ^ cip_pp_string_table_size.
 
 add_scalar_static_cell(RvalsTypes, DataAddr, !CI) :-
     get_static_cell_info(!.CI, StaticCellInfo0),

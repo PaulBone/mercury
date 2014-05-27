@@ -165,7 +165,7 @@
     [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail,
         may_not_duplicate],
 "
-    #ifdef MR_THREADSCOPE
+    #ifdef MR_PARALLEL_PROFILING
         MR_par_builtin_new_future(Future, Name);
     #else
         MR_par_builtin_new_future(Future);

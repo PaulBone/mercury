@@ -176,9 +176,9 @@ void MR_finalize_engine(MercuryEngine *eng)
         MR_release_context(eng->MR_eng_this_context);
     }
 
-#if MR_THREADSCOPE
+#if MR_PARALLEL_PROFILING
     if (eng->MR_eng_ts_buffer) {
-        MR_threadscope_finalize_engine(eng);
+        MR_parprof_finalize_engine(eng);
     }
 #endif
 }
@@ -531,8 +531,8 @@ MR_define_label(engine_done);
             MR_GOTO_LABEL(engine_done_2);
         }
 
-#ifdef MR_THREADSCOPE
-        MR_threadscope_post_stop_context(MR_TS_STOP_REASON_YIELDING);
+#ifdef MR_PARALLEL_PROFILING
+        MR_parprof_post_stop_context(MR_PARPROF_STOP_REASON_YIELDING);
 #endif
         MR_save_context(this_ctxt);
         this_ctxt->MR_ctxt_resume = MR_LABEL(engine_done_2);

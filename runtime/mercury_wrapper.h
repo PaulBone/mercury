@@ -112,9 +112,8 @@ extern void         (*MR_address_of_init_modules_complexity)(void);
 extern void         (*MR_address_of_write_out_proc_statics)(FILE *deep_fp,
                         FILE *procrep_fp);
 #endif
-#ifdef MR_THREADSCOPE
-extern void         (*MR_address_of_init_modules_threadscope_string_table)
-                        (void);
+#ifdef  MR_PARALLEL_PROFILING
+extern void         (*MR_address_of_init_modules_parprof_string_table)(void);
 #endif
 extern void         (*MR_address_of_init_modules_required)(void);
 extern void         (*MR_address_of_final_modules_required)(void);

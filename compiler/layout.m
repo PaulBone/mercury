@@ -359,7 +359,7 @@
     ;       proc_table_io_decl_array
     ;       proc_event_layouts_array
     ;       proc_exec_trace_array
-    ;       threadscope_string_table_array
+    ;       parprof_string_table_array
     ;       alloc_site_array.
 
 %-----------------------------------------------------------------------------%

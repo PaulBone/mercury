@@ -1110,11 +1110,11 @@ MR_create_context(const char *id, MR_ContextSize ctxt_size, MR_Generator *gen)
     MR_UNLOCK(&free_context_list_lock, "create_context i");
 
     if (c != NULL) {
-#ifdef MR_THREADSCOPE
+#ifdef MR_PARALLEL_PROFILING
         MR_Unsigned old_id = c->MR_ctxt_num_id;
 
         c->MR_ctxt_num_id = allocate_context_id();
-        MR_threadscope_post_reuse_context(c, old_id);
+        MR_parprof_post_reuse_context(c, old_id);
 #endif
 #ifdef MR_DEBUG_STACK_SEGMENTS
         MR_debug_log_message("Re-used an old context: %p", c);
@@ -1135,9 +1135,9 @@ MR_create_context(const char *id, MR_ContextSize ctxt_size, MR_Generator *gen)
 #ifdef MR_USE_TRAIL
         c->MR_ctxt_trail_zone = NULL;
 #endif
-#ifdef MR_THREADSCOPE
+#ifdef MR_PARALLEL_PROFILING
         c->MR_ctxt_num_id = allocate_context_id();
-        MR_threadscope_post_create_context(c);
+        MR_parprof_post_create_context(c);
 #endif
     }
 
@@ -1156,8 +1156,8 @@ MR_release_context(MR_Context *c)
 {
     MR_assert(c);
 
-#ifdef MR_THREADSCOPE
-    MR_threadscope_post_release_context(c);
+#ifdef MR_PARALLEL_PROFILING
+    MR_parprof_post_release_context(c);
 #endif
 
 #ifdef MR_THREAD_SAFE
@@ -1552,7 +1552,7 @@ MR_schedule_context(MR_Context *ctxt)
     notify_context_data.MR_ewa_context = ctxt;
 
 #ifdef MR_PROFILE_PARALLEL_EXECUTION_SUPPORT
-    MR_threadscope_post_context_runnable(ctxt);
+    MR_parprof_post_context_runnable(ctxt);
 #endif
 
     /*
@@ -2219,8 +2219,8 @@ MR_define_entry(MR_do_sleep);
         }
 #endif
 
-#ifdef MR_THREADSCOPE
-        MR_threadscope_post_engine_sleeping();
+#ifdef MR_PARALLEL_PROFILING
+        MR_parprof_post_engine_sleeping();
 #endif
 
 retry_sleep:
@@ -2422,8 +2422,8 @@ action_worksteal(MR_EngineId victim_engine_id)
         ** Steal from this engine next time, it may have more work.
         */
         MR_ENGINE(MR_eng_victim_counter) = victim_engine_id;
-#ifdef MR_THREADSCOPE
-        MR_threadscope_post_steal_spark(spark.MR_spark_id);
+#ifdef MR_PARALLEL_PROFILING
+        MR_parprof_post_steal_spark(spark.MR_spark_id);
 #endif
 #ifdef MR_DEBUG_THREADS
         if (MR_debug_threads) {
@@ -2485,8 +2485,8 @@ do_get_context(void)
     ** context, then proceed to MR_do_runnext_local.
     */
 
-    #ifdef MR_THREADSCOPE
-    MR_threadscope_post_looking_for_global_context();
+    #ifdef MR_PARALLEL_PROFILING
+    MR_parprof_post_looking_for_global_context();
     #endif
 
     /*
@@ -2542,8 +2542,8 @@ prepare_engine_for_context(MR_Context *context) {
     }
     MR_ENGINE(MR_eng_this_context) = context;
     MR_load_context(context);
-#ifdef MR_THREADSCOPE
-    MR_threadscope_post_run_context();
+#ifdef MR_PARALLEL_PROFILING
+    MR_parprof_post_run_context();
 #endif
 }
 
@@ -2561,8 +2561,8 @@ prepare_engine_for_spark(volatile MR_Spark *spark)
 #endif
         MR_ENGINE(MR_eng_this_context) = MR_create_context("from spark",
             MR_CONTEXT_SIZE_FOR_SPARK, NULL);
-#ifdef MR_THREADSCOPE
-        MR_threadscope_post_create_context_for_spark(
+#ifdef MR_PARALLEL_PROFILING
+        MR_parprof_post_create_context_for_spark(
             MR_ENGINE(MR_eng_this_context));
 #endif
 /*
@@ -2579,17 +2579,17 @@ prepare_engine_for_spark(volatile MR_Spark *spark)
             MR_ENGINE(MR_eng_this_context));
 #endif
     } else {
-#ifdef MR_THREADSCOPE
+#ifdef MR_PARALLEL_PROFILING
         MR_Unsigned old_id;
 
         old_id = MR_ENGINE(MR_eng_this_context)->MR_ctxt_num_id;
         MR_ENGINE(MR_eng_this_context)->MR_ctxt_num_id = allocate_context_id();
-        MR_threadscope_post_reuse_context(MR_ENGINE(MR_eng_this_context),
+        MR_parprof_post_reuse_context(MR_ENGINE(MR_eng_this_context),
             old_id);
 #endif
     }
-#ifdef MR_THREADSCOPE
-    MR_threadscope_post_run_context();
+#ifdef MR_PARALLEL_PROFILING
+    MR_parprof_post_run_context();
 #endif
 
     /*
@@ -2609,8 +2609,8 @@ do_local_spark(MR_Code *join_label)
     volatile MR_Spark *spark;
     MR_Context        *this_context = MR_ENGINE(MR_eng_this_context);
 
-#ifdef MR_THREADSCOPE
-    MR_threadscope_post_looking_for_local_spark();
+#ifdef MR_PARALLEL_PROFILING
+    MR_parprof_post_looking_for_local_spark();
 #endif
 
     spark = MR_wsdeque_pop_bottom(&MR_ENGINE(MR_eng_spark_deque));
@@ -2637,8 +2637,8 @@ do_local_spark(MR_Code *join_label)
         return NULL;
     }
 
-#ifdef MR_THREADSCOPE
-    MR_threadscope_post_run_spark(spark->MR_spark_id);
+#ifdef MR_PARALLEL_PROFILING
+    MR_parprof_post_run_spark(spark->MR_spark_id);
 #endif
 
     prepare_engine_for_spark(spark);
@@ -2651,8 +2651,8 @@ do_work_steal(void)
 {
     MR_Spark spark;
 
-    #ifdef MR_THREADSCOPE
-    MR_threadscope_post_work_stealing();
+    #ifdef MR_PARALLEL_PROFILING
+    MR_parprof_post_work_stealing();
     #endif
 
     /*
@@ -2664,8 +2664,8 @@ do_work_steal(void)
         (MR_num_outstanding_contexts <= MR_max_outstanding_contexts)) {
         /* Attempt to steal a spark */
         if (MR_attempt_steal_spark(&spark)) {
-#ifdef MR_THREADSCOPE
-            MR_threadscope_post_steal_spark(spark.MR_spark_id);
+#ifdef MR_PARALLEL_PROFILING
+            MR_parprof_post_steal_spark(spark.MR_spark_id);
 #endif
 #ifdef MR_DEBUG_THREADS
             if (MR_debug_threads) {
@@ -2686,8 +2686,8 @@ static void
 save_dirty_context(MR_Code *join_label) {
     MR_Context *this_context = MR_ENGINE(MR_eng_this_context);
 
-#ifdef MR_THREADSCOPE
-    MR_threadscope_post_stop_context(MR_TS_STOP_REASON_BLOCKED);
+#ifdef MR_PARALLEL_PROFILING
+    MR_parprof_post_stop_context(MR_PARPROF_STOP_REASON_BLOCKED);
 #endif
     this_context->MR_ctxt_resume_owner_engine = MR_ENGINE(MR_eng_id);
     MR_save_context(this_context);
@@ -2711,8 +2711,8 @@ MR_do_join_and_continue(MR_SyncTerm *jnc_st, MR_Code *join_label)
     MR_Context  *this_context = MR_ENGINE(MR_eng_this_context);
     MR_Code     *jump_target;
 
-  #ifdef MR_THREADSCOPE
-    MR_threadscope_post_end_par_conjunct((MR_Word*)jnc_st);
+  #ifdef MR_PARALLEL_PROFILING
+    MR_parprof_post_end_par_conjunct((MR_Word*)jnc_st);
   #endif
 
     /*
@@ -2722,8 +2722,8 @@ MR_do_join_and_continue(MR_SyncTerm *jnc_st, MR_Code *join_label)
     */
     /*
     ** XXX: We should take the current TSC time here and use it to post the
-    ** various 'context stopped' threadscope events. This profile will be more
-    ** accurate.
+    ** various 'context stopped' parallel profiling events. This profile
+    ** will be more accurate.
     */
 
     jnc_last = MR_atomic_dec_and_is_zero_uint(&(jnc_st->MR_st_count));
@@ -2733,8 +2733,8 @@ MR_do_join_and_continue(MR_SyncTerm *jnc_st, MR_Code *join_label)
         ** All the conjuncts have finished,
         */
         if (this_context != jnc_st->MR_st_orig_context) {
-#ifdef MR_THREADSCOPE
-            MR_threadscope_post_stop_context(MR_TS_STOP_REASON_FINISHED);
+#ifdef MR_PARALLEL_PROFILING
+            MR_parprof_post_stop_context(MR_PARPROF_STOP_REASON_FINISHED);
 #endif
             /*
             ** This context didn't originate this parallel conjunction and
@@ -2756,8 +2756,8 @@ MR_do_join_and_continue(MR_SyncTerm *jnc_st, MR_Code *join_label)
             ** the context is written first.
             */
             MR_CPU_LFENCE;
-#ifdef MR_THREADSCOPE
-            MR_threadscope_post_context_runnable(jnc_st->MR_st_orig_context);
+#ifdef MR_PARALLEL_PROFILING
+            MR_parprof_post_context_runnable(jnc_st->MR_st_orig_context);
 #endif
             prepare_engine_for_context(jnc_st->MR_st_orig_context);
             /*
@@ -2773,8 +2773,8 @@ MR_do_join_and_continue(MR_SyncTerm *jnc_st, MR_Code *join_label)
     } else {
         volatile MR_Spark *spark;
 
-#ifdef MR_THREADSCOPE
-        MR_threadscope_post_looking_for_local_spark();
+#ifdef MR_PARALLEL_PROFILING
+        MR_parprof_post_looking_for_local_spark();
 #endif
         spark = MR_wsdeque_pop_bottom(&MR_ENGINE(MR_eng_spark_deque));
         if (spark != NULL) {
@@ -2785,8 +2785,8 @@ MR_do_join_and_continue(MR_SyncTerm *jnc_st, MR_Code *join_label)
                 **
                 ** Change the context.
                 */
-#ifdef MR_THREADSCOPE
-                MR_threadscope_post_stop_context(MR_TS_STOP_REASON_BLOCKED);
+#ifdef MR_PARALLEL_PROFILING
+                MR_parprof_post_stop_context(MR_PARPROF_STOP_REASON_BLOCKED);
 #endif
                 save_dirty_context(join_label);
                 if (MR_runqueue_head != NULL) {
@@ -2807,16 +2807,16 @@ MR_do_join_and_continue(MR_SyncTerm *jnc_st, MR_Code *join_label)
                 /*
                 ** Save our context and then look for work as per normal.
                 */
-#ifdef MR_THREADSCOPE
-                MR_threadscope_post_stop_context(MR_TS_STOP_REASON_BLOCKED);
+#ifdef MR_PARALLEL_PROFILING
+                MR_parprof_post_stop_context(MR_PARPROF_STOP_REASON_BLOCKED);
 #endif
                 save_dirty_context(join_label);
             } else {
                 /*
                 ** This engine and context should look for other work.
                 */
-#ifdef MR_THREADSCOPE
-                MR_threadscope_post_stop_context(MR_TS_STOP_REASON_FINISHED);
+#ifdef MR_PARALLEL_PROFILING
+                MR_parprof_post_stop_context(MR_PARPROF_STOP_REASON_FINISHED);
 #endif
             }
             return MR_ENTRY(MR_do_idle);

@@ -742,7 +742,7 @@ extern MR_uint_least64_t MR_cpu_cycles_per_sec;
 
 /*
 ** Do CPU feature detection, this is necessary for profiling parallel code
-** execution and the threadscope code.
+** execution and the parallel profiling code.
 ** On i386 and x86_64 machines this uses CPUID to determine if the RDTSCP
 ** instruction is available and not prohibited by the OS.
 ** This function is idempotent.

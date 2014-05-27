@@ -557,10 +557,10 @@
 :- pred module_info_set_const_struct_db(const_struct_db::in,
     module_info::in, module_info::out) is det.
 
-:- pred module_info_get_ts_rev_string_table(module_info::in, int::out,
+:- pred module_info_get_parprof_rev_string_table(module_info::in, int::out,
     list(string)::out) is det.
 
-:- pred module_info_set_ts_rev_string_table(int::in, list(string)::in,
+:- pred module_info_set_parprof_rev_string_table(int::in, list(string)::in,
     module_info::in, module_info::out) is det.
 
 %-----------------------------------------------------------------------------%
@@ -880,14 +880,14 @@
                 % of the program.
                 msi_const_struct_db             :: const_struct_db,
 
-                % A table of strings used by some threadscope events.
-                % Currently threadscope events are introduced for each future
-                % in dep_par_conj.m which is why we need to record the table
-                % within the HLDS.  The LLDS also uses threadscope string
-                % tables, see global_data.m, the LLDS introduces strings during
-                % the HLDS->LLDS transformation of parallel conjunctions.
-                msi_ts_string_table_size        :: int,
-                msi_ts_rev_string_table         :: list(string)
+                % A table of strings used by some parallel profiling events.
+                % Currently these events are introduced for each future in
+                % dep_par_conj.m which is why we need to record the table
+                % within the HLDS.  The LLDS also uses these string tables,
+                % see global_data.m, the LLDS introduces strings during the
+                % HLDS->LLDS transformation of parallel conjunctions.
+                msi_pp_string_table_size        :: int,
+                msi_pp_rev_string_table         :: list(string)
             ).
 
 module_info_init(Name, DumpBaseFileName, Items, Globals, QualifierInfo,
@@ -1096,9 +1096,9 @@ module_info_get_event_set(MI, MI ^ mi_sub_info ^ msi_event_set).
 module_info_get_oisu_map(MI, MI ^ mi_sub_info ^ msi_oisu_map).
 module_info_get_oisu_procs(MI, MI ^ mi_sub_info ^ msi_oisu_procs).
 module_info_get_const_struct_db(MI, MI ^ mi_sub_info ^ msi_const_struct_db).
-module_info_get_ts_rev_string_table(MI,
-    MI ^ mi_sub_info ^ msi_ts_string_table_size,
-    MI ^ mi_sub_info ^ msi_ts_rev_string_table).
+module_info_get_parprof_rev_string_table(MI,
+    MI ^ mi_sub_info ^ msi_pp_string_table_size,
+    MI ^ mi_sub_info ^ msi_pp_rev_string_table).
 
     % XXX There is some debate as to whether duplicate initialise directives
     % in the same module should constitute an error. Currently it is not, but
@@ -1261,9 +1261,9 @@ module_info_set_oisu_procs(OISUProcs, !MI) :-
     !MI ^ mi_sub_info ^ msi_oisu_procs := OISUProcs.
 module_info_set_const_struct_db(ConstStructDb, !MI) :-
     !MI ^ mi_sub_info ^ msi_const_struct_db := ConstStructDb.
-module_info_set_ts_rev_string_table(Size, RevTable, !MI) :-
-    !MI ^ mi_sub_info ^ msi_ts_string_table_size := Size,
-    !MI ^ mi_sub_info ^ msi_ts_rev_string_table := RevTable.
+module_info_set_parprof_rev_string_table(Size, RevTable, !MI) :-
+    !MI ^ mi_sub_info ^ msi_pp_string_table_size := Size,
+    !MI ^ mi_sub_info ^ msi_pp_rev_string_table := RevTable.
 
 module_info_add_parents_to_used_modules(Modules, !MI) :-
     module_info_get_used_modules(!.MI, UsedModules0),
