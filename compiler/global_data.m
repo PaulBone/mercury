@@ -63,13 +63,13 @@
 :- pred global_data_get_all_closure_layouts(global_data::in,
     list(closure_proc_id_data)::out) is det.
 
-:- pred global_data_get_threadscope_string_table(global_data::in,
+:- pred global_data_get_parprof_string_table(global_data::in,
     list(string)::out) is det.
 
-:- pred global_data_get_threadscope_rev_string_table(global_data::in,
+:- pred global_data_get_parprof_rev_string_table(global_data::in,
     list(string)::out, int::out) is det.
 
-:- pred global_data_set_threadscope_rev_string_table(list(string)::in, int::in,
+:- pred global_data_set_parprof_rev_string_table(list(string)::in, int::in,
     global_data::in, global_data::out) is det.
 
 :- pred global_data_get_static_cell_info(global_data::in,
@@ -185,13 +185,13 @@
                 gd_closure_layouts          :: list(closure_proc_id_data),
 
                 % A table for allocating and maintaining slots where string IDs
-                % will be placed at runtime for threadscope profiling.  The
+                % will be placed at runtime for parallel profiling.  The
                 % actual string IDs are allocated at runtime and their IDs are
                 % placed in an array slot which can be referred to statically.
                 % The size of the table is maintained for allocating offsets
                 % into it.
-                gd_ts_string_table_size     :: int,
-                gd_ts_rev_string_table      :: list(string),
+                gd_pp_string_table_size     :: int,
+                gd_pp_rev_string_table      :: list(string),
 
                 % Information about all the statically allocated cells
                 % created so far.
@@ -248,19 +248,19 @@ global_data_get_all_proc_layouts(GlobalData, ProcLayouts) :-
 global_data_get_all_closure_layouts(GlobalData, ClosureLayouts) :-
     ClosureLayouts = GlobalData ^ gd_closure_layouts.
 
-global_data_get_threadscope_string_table(GlobalData, Table) :-
-    global_data_get_threadscope_rev_string_table(GlobalData, RevTable, _),
+global_data_get_parprof_string_table(GlobalData, Table) :-
+    global_data_get_parprof_rev_string_table(GlobalData, RevTable, _),
     Table = list.reverse(RevTable).
 
-global_data_get_threadscope_rev_string_table(GlobalData,
+global_data_get_parprof_rev_string_table(GlobalData,
         RevTable, TableSize) :-
-    RevTable = GlobalData ^ gd_ts_rev_string_table,
-    TableSize = GlobalData ^ gd_ts_string_table_size.
+    RevTable = GlobalData ^ gd_pp_rev_string_table,
+    TableSize = GlobalData ^ gd_pp_string_table_size.
 
-global_data_set_threadscope_rev_string_table(RevTable, TableSize,
+global_data_set_parprof_rev_string_table(RevTable, TableSize,
         !GlobalData) :-
-    !GlobalData ^ gd_ts_rev_string_table := RevTable,
-    !GlobalData ^ gd_ts_string_table_size := TableSize.
+    !GlobalData ^ gd_pp_rev_string_table := RevTable,
+    !GlobalData ^ gd_pp_string_table_size := TableSize.
 
 global_data_get_static_cell_info(GlobalData, StaticCellInfo) :-
     StaticCellInfo = GlobalData ^ gd_static_cell_info.
@@ -746,7 +746,7 @@ merge_global_datas(GlobalDataA, GlobalDataB, GlobalData, GlobalDataRemap) :-
     ProcVarMap = map.old_merge(ProcVarMapA, ProcVarMapB),
     ProcLayoutMap = map.old_merge(ProcLayoutMapA, ProcLayoutMapB),
     ClosureLayouts = ClosureLayoutsA ++ ClosureLayoutsB,
-    merge_threadscope_string_tables(TSRevStringTableA, TSStringSlotCounterA,
+    merge_parprof_string_tables(TSRevStringTableA, TSStringSlotCounterA,
         TSRevStringTableB, TSStringSlotCounterB,
         TSRevStringTable, TSStringSlotCounter, MaybeTSStringTableRemap),
     merge_static_cell_infos(StaticCellInfoA, StaticCellInfoB, StaticCellInfo,
@@ -757,23 +757,23 @@ merge_global_datas(GlobalDataA, GlobalDataB, GlobalData, GlobalDataRemap) :-
     GlobalDataRemap =
         global_data_remapping(MaybeTSStringTableRemap, StaticCellRemap).
 
-    % merge_threadscope_string_tables(RevTableA, CounterA, RevTableB, CounterB,
+    % merge_parprof_string_tables(RevTableA, CounterA, RevTableB, CounterB,
     %   RevTable, Counter, MaybeRemapOffset).
     %
-    % Merge the threadscope string tables.
+    % Merge the parprof string tables.
     %
     % After doing this merge the references in RevTableB may be adjusted and
     % must be corrected by adding RemapOffset to them if MaybeRemapOffset =
     % yes(RemapOffset).
     %
-:- pred merge_threadscope_string_tables(list(string)::in, int::in,
+:- pred merge_parprof_string_tables(list(string)::in, int::in,
     list(string)::in, int::in,
     list(string)::out, int::out, maybe(int)::out) is det.
 
-merge_threadscope_string_tables([], _, [], _, [], 0, no).
-merge_threadscope_string_tables([], _, [X | Xs], N, [X | Xs], N, no).
-merge_threadscope_string_tables([X | Xs], N, [], _, [X | Xs], N, no).
-merge_threadscope_string_tables(RevTableA, CounterA, RevTableB, CounterB,
+merge_parprof_string_tables([], _, [], _, [], 0, no).
+merge_parprof_string_tables([], _, [X | Xs], N, [X | Xs], N, no).
+merge_parprof_string_tables([X | Xs], N, [], _, [X | Xs], N, no).
+merge_parprof_string_tables(RevTableA, CounterA, RevTableB, CounterB,
         RevTable, Counter, yes(RemapOffset)) :-
     RevTableA = [_ | _],
     RevTableB = [_ | _],

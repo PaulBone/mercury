@@ -88,7 +88,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef MR_THREADSCOPE
+#ifdef MR_PARPROF
 
 /***************************************************************************/
 
@@ -246,34 +246,34 @@
 #define MR_TSC_SYNC_NUM_BEST_ROUNDS (3)
 
 /* Uncomment this to enable some debugging code */
-/* #define MR_DEBUG_THREADSCOPE 1 */
+/* #define MR_DEBUG_PARPROF 1 */
 
-#if MR_DEBUG_THREADSCOPE
-#define MR_DO_THREADSCOPE_DEBUG(x) do { x; } while(0)
+#if MR_DEBUG_PARPROF
+#define MR_DO_PARPROF_DEBUG(x) do { x; } while(0)
 #else
-#define MR_DO_THREADSCOPE_DEBUG(x)
+#define MR_DO_PARPROF_DEBUG(x)
 #endif
 
 /***************************************************************************/
 
-struct MR_threadscope_event_buffer {
-    unsigned char       MR_tsbuffer_data[MR_TS_BUFFERSIZE];
+struct MR_parprof_event_buffer {
+    unsigned char       MR_ppbuffer_data[MR_TS_BUFFERSIZE];
 
     /* The current writing position in the buffer. */
-    MR_Unsigned         MR_tsbuffer_pos;
+    MR_Unsigned         MR_ppbuffer_pos;
 
     /* The position of the start of the most recent block. */
-    MR_Integer          MR_tsbuffer_block_open_pos;
+    MR_Integer          MR_ppbuffer_block_open_pos;
 
     /*
     ** True if the engine's current context is stopped, and therefore
     ** stop and start events should not be posted from the GC callback
     ** procedures.
     */
-    MR_bool             MR_tsbuffer_ctxt_is_stopped;
+    MR_bool             MR_ppbuffer_ctxt_is_stopped;
 
     /* A cheap userspace lock to make buffers reentrant. */
-    volatile MR_Us_Lock MR_tsbuffer_lock;
+    volatile MR_Us_Lock MR_ppbuffer_lock;
 };
 
 /*
@@ -665,12 +665,12 @@ static EventTypeDesc event_type_descs[] = {
 static MR_int_least16_t event_type_sizes[MR_TS_NUM_EVENT_TAGS];
 static MR_int_least16_t event_type_sizes_mercury[MR_TS_NUM_MER_EVENTS];
 
-static FILE* MR_threadscope_output_file = NULL;
-static char* MR_threadscope_output_filename;
+static FILE* MR_parprof_output_file = NULL;
+static char* MR_parprof_output_filename;
 
 /*
 ** The TSC value recorded when the primordial thread called
-** MR_setup_threadscope(), this is used retroactivly to initialise the
+** MR_setup_parprof(), this is used retroactivly to initialise the
 ** MR_eng_cpu_clock_ticks_offset field in the engine structure once it is
 ** created.
 */
@@ -678,21 +678,21 @@ static MR_uint_least64_t MR_primordial_first_tsc;
 
 static Timedelta        MR_global_offset;
 
-static struct MR_threadscope_event_buffer global_buffer;
+static struct MR_parprof_event_buffer global_buffer;
 
 /*
 ** Alternativly we use gettimeofday for measuring time.
 */
-MR_bool                 MR_threadscope_use_tsc = MR_FALSE;
+MR_bool                 MR_parprof_use_tsc = MR_FALSE;
 static Timedelta        MR_gettimeofday_offset;
 
 /*
 ** An ID that may be allocated to the next string to be registered.
 */
-static MR_TS_StringId   MR_next_string_id = 0;
-static MR_EngSetId      next_engset_id = 0;
+static MR_Parprof_StringId  MR_next_string_id = 0;
+static MR_EngSetId          next_engset_id = 0;
 
-static MR_EngSetId      process_engset_id;
+static MR_EngSetId          process_engset_id;
 
 /***************************************************************************/
 
@@ -730,11 +730,11 @@ event_type_size(EventType event_type) {
 ** for this statically sized event _and_ for the block marker event.
 */
 MR_STATIC_INLINE MR_bool
-enough_room_for_event(struct MR_threadscope_event_buffer *buffer,
+enough_room_for_event(struct MR_parprof_event_buffer *buffer,
     EventType event_type)
 {
     int needed =
-        buffer->MR_tsbuffer_pos +
+        buffer->MR_ppbuffer_pos +
         event_type_size(event_type) +
         event_type_size(MR_TS_EVENT_BLOCK_MARKER) +
         ((2 + 8) * 2); /* (EventType, Time) * 2 */
@@ -742,11 +742,11 @@ enough_room_for_event(struct MR_threadscope_event_buffer *buffer,
 }
 
 MR_STATIC_INLINE MR_bool
-enough_room_for_variable_size_event(struct MR_threadscope_event_buffer *buffer,
+enough_room_for_variable_size_event(struct MR_parprof_event_buffer *buffer,
     MR_Unsigned length)
 {
     int needed =
-        buffer->MR_tsbuffer_pos +
+        buffer->MR_ppbuffer_pos +
         length +
         event_type_size(MR_TS_EVENT_BLOCK_MARKER) +
         ((2 + 8) * 2); /* (EventType, Time) * 2 */
@@ -757,42 +757,42 @@ enough_room_for_variable_size_event(struct MR_threadscope_event_buffer *buffer,
 ** Is a block currently open?
 */
 MR_STATIC_INLINE MR_bool block_is_open(
-    struct MR_threadscope_event_buffer *buffer)
+    struct MR_parprof_event_buffer *buffer)
 {
-    return !(buffer->MR_tsbuffer_block_open_pos == -1);
+    return !(buffer->MR_ppbuffer_block_open_pos == -1);
 }
 
 /*
 ** Put words into the current engine's buffer in big endian order.
 */
-MR_STATIC_INLINE void put_byte(struct MR_threadscope_event_buffer *buffer,
+MR_STATIC_INLINE void put_byte(struct MR_parprof_event_buffer *buffer,
     int byte)
 {
-    buffer->MR_tsbuffer_data[buffer->MR_tsbuffer_pos++] = byte;
+    buffer->MR_ppbuffer_data[buffer->MR_ppbuffer_pos++] = byte;
 }
 
-MR_STATIC_INLINE void put_be_int16(struct MR_threadscope_event_buffer *buffer,
+MR_STATIC_INLINE void put_be_int16(struct MR_parprof_event_buffer *buffer,
     MR_int_least16_t word)
 {
     put_byte(buffer, (word >> 8) & 0xFF);
     put_byte(buffer, word & 0xFF);
 }
 
-MR_STATIC_INLINE void put_be_uint16(struct MR_threadscope_event_buffer *buffer,
+MR_STATIC_INLINE void put_be_uint16(struct MR_parprof_event_buffer *buffer,
     MR_uint_least16_t word)
 {
     put_byte(buffer, (word >> 8) & 0xFF);
     put_byte(buffer, word & 0xFF);
 }
 
-MR_STATIC_INLINE void put_be_uint32(struct MR_threadscope_event_buffer *buffer,
+MR_STATIC_INLINE void put_be_uint32(struct MR_parprof_event_buffer *buffer,
     MR_uint_least32_t word)
 {
     put_be_uint16(buffer, (word >> 16) & 0xFFFF);
     put_be_uint16(buffer, word & 0xFFFF);
 }
 
-MR_STATIC_INLINE void put_be_uint64(struct MR_threadscope_event_buffer *buffer,
+MR_STATIC_INLINE void put_be_uint64(struct MR_parprof_event_buffer *buffer,
     MR_uint_least64_t word)
 {
     put_be_uint32(buffer, (word >> 32) & 0xFFFFFFFF);
@@ -800,7 +800,7 @@ MR_STATIC_INLINE void put_be_uint64(struct MR_threadscope_event_buffer *buffer,
 }
 
 MR_STATIC_INLINE void put_raw_string(
-    struct MR_threadscope_event_buffer *buffer,
+    struct MR_parprof_event_buffer *buffer,
     const char *string, unsigned len)
 {
     unsigned i;
@@ -814,7 +814,7 @@ MR_STATIC_INLINE void put_raw_string(
 ** by a 16 bit integer giving the string's length.
 */
 MR_STATIC_INLINE void put_string_size16(
-    struct MR_threadscope_event_buffer *buffer, const char *string)
+    struct MR_parprof_event_buffer *buffer, const char *string)
 {
     unsigned i, len;
 
@@ -828,7 +828,7 @@ MR_STATIC_INLINE void put_string_size16(
 ** by a 32 bit integer giving the string's length.
 */
 MR_STATIC_INLINE void put_string_size32(
-    struct MR_threadscope_event_buffer *buffer, const char *string)
+    struct MR_parprof_event_buffer *buffer, const char *string)
 {
     unsigned i, len;
 
@@ -837,75 +837,75 @@ MR_STATIC_INLINE void put_string_size32(
     put_raw_string(buffer, string, len);
 }
 
-MR_STATIC_INLINE void put_timestamp(struct MR_threadscope_event_buffer *buffer,
+MR_STATIC_INLINE void put_timestamp(struct MR_parprof_event_buffer *buffer,
     Time timestamp)
 {
     put_be_uint64(buffer, timestamp);
 }
 
 MR_STATIC_INLINE void put_eventlog_offset(
-    struct MR_threadscope_event_buffer *buffer, EventlogOffset offset)
+    struct MR_parprof_event_buffer *buffer, EventlogOffset offset)
 {
     put_be_uint32(buffer, offset);
 }
 
 MR_STATIC_INLINE void put_event_header(
-    struct MR_threadscope_event_buffer *buffer,
+    struct MR_parprof_event_buffer *buffer,
     EventType event_type, Time timestamp)
 {
     put_be_uint16(buffer, event_type);
     put_timestamp(buffer, timestamp);
 }
 
-MR_STATIC_INLINE void put_engine_id(struct MR_threadscope_event_buffer *buffer,
+MR_STATIC_INLINE void put_engine_id(struct MR_parprof_event_buffer *buffer,
     MR_EngineId engine_num)
 {
     put_be_uint16(buffer, engine_num);
 }
 
 MR_STATIC_INLINE void put_context_id(
-    struct MR_threadscope_event_buffer *buffer, MR_ContextId context_id)
+    struct MR_parprof_event_buffer *buffer, MR_ContextId context_id)
 {
     put_be_uint32(buffer, context_id);
 }
 
 MR_STATIC_INLINE void put_stop_reason(
-    struct MR_threadscope_event_buffer *buffer, MR_ContextStopReason reason)
+    struct MR_parprof_event_buffer *buffer, MR_ContextStopReason reason)
 {
     put_be_uint16(buffer, reason);
 }
 
-MR_STATIC_INLINE void put_string_id(struct MR_threadscope_event_buffer *buffer,
-    MR_TS_StringId id)
+MR_STATIC_INLINE void put_string_id(struct MR_parprof_event_buffer *buffer,
+    MR_Parprof_StringId id)
 {
     put_be_uint32(buffer, id);
 }
 
 MR_STATIC_INLINE void put_par_conj_dynamic_id(
-    struct MR_threadscope_event_buffer *buffer, MR_Word* id)
+    struct MR_parprof_event_buffer *buffer, MR_Word* id)
 {
     put_be_uint64(buffer, (MR_Word)id);
 }
 
-MR_STATIC_INLINE void put_spark_id(struct MR_threadscope_event_buffer *buffer,
+MR_STATIC_INLINE void put_spark_id(struct MR_parprof_event_buffer *buffer,
     MR_SparkId spark_id)
 {
     put_be_uint32(buffer, spark_id);
 }
 
-MR_STATIC_INLINE void put_engset_id(struct MR_threadscope_event_buffer *buffer,
+MR_STATIC_INLINE void put_engset_id(struct MR_parprof_event_buffer *buffer,
     MR_EngSetId engset_id)
 {
     put_be_uint32(buffer, engset_id);
 }
 
 MR_STATIC_INLINE void put_engset_type(
-    struct MR_threadscope_event_buffer *buffer, MR_EngSetType type)
+    struct MR_parprof_event_buffer *buffer, MR_EngSetType type)
 {
     put_be_uint16(buffer, type);
 }
 
-MR_STATIC_INLINE void put_future_id(struct MR_threadscope_event_buffer *buffer,
+MR_STATIC_INLINE void put_future_id(struct MR_parprof_event_buffer *buffer,
     MR_Future* id)
 {
     put_be_uint64(buffer, (MR_Word)id);
@@ -913,7 +913,7 @@ MR_STATIC_INLINE void put_future_id(struct MR_threadscope_event_buffer *buffer,
 
 /***************************************************************************/
 
-static struct MR_threadscope_event_buffer* MR_create_event_buffer(void);
+static struct MR_parprof_event_buffer* MR_create_event_buffer(void);
 
 /*
 ** The prelude is everything up to and including the 'DATA_BEGIN' marker.
@@ -922,20 +922,20 @@ static void MR_open_output_file_and_write_prelude(void);
 
 static void MR_close_output_file(void);
 
-static void put_event_type(struct MR_threadscope_event_buffer *buffer,
+static void put_event_type(struct MR_parprof_event_buffer *buffer,
                 EventTypeDesc *event_type);
 
-static MR_bool flush_event_buffer(struct MR_threadscope_event_buffer *buffer);
+static MR_bool flush_event_buffer(struct MR_parprof_event_buffer *buffer);
 
-static void maybe_close_block(struct MR_threadscope_event_buffer *buffer);
+static void maybe_close_block(struct MR_parprof_event_buffer *buffer);
 
-static void open_block(struct MR_threadscope_event_buffer *buffer,
+static void open_block(struct MR_parprof_event_buffer *buffer,
                 MR_Unsigned eng_id);
 
 /***************************************************************************/
 
-static MR_TS_StringId
-MR_threadscope_register_string(const char *string);
+static MR_Parprof_StringId
+MR_parprof_register_string(const char *string);
 
 /*
 ** These four events are used to create and manage engine sets.
@@ -943,16 +943,16 @@ MR_threadscope_register_string(const char *string);
 **
 ** The first two work on the global event buffer and are not thread safe.
 */
-static void MR_threadscope_post_create_engset(MR_EngSetId id,
+static void MR_parprof_post_create_engset(MR_EngSetId id,
                 MR_EngSetType type);
 
-static void MR_threadscope_post_destroy_engset(MR_EngSetId id);
+static void MR_parprof_post_destroy_engset(MR_EngSetId id);
 
-static void MR_threadscope_post_engset_add(
-                struct MR_threadscope_event_buffer *buffer,
+static void MR_parprof_post_engset_add(
+                struct MR_parprof_event_buffer *buffer,
                 MR_EngSetId id, MR_EngineId eng);
 
-static void MR_threadscope_post_engset_remove(MR_EngSetId id, MR_EngineId eng);
+static void MR_parprof_post_engset_remove(MR_EngSetId id, MR_EngineId eng);
 
 /*
 ** Post the name and version of the runtime system to the log file.
@@ -962,7 +962,7 @@ static void MR_threadscope_post_engset_remove(MR_EngSetId id, MR_EngineId eng);
 **
 ** The name and version are separated by a '-'.
 */
-static void MR_threadscope_post_runtime_identifier(MR_EngSetId id,
+static void MR_parprof_post_runtime_identifier(MR_EngSetId id,
                 const char *ident);
 
 /***************************************************************************/
@@ -980,17 +980,18 @@ static Time gettimeofday_nsecs(void);
 /***************************************************************************/
 
 void
-MR_setup_threadscope(void)
+MR_setup_parprof(void)
 {
-    MR_DO_THREADSCOPE_DEBUG(
-        fprintf(stderr, "In setup threadscope thread: 0x%lx\n", pthread_self())
+    MR_DO_PARPROF_DEBUG(
+        fprintf(stderr, "In setup parallel profiling for thread: 0x%lx\n",
+            pthread_self())
     );
 
     if (!MR_tsc_is_sensible()) {
-        MR_threadscope_use_tsc = MR_FALSE;
+        MR_parprof_use_tsc = MR_FALSE;
     }
 
-    if (MR_threadscope_use_tsc) {
+    if (MR_parprof_use_tsc) {
         /* This value is used later when setting up the primordial engine. */
         MR_primordial_first_tsc = MR_read_cpu_tsc();
 
@@ -1018,18 +1019,18 @@ MR_setup_threadscope(void)
 #endif
 
     /* Clear the global buffer and setup the file */
-    global_buffer.MR_tsbuffer_pos = 0;
-    global_buffer.MR_tsbuffer_block_open_pos = -1;
-    global_buffer.MR_tsbuffer_lock = MR_US_LOCK_INITIAL_VALUE;
+    global_buffer.MR_ppbuffer_pos = 0;
+    global_buffer.MR_ppbuffer_block_open_pos = -1;
+    global_buffer.MR_ppbuffer_lock = MR_US_LOCK_INITIAL_VALUE;
     MR_open_output_file_and_write_prelude();
 
     /*
     ** Post the initial events to the buffer.
     */
     process_engset_id = get_next_engset_id();
-    MR_threadscope_post_create_engset(process_engset_id,
+    MR_parprof_post_create_engset(process_engset_id,
         MR_TS_ENGSET_TYPE_OSPROCESS);
-    MR_threadscope_post_runtime_identifier(process_engset_id,
+    MR_parprof_post_runtime_identifier(process_engset_id,
         "mmc-" MR_VERSION);
 
     /*
@@ -1042,29 +1043,30 @@ MR_setup_threadscope(void)
 }
 
 void
-MR_finalize_threadscope(void)
+MR_finalize_parprof(void)
 {
-    MR_DO_THREADSCOPE_DEBUG(
-        fprintf(stderr, "In finalize threadscope thread: 0x%lx\n",
+    MR_DO_PARPROF_DEBUG(
+        fprintf(stderr, "In finalize parallel profiling for thread: 0x%lx\n",
             pthread_self())
     );
 
-    MR_threadscope_post_destroy_engset(process_engset_id);
+    MR_parprof_post_destroy_engset(process_engset_id);
 
     flush_event_buffer(&global_buffer);
     MR_close_output_file();
 }
 
 void
-MR_threadscope_setup_engine(MercuryEngine *eng)
+MR_parprof_setup_engine(MercuryEngine *eng)
 {
-    MR_DO_THREADSCOPE_DEBUG(
-        fprintf(stderr, "In threadscope setup engine thread: 0x%lx\n",
+    MR_DO_PARPROF_DEBUG(
+        fprintf(stderr,
+            "In parallel profiling setup for engine thread: 0x%lx\n",
             pthread_self())
     );
     eng->MR_eng_next_spark_id = 0;
 
-    if (MR_threadscope_use_tsc) {
+    if (MR_parprof_use_tsc) {
         if (eng->MR_eng_id == 0) {
             MR_global_offset = -MR_primordial_first_tsc;
         }
@@ -1073,7 +1075,7 @@ MR_threadscope_setup_engine(MercuryEngine *eng)
 
     eng->MR_eng_ts_buffer = MR_create_event_buffer();
 
-    MR_threadscope_post_engset_add(eng->MR_eng_ts_buffer, process_engset_id,
+    MR_parprof_post_engset_add(eng->MR_eng_ts_buffer, process_engset_id,
         eng->MR_eng_id);
     /*
     ** Flush the buffer to ensure the message above (which lacks a timestamp)
@@ -1083,18 +1085,19 @@ MR_threadscope_setup_engine(MercuryEngine *eng)
 }
 
 void
-MR_threadscope_finalize_engine(MercuryEngine *eng)
+MR_parprof_finalize_engine(MercuryEngine *eng)
 {
-    struct MR_threadscope_event_buffer *buffer = eng->MR_eng_ts_buffer;
+    struct MR_parprof_event_buffer *buffer = eng->MR_eng_ts_buffer;
 
-    MR_DO_THREADSCOPE_DEBUG(
-        fprintf(stderr, "In threadscope finalize engine thread: 0x%lx\n",
+    MR_DO_PARPROF_DEBUG(
+        fprintf(stderr,
+            "In parallel profiling finalize for engine thread: 0x%lx\n",
             pthread_self())
     );
 
-    MR_threadscope_post_engset_remove(process_engset_id, eng->MR_eng_id);
+    MR_parprof_post_engset_remove(process_engset_id, eng->MR_eng_id);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
 
     if (!enough_room_for_event(buffer, MR_TS_EVENT_SHUTDOWN)) {
         flush_event_buffer(buffer);
@@ -1106,7 +1109,7 @@ MR_threadscope_finalize_engine(MercuryEngine *eng)
 
     flush_event_buffer(buffer);
     eng->MR_eng_ts_buffer = NULL;
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 #if 0
@@ -1143,7 +1146,7 @@ static Time                 MR_tsc_sync_master_time;
 static int compare_time_delay_offset_by_delay(const void *a, const void *b);
 
 void
-MR_threadscope_sync_tsc_master(void)
+MR_parprof_sync_tsc_master(void)
 {
     unsigned i;
 
@@ -1165,7 +1168,7 @@ MR_threadscope_sync_tsc_master(void)
 }
 
 void
-MR_threadscope_sync_tsc_slave(void)
+MR_parprof_sync_tsc_slave(void)
 {
     unsigned        i, j;
     TimeDelayOffset delay_offset[MR_TSC_SYNC_NUM_ROUNDS];
@@ -1173,7 +1176,7 @@ MR_threadscope_sync_tsc_slave(void)
     MercuryEngine   *eng = MR_thread_engine_base;
 
     /* Only one slave may enter at a time. */
-    MR_LOCK(&MR_tsc_sync_slave_lock, "MR_threadscope_sync_tsc_slave");
+    MR_LOCK(&MR_tsc_sync_slave_lock, "MR_parprof_sync_tsc_slave");
 
     /*
     ** Tell the master we are ready to begin, and wait for it to tell us
@@ -1222,7 +1225,7 @@ MR_threadscope_sync_tsc_slave(void)
     ** We do this debugging output while holding the lock, so that the output
     ** is reasonable.
     */
-    MR_DO_THREADSCOPE_DEBUG({
+    MR_DO_PARPROF_DEBUG({
         fprintf(stderr, "TSC Synchronization for thread 0x%x\n",
             pthread_self());
         for (i = 0; i < MR_TSC_SYNC_NUM_ROUNDS; i++) {
@@ -1232,7 +1235,7 @@ MR_threadscope_sync_tsc_slave(void)
                 delay_offset[i].offset + MR_global_offset);
         }
     });
-    MR_UNLOCK(&MR_tsc_sync_slave_lock, "MR_threadscope_sync_tsc_slave");
+    MR_UNLOCK(&MR_tsc_sync_slave_lock, "MR_parprof_sync_tsc_slave");
 
     /* Now to average the best offsets. */
     qsort(&delay_offset, MR_TSC_SYNC_NUM_ROUNDS, sizeof(TimeDelayOffset),
@@ -1243,7 +1246,7 @@ MR_threadscope_sync_tsc_slave(void)
     }
     eng->MR_eng_cpu_clock_ticks_offset = total_offset + MR_global_offset;
 
-    MR_DO_THREADSCOPE_DEBUG({
+    MR_DO_PARPROF_DEBUG({
         fprintf(stderr, "TSC Synchronization offset for thread 0x%x: %ld\n",
             pthread_self(), eng->MR_eng_cpu_clock_ticks_offset);
     });
@@ -1268,11 +1271,11 @@ compare_time_delay_offset_by_delay(const void *a, const void *b) {
 /***************************************************************************/
 
 void
-MR_threadscope_post_create_context(MR_Context *context)
+MR_parprof_post_create_context(MR_Context *context)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
 
     if (!enough_room_for_event(buffer, MR_TS_EVENT_CREATE_THREAD)) {
         flush_event_buffer(buffer);
@@ -1285,15 +1288,15 @@ MR_threadscope_post_create_context(MR_Context *context)
         get_current_time_nanosecs());
     put_context_id(buffer, context->MR_ctxt_num_id);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_reuse_context(MR_Context *context, MR_Unsigned old_id)
+MR_parprof_post_reuse_context(MR_Context *context, MR_Unsigned old_id)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
 
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_REUSE_THREAD)) {
         flush_event_buffer(buffer);
@@ -1307,15 +1310,15 @@ MR_threadscope_post_reuse_context(MR_Context *context, MR_Unsigned old_id)
     put_context_id(buffer, context->MR_ctxt_num_id);
     put_context_id(buffer, old_id);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_create_context_for_spark(MR_Context *context)
+MR_parprof_post_create_context_for_spark(MR_Context *context)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
 
     if (!enough_room_for_event(buffer, MR_TS_EVENT_CREATE_SPARK_THREAD)) {
         flush_event_buffer(buffer);
@@ -1328,15 +1331,15 @@ MR_threadscope_post_create_context_for_spark(MR_Context *context)
         get_current_time_nanosecs());
     put_context_id(buffer, context->MR_ctxt_num_id);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_release_context(MR_Context *context)
+MR_parprof_post_release_context(MR_Context *context)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
 
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_RELEASE_CONTEXT)) {
         flush_event_buffer(buffer);
@@ -1349,15 +1352,15 @@ MR_threadscope_post_release_context(MR_Context *context)
         get_current_time_nanosecs());
     put_context_id(buffer, context->MR_ctxt_num_id);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_context_runnable(MR_Context *context)
+MR_parprof_post_context_runnable(MR_Context *context)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
 
     if (!enough_room_for_event(buffer, MR_TS_EVENT_THREAD_RUNNABLE)) {
         flush_event_buffer(buffer);
@@ -1370,12 +1373,12 @@ MR_threadscope_post_context_runnable(MR_Context *context)
         get_current_time_nanosecs());
     put_context_id(buffer, context->MR_ctxt_num_id);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 static void
-MR_threadscope_post_run_context_locked(
-    struct MR_threadscope_event_buffer *buffer, MR_Context *context)
+MR_parprof_post_run_context_locked(
+    struct MR_parprof_event_buffer *buffer, MR_Context *context)
 {
     if (!enough_room_for_event(buffer, MR_TS_EVENT_RUN_THREAD)) {
         flush_event_buffer(buffer);
@@ -1391,9 +1394,9 @@ MR_threadscope_post_run_context_locked(
 }
 
 void
-MR_threadscope_post_run_context(void)
+MR_parprof_post_run_context(void)
 {
-    struct MR_threadscope_event_buffer  *buffer;
+    struct MR_parprof_event_buffer  *buffer;
     MR_Context                          *context;
 
     buffer = MR_thread_engine_base->MR_eng_ts_buffer;
@@ -1401,18 +1404,18 @@ MR_threadscope_post_run_context(void)
     context = MR_thread_engine_base->MR_eng_this_context;
 
     if (context) {
-        MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
-        if (buffer->MR_tsbuffer_ctxt_is_stopped) {
-            MR_threadscope_post_run_context_locked(buffer, context);
-            buffer->MR_tsbuffer_ctxt_is_stopped = MR_FALSE;
+        MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
+        if (buffer->MR_ppbuffer_ctxt_is_stopped) {
+            MR_parprof_post_run_context_locked(buffer, context);
+            buffer->MR_ppbuffer_ctxt_is_stopped = MR_FALSE;
         }
-        MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+        MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
     }
 }
 
 static void
-MR_threadscope_post_stop_context_locked(
-    struct MR_threadscope_event_buffer *buffer,
+MR_parprof_post_stop_context_locked(
+    struct MR_parprof_event_buffer *buffer,
     MR_Context *context, MR_ContextStopReason reason)
 {
     if (!enough_room_for_event(buffer, MR_TS_EVENT_STOP_THREAD)) {
@@ -1429,30 +1432,30 @@ MR_threadscope_post_stop_context_locked(
 }
 
 void
-MR_threadscope_post_stop_context(MR_ContextStopReason reason)
+MR_parprof_post_stop_context(MR_ContextStopReason reason)
 {
-    struct MR_threadscope_event_buffer  *buffer;
+    struct MR_parprof_event_buffer  *buffer;
     MR_Context                          *context;
 
     buffer = MR_thread_engine_base->MR_eng_ts_buffer;
     context = MR_thread_engine_base->MR_eng_this_context;
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
-    if (!buffer->MR_tsbuffer_ctxt_is_stopped) {
-        MR_threadscope_post_stop_context_locked(buffer, context, reason);
-        buffer->MR_tsbuffer_ctxt_is_stopped = MR_TRUE;
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
+    if (!buffer->MR_ppbuffer_ctxt_is_stopped) {
+        MR_parprof_post_stop_context_locked(buffer, context, reason);
+        buffer->MR_ppbuffer_ctxt_is_stopped = MR_TRUE;
     }
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_run_spark(MR_SparkId spark_id)
+MR_parprof_post_run_spark(MR_SparkId spark_id)
 {
-    struct MR_threadscope_event_buffer  *buffer;
+    struct MR_parprof_event_buffer  *buffer;
 
     buffer = MR_thread_engine_base->MR_eng_ts_buffer;
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_SPARK_RUN)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1463,18 +1466,18 @@ MR_threadscope_post_run_spark(MR_SparkId spark_id)
     put_event_header(buffer, MR_TS_MER_EVENT_SPARK_RUN,
         get_current_time_nanosecs());
     put_spark_id(buffer, spark_id);
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_steal_spark(MR_SparkId spark_id)
+MR_parprof_post_steal_spark(MR_SparkId spark_id)
 {
-    struct MR_threadscope_event_buffer  *buffer;
+    struct MR_parprof_event_buffer  *buffer;
     unsigned                            engine_id;
 
     buffer = MR_thread_engine_base->MR_eng_ts_buffer;
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_SPARK_STEAL)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1493,15 +1496,15 @@ MR_threadscope_post_steal_spark(MR_SparkId spark_id)
     engine_id = (spark_id & 0xFF000000) >> 24;
     put_be_uint16(buffer, engine_id);
     put_spark_id(buffer, spark_id);
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_sparking(MR_Word* dynamic_conj_id, MR_SparkId spark_id)
+MR_parprof_post_sparking(MR_Word* dynamic_conj_id, MR_SparkId spark_id)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_SPARK_CREATE)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1514,15 +1517,15 @@ MR_threadscope_post_sparking(MR_Word* dynamic_conj_id, MR_SparkId spark_id)
     put_par_conj_dynamic_id(buffer, dynamic_conj_id);
     put_spark_id(buffer, spark_id);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_calling_main(void)
+MR_parprof_post_calling_main(void)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_CALLING_MAIN)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1532,15 +1535,15 @@ MR_threadscope_post_calling_main(void)
 
     put_event_header(buffer, MR_TS_MER_EVENT_CALLING_MAIN,
         get_current_time_nanosecs());
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_looking_for_global_context(void)
+MR_parprof_post_looking_for_global_context(void)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer,
             MR_TS_MER_EVENT_LOOKING_FOR_GLOBAL_CONTEXT))
     {
@@ -1552,15 +1555,15 @@ MR_threadscope_post_looking_for_global_context(void)
 
     put_event_header(buffer, MR_TS_MER_EVENT_LOOKING_FOR_GLOBAL_CONTEXT,
         get_current_time_nanosecs());
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_looking_for_local_spark(void)
+MR_parprof_post_looking_for_local_spark(void)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_LOOKING_FOR_LOCAL_SPARK)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1570,15 +1573,15 @@ MR_threadscope_post_looking_for_local_spark(void)
 
     put_event_header(buffer, MR_TS_MER_EVENT_LOOKING_FOR_LOCAL_SPARK,
         get_current_time_nanosecs());
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_work_stealing(void)
+MR_parprof_post_work_stealing(void)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_WORK_STEALING)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1588,16 +1591,16 @@ MR_threadscope_post_work_stealing(void)
 
     put_event_header(buffer, MR_TS_MER_EVENT_WORK_STEALING,
         get_current_time_nanosecs());
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_start_par_conj(MR_Word* dynamic_id,
-    MR_TS_StringId static_id)
+MR_parprof_post_start_par_conj(MR_Word* dynamic_id,
+    MR_Parprof_StringId static_id)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_START_PAR_CONJ)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1610,15 +1613,15 @@ MR_threadscope_post_start_par_conj(MR_Word* dynamic_id,
     put_par_conj_dynamic_id(buffer, dynamic_id);
     put_string_id(buffer, static_id);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_end_par_conj(MR_Word *dynamic_id)
+MR_parprof_post_end_par_conj(MR_Word *dynamic_id)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_END_PAR_CONJ)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1630,15 +1633,15 @@ MR_threadscope_post_end_par_conj(MR_Word *dynamic_id)
         get_current_time_nanosecs());
     put_par_conj_dynamic_id(buffer, dynamic_id);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_end_par_conjunct(MR_Word *dynamic_id)
+MR_parprof_post_end_par_conjunct(MR_Word *dynamic_id)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_END_PAR_CONJUNCT)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1650,16 +1653,16 @@ MR_threadscope_post_end_par_conjunct(MR_Word *dynamic_id)
         get_current_time_nanosecs());
     put_par_conj_dynamic_id(buffer, dynamic_id);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 /*
 ** Register a string for use in future messages.
 */
-static MR_TS_StringId
-MR_threadscope_register_string(const char *string)
+static MR_Parprof_StringId
+MR_parprof_register_string(const char *string)
 {
-    MR_TS_StringId id;
+    MR_Parprof_StringId id;
     unsigned length;
 
     length = strlen(string);
@@ -1684,25 +1687,25 @@ MR_threadscope_register_string(const char *string)
 }
 
 void
-MR_threadscope_register_strings_array(MR_Threadscope_String *array,
+MR_parprof_register_strings_array(MR_Parprof_String *array,
     unsigned size)
 {
     unsigned i;
 
     for (i = 0; i < size; i++) {
-        array[i].MR_tsstring_id =
-            MR_threadscope_register_string(array[i].MR_tsstring_string);
+        array[i].MR_ppstring_id =
+            MR_parprof_register_string(array[i].MR_ppstring_string);
     }
 
     flush_event_buffer(&global_buffer);
 }
 
 void
-MR_threadscope_post_log_msg(const char *message)
+MR_parprof_post_log_msg(const char *message)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_variable_size_event(buffer, strlen(message) + 2)) {
         flush_event_buffer(buffer),
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1714,13 +1717,13 @@ MR_threadscope_post_log_msg(const char *message)
         get_current_time_nanosecs());
     put_string_size16(buffer, message);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_create_engset(MR_EngSetId id, MR_EngSetType type)
+MR_parprof_post_create_engset(MR_EngSetId id, MR_EngSetType type)
 {
-    struct MR_threadscope_event_buffer *buffer = &global_buffer;
+    struct MR_parprof_event_buffer *buffer = &global_buffer;
 
     if (!enough_room_for_event(buffer, MR_TS_EVENT_CAPSET_CREATE)) {
         flush_event_buffer(buffer);
@@ -1732,9 +1735,9 @@ MR_threadscope_post_create_engset(MR_EngSetId id, MR_EngSetType type)
 }
 
 void
-MR_threadscope_post_destroy_engset(MR_EngSetId id)
+MR_parprof_post_destroy_engset(MR_EngSetId id)
 {
-    struct MR_threadscope_event_buffer *buffer = &global_buffer;
+    struct MR_parprof_event_buffer *buffer = &global_buffer;
 
     if (!enough_room_for_event(buffer, MR_TS_EVENT_CAPSET_DELETE)) {
         flush_event_buffer(buffer);
@@ -1746,10 +1749,10 @@ MR_threadscope_post_destroy_engset(MR_EngSetId id)
 }
 
 void
-MR_threadscope_post_engset_add(struct MR_threadscope_event_buffer *buffer,
+MR_parprof_post_engset_add(struct MR_parprof_event_buffer *buffer,
     MR_EngSetId id, MR_EngineId eng)
 {
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     maybe_close_block(buffer);
     if (!enough_room_for_event(buffer, MR_TS_EVENT_CAPSET_ASSIGN_CAP)) {
         flush_event_buffer(buffer);
@@ -1763,15 +1766,15 @@ MR_threadscope_post_engset_add(struct MR_threadscope_event_buffer *buffer,
     put_engset_id(buffer, id);
     put_engine_id(buffer, eng);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_engset_remove(MR_EngSetId id, MR_EngineId eng)
+MR_parprof_post_engset_remove(MR_EngSetId id, MR_EngineId eng)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     maybe_close_block(buffer);
     if (!enough_room_for_event(buffer, MR_TS_EVENT_CAPSET_REMOVE_CAP)) {
         flush_event_buffer(buffer);
@@ -1782,14 +1785,14 @@ MR_threadscope_post_engset_remove(MR_EngSetId id, MR_EngineId eng)
     put_engset_id(buffer, id);
     put_engine_id(buffer, eng);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_runtime_identifier(MR_EngSetId engset_id,
+MR_parprof_post_runtime_identifier(MR_EngSetId engset_id,
     const char *identifier)
 {
-    struct MR_threadscope_event_buffer *buffer = &global_buffer;
+    struct MR_parprof_event_buffer *buffer = &global_buffer;
     unsigned len;
 
     len = strlen(identifier);
@@ -1805,11 +1808,11 @@ MR_threadscope_post_runtime_identifier(MR_EngSetId engset_id,
 }
 
 void
-MR_threadscope_post_new_future(MR_Future *future_id, MR_TS_StringId name)
+MR_parprof_post_new_future(MR_Future *future_id, MR_Parprof_StringId name)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_FUT_CREATE)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1822,15 +1825,15 @@ MR_threadscope_post_new_future(MR_Future *future_id, MR_TS_StringId name)
     put_future_id(buffer, future_id);
     put_string_id(buffer, name);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_wait_future_nosuspend(MR_Future* future_id)
+MR_parprof_post_wait_future_nosuspend(MR_Future* future_id)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_FUT_WAIT_NOSUSPEND)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1842,15 +1845,15 @@ MR_threadscope_post_wait_future_nosuspend(MR_Future* future_id)
         get_current_time_nanosecs());
     put_future_id(buffer, future_id);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_wait_future_suspended(MR_Future* future_id)
+MR_parprof_post_wait_future_suspended(MR_Future* future_id)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_FUT_WAIT_SUSPENDED)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1862,15 +1865,15 @@ MR_threadscope_post_wait_future_suspended(MR_Future* future_id)
         get_current_time_nanosecs());
     put_future_id(buffer, future_id);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 void
-MR_threadscope_post_signal_future(MR_Future* future_id)
+MR_parprof_post_signal_future(MR_Future* future_id)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_FUT_SIGNAL)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1882,14 +1885,14 @@ MR_threadscope_post_signal_future(MR_Future* future_id)
         get_current_time_nanosecs());
     put_future_id(buffer, future_id);
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
-void MR_threadscope_post_engine_sleeping(void)
+void MR_parprof_post_engine_sleeping(void)
 {
-    struct MR_threadscope_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
+    struct MR_parprof_event_buffer *buffer = MR_ENGINE(MR_eng_ts_buffer);
 
-    MR_US_SPIN_LOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_SPIN_LOCK(&(buffer->MR_ppbuffer_lock));
     if (!enough_room_for_event(buffer, MR_TS_MER_EVENT_ENGINE_SLEEPING)) {
         flush_event_buffer(buffer);
         open_block(buffer, MR_ENGINE(MR_eng_id));
@@ -1900,21 +1903,21 @@ void MR_threadscope_post_engine_sleeping(void)
     put_event_header(buffer, MR_TS_MER_EVENT_ENGINE_SLEEPING,
         get_current_time_nanosecs());
 
-    MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+    MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
 }
 
 /***************************************************************************/
 
-static struct MR_threadscope_event_buffer*
+static struct MR_parprof_event_buffer*
 MR_create_event_buffer(void)
 {
-    struct MR_threadscope_event_buffer* buffer;
+    struct MR_parprof_event_buffer* buffer;
 
-    buffer = MR_GC_NEW(MR_threadscope_event_buffer_t);
-    buffer->MR_tsbuffer_pos = 0;
-    buffer->MR_tsbuffer_block_open_pos = -1;
-    buffer->MR_tsbuffer_ctxt_is_stopped = MR_TRUE;
-    buffer->MR_tsbuffer_lock = MR_US_LOCK_INITIAL_VALUE;
+    buffer = MR_GC_NEW(MR_parprof_event_buffer_t);
+    buffer->MR_ppbuffer_pos = 0;
+    buffer->MR_ppbuffer_block_open_pos = -1;
+    buffer->MR_ppbuffer_ctxt_is_stopped = MR_TRUE;
+    buffer->MR_ppbuffer_lock = MR_US_LOCK_INITIAL_VALUE;
 
     return buffer;
 }
@@ -1937,16 +1940,16 @@ MR_open_output_file_and_write_prelude(void)
     ** for this filename.
     */
     filename_len = strlen(progname_base) + strlen(MR_TS_FILENAME_FORMAT) + 1;
-    MR_threadscope_output_filename = MR_GC_NEW_ARRAY(char, filename_len);
-    snprintf(MR_threadscope_output_filename, filename_len,
+    MR_parprof_output_filename = MR_GC_NEW_ARRAY(char, filename_len);
+    snprintf(MR_parprof_output_filename, filename_len,
         MR_TS_FILENAME_FORMAT, progname_base);
     free(progname_copy);
     progname_copy = NULL;
     progname_base = NULL;
 
-    MR_threadscope_output_file = fopen(MR_threadscope_output_filename, "w");
-    if (!MR_threadscope_output_file) {
-        perror(MR_threadscope_output_filename);
+    MR_parprof_output_file = fopen(MR_parprof_output_filename, "w");
+    if (!MR_parprof_output_file) {
+        perror(MR_parprof_output_filename);
         return;
     }
 
@@ -1968,20 +1971,20 @@ MR_open_output_file_and_write_prelude(void)
 static void
 MR_close_output_file(void)
 {
-    if (MR_threadscope_output_file) {
+    if (MR_parprof_output_file) {
         put_be_uint16(&global_buffer, MR_TS_EVENT_DATA_END);
         if (flush_event_buffer(&global_buffer)) {
-            if (EOF == fclose(MR_threadscope_output_file)) {
-                perror(MR_threadscope_output_filename);
+            if (EOF == fclose(MR_parprof_output_file)) {
+                perror(MR_parprof_output_filename);
             }
-            MR_threadscope_output_file = NULL;
-            MR_threadscope_output_filename = NULL;
+            MR_parprof_output_file = NULL;
+            MR_parprof_output_filename = NULL;
         }
     }
 }
 
 static void
-put_event_type(struct MR_threadscope_event_buffer *buffer,
+put_event_type(struct MR_parprof_event_buffer *buffer,
     EventTypeDesc *event_type_desc)
 {
     MR_int_least16_t    size;
@@ -2022,47 +2025,47 @@ put_event_type(struct MR_threadscope_event_buffer *buffer,
 }
 
 static MR_bool
-flush_event_buffer(struct MR_threadscope_event_buffer *buffer)
+flush_event_buffer(struct MR_parprof_event_buffer *buffer)
 {
     maybe_close_block(buffer);
 
     /*
     ** fwrite handles locking for us, so we have no concurrent access problems.
     */
-    if (MR_threadscope_output_file && buffer->MR_tsbuffer_pos) {
-        if (0 == fwrite(buffer->MR_tsbuffer_data, buffer->MR_tsbuffer_pos, 1,
-            MR_threadscope_output_file))
+    if (MR_parprof_output_file && buffer->MR_ppbuffer_pos) {
+        if (0 == fwrite(buffer->MR_ppbuffer_data, buffer->MR_ppbuffer_pos, 1,
+            MR_parprof_output_file))
         {
-            perror(MR_threadscope_output_filename);
-            MR_threadscope_output_file = NULL;
-            MR_threadscope_output_filename = NULL;
+            perror(MR_parprof_output_filename);
+            MR_parprof_output_file = NULL;
+            MR_parprof_output_filename = NULL;
         }
     }
-    buffer->MR_tsbuffer_pos = 0;
+    buffer->MR_ppbuffer_pos = 0;
 
-    return (MR_threadscope_output_filename ? MR_TRUE : MR_FALSE);
+    return (MR_parprof_output_filename ? MR_TRUE : MR_FALSE);
 }
 
 static void
-maybe_close_block(struct MR_threadscope_event_buffer *buffer)
+maybe_close_block(struct MR_parprof_event_buffer *buffer)
 {
     MR_Unsigned saved_pos;
 
-    if (buffer->MR_tsbuffer_block_open_pos != -1) {
-        saved_pos = buffer->MR_tsbuffer_pos;
-        buffer->MR_tsbuffer_pos = buffer->MR_tsbuffer_block_open_pos +
+    if (buffer->MR_ppbuffer_block_open_pos != -1) {
+        saved_pos = buffer->MR_ppbuffer_pos;
+        buffer->MR_ppbuffer_pos = buffer->MR_ppbuffer_block_open_pos +
             sizeof(EventType) + sizeof(Time);
         put_eventlog_offset(buffer,
-            saved_pos - buffer->MR_tsbuffer_block_open_pos);
+            saved_pos - buffer->MR_ppbuffer_block_open_pos);
         put_timestamp(buffer, get_current_time_nanosecs());
 
-        buffer->MR_tsbuffer_block_open_pos = -1;
-        buffer->MR_tsbuffer_pos = saved_pos;
+        buffer->MR_ppbuffer_block_open_pos = -1;
+        buffer->MR_ppbuffer_pos = saved_pos;
     }
 }
 
 static void
-open_block(struct MR_threadscope_event_buffer *buffer, MR_Unsigned eng_id)
+open_block(struct MR_parprof_event_buffer *buffer, MR_Unsigned eng_id)
 {
     maybe_close_block(buffer);
 
@@ -2070,13 +2073,13 @@ open_block(struct MR_threadscope_event_buffer *buffer, MR_Unsigned eng_id)
     ** Save the old position. Close block uses this so that it knows
     ** where the block marker is that it should write into.
     */
-    buffer->MR_tsbuffer_block_open_pos = buffer->MR_tsbuffer_pos;
+    buffer->MR_ppbuffer_block_open_pos = buffer->MR_ppbuffer_pos;
 
     put_event_header(buffer, MR_TS_EVENT_BLOCK_MARKER,
         get_current_time_nanosecs());
 
     /* Skip over the next two fields, they are filled in by close_block. */
-    buffer->MR_tsbuffer_pos += sizeof(EventlogOffset) + sizeof(Time);
+    buffer->MR_ppbuffer_pos += sizeof(EventlogOffset) + sizeof(Time);
 
     put_engine_id(buffer, eng_id);
 }
@@ -2084,16 +2087,16 @@ open_block(struct MR_threadscope_event_buffer *buffer, MR_Unsigned eng_id)
 static void
 start_gc_callback(void)
 {
-    struct MR_threadscope_event_buffer  *buffer;
+    struct MR_parprof_event_buffer  *buffer;
     MR_Context                          *context;
 
-    MR_DO_THREADSCOPE_DEBUG(
+    MR_DO_PARPROF_DEBUG(
         fprintf(stderr, "In gc start callback thread: 0x%lx\n", pthread_self())
     );
     if (MR_thread_engine_base == NULL) {
         return;
     }
-    MR_DO_THREADSCOPE_DEBUG(
+    MR_DO_PARPROF_DEBUG(
         fprintf(stderr, "\tEngine: 0x%.16lx\n", MR_thread_engine_base)
     );
     buffer = MR_thread_engine_base->MR_eng_ts_buffer;
@@ -2101,15 +2104,15 @@ start_gc_callback(void)
         /* GC might be running before we're done setting up */
         return;
     }
-    MR_DO_THREADSCOPE_DEBUG(
+    MR_DO_PARPROF_DEBUG(
         fprintf(stderr, "\tBuffer: 0x%.16lx\n", buffer)
     );
 
-    if (MR_US_TRY_LOCK(&(buffer->MR_tsbuffer_lock))) {
+    if (MR_US_TRY_LOCK(&(buffer->MR_ppbuffer_lock))) {
         context = MR_thread_engine_base->MR_eng_this_context;
-        if (!buffer->MR_tsbuffer_ctxt_is_stopped && context) {
-            MR_threadscope_post_stop_context_locked(buffer,
-                context, MR_TS_STOP_REASON_HEAP_OVERFLOW);
+        if (!buffer->MR_ppbuffer_ctxt_is_stopped && context) {
+            MR_parprof_post_stop_context_locked(buffer,
+                context, MR_PARPROF_STOP_REASON_HEAP_OVERFLOW);
         }
 
         if (!enough_room_for_event(buffer, MR_TS_EVENT_GC_START)) {
@@ -2136,17 +2139,17 @@ start_gc_callback(void)
         put_event_header(buffer, MR_TS_EVENT_GC_GLOBAL_SYNC,
             get_current_time_nanosecs());
 
-        MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+        MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
     }
 }
 
 static void
 stop_gc_callback(void)
 {
-    struct MR_threadscope_event_buffer  *buffer;
+    struct MR_parprof_event_buffer      *buffer;
     MR_Context                          *context;
 
-    MR_DO_THREADSCOPE_DEBUG(
+    MR_DO_PARPROF_DEBUG(
         fprintf(stderr, "In gc stop callback thread: 0x%lx\n", pthread_self());
     );
     if (MR_thread_engine_base == NULL) return;
@@ -2156,7 +2159,7 @@ stop_gc_callback(void)
         return;
     }
 
-    if (MR_US_TRY_LOCK(&(buffer->MR_tsbuffer_lock))) {
+    if (MR_US_TRY_LOCK(&(buffer->MR_ppbuffer_lock))) {
         if (!enough_room_for_event(buffer, MR_TS_EVENT_GC_END)) {
             flush_event_buffer(buffer);
             open_block(buffer, MR_thread_engine_base->MR_eng_id);
@@ -2168,20 +2171,20 @@ stop_gc_callback(void)
             get_current_time_nanosecs());
 
         context = MR_thread_engine_base->MR_eng_this_context;
-        if (!buffer->MR_tsbuffer_ctxt_is_stopped && context) {
-            MR_threadscope_post_run_context_locked(buffer, context);
+        if (!buffer->MR_ppbuffer_ctxt_is_stopped && context) {
+            MR_parprof_post_run_context_locked(buffer, context);
         }
-        MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+        MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
     }
 }
 
 static void
 pause_thread_gc_callback(void)
 {
-    struct MR_threadscope_event_buffer  *buffer;
+    struct MR_parprof_event_buffer  *buffer;
     MR_Context                          *context;
 
-    MR_DO_THREADSCOPE_DEBUG(
+    MR_DO_PARPROF_DEBUG(
         fprintf(stderr, "In gc pause thread callback thread: 0x%lx\n",
             pthread_self())
     );
@@ -2192,23 +2195,23 @@ pause_thread_gc_callback(void)
         return;
     }
 
-    if (MR_US_TRY_LOCK(&(buffer->MR_tsbuffer_lock))) {
+    if (MR_US_TRY_LOCK(&(buffer->MR_ppbuffer_lock))) {
         context = MR_thread_engine_base->MR_eng_this_context;
-        if (!buffer->MR_tsbuffer_ctxt_is_stopped && context) {
-            MR_threadscope_post_stop_context_locked(buffer, context,
-                MR_TS_STOP_REASON_YIELDING);
+        if (!buffer->MR_ppbuffer_ctxt_is_stopped && context) {
+            MR_parprof_post_stop_context_locked(buffer, context,
+                MR_PARPROF_STOP_REASON_YIELDING);
         }
-        MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+        MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
     }
 }
 
 static void
 resume_thread_gc_callback(void)
 {
-    struct MR_threadscope_event_buffer  *buffer;
+    struct MR_parprof_event_buffer  *buffer;
     MR_Context                          *context;
 
-    MR_DO_THREADSCOPE_DEBUG(
+    MR_DO_PARPROF_DEBUG(
         fprintf(stderr, "In gc resume thread callback thread: 0x%lx\n",
             pthread_self());
     );
@@ -2219,12 +2222,12 @@ resume_thread_gc_callback(void)
         return;
     }
 
-    if (MR_US_TRY_LOCK(&(buffer->MR_tsbuffer_lock))) {
+    if (MR_US_TRY_LOCK(&(buffer->MR_ppbuffer_lock))) {
         context = MR_thread_engine_base->MR_eng_this_context;
-        if (!buffer->MR_tsbuffer_ctxt_is_stopped && context) {
-            MR_threadscope_post_run_context_locked(buffer, context);
+        if (!buffer->MR_ppbuffer_ctxt_is_stopped && context) {
+            MR_parprof_post_run_context_locked(buffer, context);
         }
-        MR_US_UNLOCK(&(buffer->MR_tsbuffer_lock));
+        MR_US_UNLOCK(&(buffer->MR_ppbuffer_lock));
     }
 }
 
@@ -2233,7 +2236,7 @@ resume_thread_gc_callback(void)
 static Time
 get_current_time_nanosecs(void)
 {
-    if (MR_threadscope_use_tsc) {
+    if (MR_parprof_use_tsc) {
         MR_uint_least64_t   current_tsc;
         MercuryEngine       *eng = MR_thread_engine_base;
 
@@ -2266,4 +2269,4 @@ gettimeofday_nsecs(void)
 
 /***************************************************************************/
 
-#endif /* MR_THREADSCOPE */
+#endif /* MR_PARPROF */

@@ -699,7 +699,7 @@ gather_grade_defines(Globals, PIC, GradeDefines) :-
     globals.lookup_bool_option(Globals, threadscope, Threadscope),
     (
         Threadscope = yes,
-        ThreadscopeOpt = "-DMR_THREADSCOPE "
+        ThreadscopeOpt = "-DMR_PARPROF "
     ;
         Threadscope = no,
         ThreadscopeOpt = ""

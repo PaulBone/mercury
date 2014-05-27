@@ -431,8 +431,8 @@ void    (*MR_address_of_init_modules_complexity)(void);
 void    (*MR_address_of_write_out_proc_statics)(FILE *deep_fp,
             FILE *procrep_fp);
 #endif
-#ifdef  MR_THREADSCOPE
-void    (*MR_address_of_init_modules_threadscope_string_table)(void);
+#ifdef  MR_PARPROF
+void    (*MR_address_of_init_modules_parprof_string_table)(void);
 #endif
 void    (*MR_address_of_init_modules_required)(void);
 void    (*MR_address_of_final_modules_required)(void);
@@ -578,9 +578,9 @@ mercury_runtime_init(int argc, char **argv)
     /*
     ** Setup support for reading the CPU's TSC and detect the clock speed of the
     ** processor. This is currently used by profiling of the parallelism
-    ** runtime and the threadscope support but may be used by other profiling
-    ** or timing code. On architectures other than i386 and amd64 this is a
-    ** no-op.
+    ** runtime and the parallel profiling support but may be used by other
+    ** profiling or timing code. On architectures other than i386 and amd64
+    ** this is a no-op.
     */
     MR_do_cpu_feature_detection();
 #endif
@@ -679,18 +679,18 @@ mercury_runtime_init(int argc, char **argv)
 #if defined(MR_HAVE_THREAD_PINNING)
     MR_pin_primordial_thread();
 #endif
-  #if defined(MR_THREADSCOPE)
+  #if defined(MR_PARPROF)
     /*
-    ** We must setup threadscope before we setup the first engine.
+    ** We must setup parallel profiling before we setup the first engine.
     ** Pin the primordial thread, if thread pinning is configured.
     */
-    MR_setup_threadscope();
+    MR_setup_parprof();
 
     /*
-    ** Setup the threadscope string tables before the standard library is
-    ** initalised or engines are created.
+    ** Setup the parallel profiling string tables before the standard
+    ** library is initalised or engines are created.
     */
-    (*MR_address_of_init_modules_threadscope_string_table)();
+    (*MR_address_of_init_modules_parprof_string_table)();
   #endif
 
 #endif
@@ -710,13 +710,13 @@ mercury_runtime_init(int argc, char **argv)
         for (i = 1; i < MR_num_threads; i++) {
             MR_create_thread(NULL);
         }
-    #ifdef MR_THREADSCOPE
+    #ifdef MR_PARPROF
     /*
     ** TSC Synchronization is not used, support is commented out.
     ** See runtime/mercury_par_profile.h for an explanation.
     **
         for (i = 1; i < MR_num_threads; i++) {
-            MR_threadscope_sync_tsc_master();
+            MR_parprof_sync_tsc_master();
         }
     */
     #endif
@@ -1879,8 +1879,8 @@ MR_process_options(int argc, char **argv)
                 break;
 
             case MR_THREADSCOPE_USE_TSC:
-#ifdef MR_THREADSCOPE
-                MR_threadscope_use_tsc = MR_TRUE;
+#ifdef MR_PARPROF
+                MR_parprof_use_tsc = MR_TRUE;
 #endif
                 break;
 
@@ -2558,9 +2558,9 @@ mercury_runtime_main(void)
         MR_setup_callback(MR_program_entry_point);
 #endif
 
-#ifdef MR_THREADSCOPE
+#ifdef MR_PARPROF
 
-        MR_threadscope_post_calling_main();
+        MR_parprof_post_calling_main();
 
 #endif
 
@@ -2572,9 +2572,9 @@ mercury_runtime_main(void)
         MR_debugmsg0("Returning from MR_call_engine()\n");
 #endif
 
-#ifdef MR_THREADSCOPE
+#ifdef MR_PARPROF
 
-        MR_threadscope_post_stop_context(MR_TS_STOP_REASON_FINISHED);
+        MR_parprof_post_stop_context(MR_PARPROF_STOP_REASON_FINISHED);
 
 #endif
 
@@ -3109,11 +3109,11 @@ mercury_runtime_terminate(void)
 #if !defined(MR_HIGHLEVEL_CODE) && defined(MR_THREAD_SAFE)
     MR_shutdown_all_engines();
 
-#ifdef MR_THREADSCOPE
+#ifdef MR_PARPROF
     if (MR_ENGINE(MR_eng_ts_buffer)) {
-        MR_threadscope_finalize_engine(MR_thread_engine_base);
+        MR_parprof_finalize_engine(MR_thread_engine_base);
     }
-    MR_finalize_threadscope();
+    MR_finalize_parprof();
 #endif
 
     assert(MR_thread_equal(MR_primordial_thread, pthread_self()));

@@ -222,14 +222,15 @@
 ** MR_THREAD_SAFE
 ** Enable support for parallelism.
 **
-** MR_THREADSCOPE
-** Enable support for parallelism profiling, aka 'threadscope'.  This is a
-** grade component. This works only with the low level C parallel grades.
+** MR_PARPROF
+** Enable support for parallelism profiling, formerlly 'threadscope support'.
+** This is a grade component.  This works only with the low level C parallel
+** grades.
 **
 ** MR_PROFILE_PARALLEL_EXECUTION_SUPPORT
 ** Enable support for profiling the parallel runtime system.  This collects
 ** counts and timings of certain runtime events.  It is implied by
-** MR_THREADSCOPE and must be enabled at runtime with the
+** MR_PARPROF and must be enabled at runtime with the
 ** --profile-parallel-execution runtime option.
 **
 ** MR_NO_BACKWARDS_COMPAT
@@ -937,17 +938,18 @@
 #endif
 
 /*
-** Check that MR_THREADSCOPE is used correctly.
+** Check that MR_PARPROF is used correctly.
 */
-#if defined(MR_THREADSCOPE) && !defined(MR_THREAD_SAFE)
+#if defined(MR_PARPROF) && !defined(MR_THREAD_SAFE)
   #error "The threadscope grade component may only be used with " \
     "parallel grades"
 #endif
 
 #ifdef MR_PROFILE_PARALLEL_EXECUTION_SUPPORT
-  #error "MR_PROFILE_PARALLEL_EXECUTION_SUPPORT may only be implied by MR_THREADSCOPE"
+  #error "MR_PROFILE_PARALLEL_EXECUTION_SUPPORT may only be implied by "
+    "MR_PARPROF"
 #endif
-#ifdef MR_THREADSCOPE
+#ifdef MR_PARPROF
   #define MR_PROFILE_PARALLEL_EXECUTION_SUPPORT
 #endif
 

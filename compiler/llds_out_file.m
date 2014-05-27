@@ -399,7 +399,7 @@ gather_labels_from_instrs_acc([Instr | Instrs],
     decl_set::in, decl_set::out, io::di, io::uo) is det.
 
 output_c_module_init_list(Info, ModuleName, AnnotatedModules, RttiDatas,
-        ProcLayoutDatas, ModuleLayoutDatas, ComplexityProcs, TSStringTable,
+        ProcLayoutDatas, ModuleLayoutDatas, ComplexityProcs, PPStringTable,
         AllocSites, InitPredNames, FinalPredNames, !DeclSet, !IO) :-
     MustInit = (pred(Module::in) is semidet :-
         module_defines_label_with_layout(Info, Module)
@@ -446,10 +446,10 @@ output_c_module_init_list(Info, ModuleName, AnnotatedModules, RttiDatas,
     io.write_string("init_complexity_procs(void);\n", !IO),
     io.write_string("#endif\n", !IO),
 
-    io.write_string("#ifdef MR_THREADSCOPE\n", !IO),
+    io.write_string("#ifdef MR_PARPROF\n", !IO),
     io.write_string("void ", !IO),
     output_init_name(ModuleName, !IO),
-    io.write_string("init_threadscope_string_table(void);\n", !IO),
+    io.write_string("init_parprof_string_table(void);\n", !IO),
     io.write_string("#endif\n", !IO),
 
     (
@@ -555,22 +555,22 @@ output_c_module_init_list(Info, ModuleName, AnnotatedModules, RttiDatas,
     io.write_string("}\n", !IO),
     io.write_string("\n#endif\n\n", !IO),
 
-    io.write_string("#ifdef MR_THREADSCOPE\n", !IO),
+    io.write_string("#ifdef MR_PARPROF\n", !IO),
     io.write_string("\nvoid ", !IO),
     output_init_name(ModuleName, !IO),
-    io.write_string("init_threadscope_string_table(void)\n", !IO),
+    io.write_string("init_parprof_string_table(void)\n", !IO),
     io.write_string("{\n", !IO),
     (
-        TSStringTable = []
+        PPStringTable = []
     ;
-        TSStringTable = [_ | _],
-        TSStringTableSize = length(TSStringTable),
-        io.write_string("\tMR_threadscope_register_strings_array(\n", !IO),
+        PPStringTable = [_ | _],
+        PPStringTableSize = length(PPStringTable),
+        io.write_string("\tMR_parprof_register_strings_array(\n", !IO),
         io.write_string("\t\t", !IO),
         MangledModuleName = Info ^ lout_mangled_module_name,
         output_layout_array_name(use_layout_macro, MangledModuleName,
-            threadscope_string_table_array, !IO),
-        io.format(", %d);\n", [i(TSStringTableSize)], !IO)
+            parprof_string_table_array, !IO),
+        io.format(", %d);\n", [i(PPStringTableSize)], !IO)
     ),
     io.write_string("}\n", !IO),
     io.write_string("\n#endif\n\n", !IO),

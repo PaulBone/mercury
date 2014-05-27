@@ -166,8 +166,8 @@ MR_init_thread(MR_when_to_use when_to_use)
 
     MR_all_engine_bases[eng->MR_eng_id] = eng;
     MR_spark_deques[eng->MR_eng_id] = &(eng->MR_eng_spark_deque);
-    #ifdef MR_THREADSCOPE
-        MR_threadscope_setup_engine(eng);
+    #ifdef MR_PARPROF
+        MR_parprof_setup_engine(eng);
     #endif
   #endif
 #else
@@ -179,13 +179,13 @@ MR_init_thread(MR_when_to_use when_to_use)
 #ifdef MR_THREAD_SAFE
     MR_ENGINE(MR_eng_owner_thread) = pthread_self();
   #ifdef MR_LL_PARALLEL_CONJ
-    #ifdef MR_THREADSCOPE
+    #ifdef MR_PARPROF
     /*
     ** TSC Synchronization is not used, support is commented out.  See
     ** runtime/mercury_par_profiling.h for an explanation.
     **
     if (when_to_use == MR_use_later) {
-        MR_threadscope_sync_tsc_slave();
+        MR_parprof_sync_tsc_slave();
     }
     */
     #endif
@@ -215,8 +215,8 @@ MR_init_thread(MR_when_to_use when_to_use)
                         MR_CONTEXT_SIZE_REGULAR, NULL);
             }
             MR_load_context(MR_ENGINE(MR_eng_this_context));
-#ifdef MR_THREADSCOPE
-            MR_threadscope_post_run_context();
+#ifdef MR_PARPROF
+            MR_parprof_post_run_context();
 #endif
             MR_save_registers();
             return MR_TRUE;

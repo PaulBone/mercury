@@ -502,7 +502,7 @@ output_layout_array_defns(Info, PseudoTypeInfos, HLDSVarNums,
         TSStringTable = []
     ;
         TSStringTable = [_ | _],
-        output_threadscope_string_table_array(Info, TSStringTable, !IO)
+        output_parprof_string_table_array(Info, TSStringTable, !IO)
     ),
     (
         AllocSites = []
@@ -1596,28 +1596,29 @@ eval_method_to_c_string(eval_table_io(Decl, Unitize)) = Str :-
 
 %-----------------------------------------------------------------------------%
 %
-% Definition of array #20: threadscope string table.
+% Definition of array #20: parallel profiling (formerly threadscope) string
+% table.
 %
 
-:- pred output_threadscope_string_table_array(llds_out_info::in,
+:- pred output_parprof_string_table_array(llds_out_info::in,
     list(string)::in, io::di, io::uo) is det.
 
-output_threadscope_string_table_array(Info, TSStringTable, !IO) :-
+output_parprof_string_table_array(Info, StringTable, !IO) :-
     ModuleName = Info ^ lout_mangled_module_name,
-    list.length(TSStringTable, NumStrings),
-    Name = threadscope_string_table_array,
-    io.write_string("#ifdef MR_THREADSCOPE\n", !IO),
+    list.length(StringTable, NumStrings),
+    Name = parprof_string_table_array,
+    io.write_string("#ifdef MR_PARPROF\n", !IO),
     output_layout_array_name_storage_type_name(ModuleName, Name,
         being_defined, !IO),
     io.format("[%d] = {\n", [i(NumStrings)], !IO),
-    list.foldl2(output_threadscope_string_table_slot(Info), TSStringTable,
+    list.foldl2(output_parprof_string_table_slot(Info), StringTable,
         0, _, !IO),
     io.write_string("};\n#endif\n\n", !IO).
 
-:- pred output_threadscope_string_table_slot(llds_out_info::in, string::in,
+:- pred output_parprof_string_table_slot(llds_out_info::in, string::in,
     int::in, int::out, io::di, io::uo) is det.
 
-output_threadscope_string_table_slot(Info, String, !Slot, !IO) :-
+output_parprof_string_table_slot(Info, String, !Slot, !IO) :-
     AutoComments = Info ^ lout_auto_comments,
     (
         AutoComments = yes,
@@ -1753,8 +1754,8 @@ output_layout_array_name(UseMacro, ModuleName, ArrayName, !IO) :-
             ArrayName = proc_exec_trace_array,
             io.write_string("MR_proc_exec_traces", !IO)
         ;
-            ArrayName = threadscope_string_table_array,
-            io.write_string("MR_threadscope_strings", !IO)
+            ArrayName = parprof_string_table_array,
+            io.write_string("MR_parprof_strings", !IO)
         ;
             ArrayName = alloc_site_array,
             io.write_string("MR_alloc_sites", !IO)
@@ -1822,8 +1823,8 @@ output_layout_array_name(UseMacro, ModuleName, ArrayName, !IO) :-
             ArrayName = proc_exec_trace_array,
             io.write_string("mercury_data__proc_exec_traces_array__", !IO)
         ;
-            ArrayName = threadscope_string_table_array,
-            io.write_string("mercury_data__threadscope_string_table_array__",
+            ArrayName = parprof_string_table_array,
+            io.write_string("mercury_data__parprof_string_table_array__",
                 !IO)
         ;
             ArrayName = alloc_site_array,
@@ -2094,8 +2095,8 @@ output_layout_array_name_storage_type_name(ModuleName, Name, BeingDefined,
         output_layout_array_name(do_not_use_layout_macro, ModuleName,
             Name, !IO)
     ;
-        Name = threadscope_string_table_array,
-        io.write_string("MR_Threadscope_String ", !IO),
+        Name = parprof_string_table_array,
+        io.write_string("MR_Parprof_String ", !IO),
         output_layout_array_name(do_not_use_layout_macro, ModuleName,
             Name, !IO)
     ;
@@ -3277,7 +3278,7 @@ output_layout_slots_in_vector(ModuleName, [SlotName | SlotNames], !IO) :-
         ; ArrayName = proc_table_io_decl_array
         ; ArrayName = proc_event_layouts_array
         ; ArrayName = proc_exec_trace_array
-        ; ArrayName = threadscope_string_table_array
+        ; ArrayName = parprof_string_table_array
         ; ArrayName = alloc_site_array
         ),
         output_layout_slot_addr(use_layout_macro, ModuleName, SlotName, !IO),

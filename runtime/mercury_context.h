@@ -253,7 +253,7 @@ struct MR_Spark_Struct {
     MR_SyncTerm             *MR_spark_sync_term;
     MR_Code                 *MR_spark_resume;
     MR_ThreadLocalMuts      *MR_spark_thread_local_mutables;
-#ifdef MR_THREADSCOPE
+#ifdef MR_PARPROF
     MR_uint_least32_t       MR_spark_id;
 #endif
 };
@@ -278,7 +278,7 @@ struct MR_SparkDeque_Struct {
 
 struct MR_Context_Struct {
     const char          *MR_ctxt_id;
-#ifdef MR_THREADSCOPE
+#ifdef MR_PARPROF
     MR_Unsigned         MR_ctxt_num_id;
 #endif
     MR_ContextSize      MR_ctxt_size;
@@ -619,10 +619,10 @@ extern  void        MR_schedule_context(MR_Context *ctxt);
   #define MR_IF_NOT_HIGHLEVEL_CODE(x)
 #endif
 
-#ifdef MR_THREADSCOPE
-  #define MR_IF_THREADSCOPE(x) x
+#ifdef MR_PARPROF
+  #define MR_IF_PARPROF(x) x
 #else
-  #define MR_IF_THREADSCOPE(x)
+  #define MR_IF_PARPROF(x)
 #endif
 
 #ifdef MR_WORKSTEAL_POLLING
@@ -792,7 +792,7 @@ extern  void        MR_schedule_context(MR_Context *ctxt);
   MR_STATIC_ASSERT(mercury_context,
     MR_SYNC_TERM_SIZE == MR_bytes_to_words(sizeof(struct MR_SyncTerm_Struct)));
 
-#ifdef MR_THREADSCOPE
+#ifdef MR_PARPROF
   #define MR_init_sync_term(sync_term, nbranches, static_conj_id)             \
     do {                                                                      \
         MR_SyncTerm *init_st = (MR_SyncTerm *) &(sync_term);                  \
@@ -800,7 +800,7 @@ extern  void        MR_schedule_context(MR_Context *ctxt);
         init_st->MR_st_orig_context = MR_ENGINE(MR_eng_this_context);         \
         init_st->MR_st_parent_sp = MR_parent_sp;                              \
         init_st->MR_st_count = (nbranches);                                   \
-        MR_threadscope_post_start_par_conj(&(sync_term), static_conj_id);     \
+        MR_parprof_post_start_par_conj(&(sync_term), static_conj_id);         \
     } while (0)
 #else
   #define MR_init_sync_term(sync_term, nbranches, static_conj_id)             \
@@ -826,7 +826,7 @@ do {                                                                         \
     MR_Spark            fnc_spark;                                           \
     MR_SparkDeque       *fnc_deque;                                          \
     MR_EngineId         engine_id = MR_ENGINE(MR_eng_id);                    \
-    MR_IF_THREADSCOPE(                                                       \
+    MR_IF_PARPROF(                                                           \
         MR_uint_least32_t   id;                                              \
     )                                                                        \
     MR_IF_NOT_WORKSTEAL_POLLING(                                             \
@@ -836,14 +836,14 @@ do {                                                                         \
     fnc_spark.MR_spark_sync_term = (MR_SyncTerm*) &(sync_term);              \
     fnc_spark.MR_spark_resume = (child);                                     \
     fnc_spark.MR_spark_thread_local_mutables = MR_THREAD_LOCAL_MUTABLES;     \
-    MR_IF_THREADSCOPE(                                                       \
+    MR_IF_PARPROF(                                                           \
         id = MR_ENGINE(MR_eng_next_spark_id)++;                              \
         fnc_spark.MR_spark_id = (engine_id << 24)|(id & 0xFFFFFF);           \
     )                                                                        \
     fnc_deque = &MR_ENGINE(MR_eng_spark_deque);                              \
     MR_wsdeque_push_bottom(fnc_deque, &fnc_spark);                           \
-    MR_IF_THREADSCOPE(                                                       \
-        MR_threadscope_post_sparking(&(sync_term), fnc_spark.MR_spark_id);   \
+    MR_IF_PARPROF(                                                           \
+        MR_parprof_post_sparking(&(sync_term), fnc_spark.MR_spark_id);       \
     )                                                                        \
     MR_IF_NOT_WORKSTEAL_POLLING(                                             \
         action_data.MR_ewa_worksteal_engine = MR_ENGINE(MR_eng_id);          \

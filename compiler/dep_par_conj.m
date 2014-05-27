@@ -180,10 +180,10 @@ impl_dep_par_conjs_in_module(!ModuleInfo) :-
     % Phase one: insert synchronization code into all parallel conjunctions
     % in the module.
     module_info_get_valid_predids(PredIds, !ModuleInfo),
-    module_info_get_ts_rev_string_table(!.ModuleInfo, _, RevTable0),
-    make_ts_string_table(RevTable0, TSStringTable0),
+    module_info_get_parprof_rev_string_table(!.ModuleInfo, _, RevTable0),
+    make_pp_string_table(RevTable0, PPStringTable0),
     list.foldl3(maybe_sync_dep_par_conjs_in_pred, PredIds,
-        !ModuleInfo, [], ProcsToScan, TSStringTable0, TSStringTable1),
+        !ModuleInfo, [], ProcsToScan, PPStringTable0, PPStringTable1),
 
     % Phase two: attempt to push the synchronization code inside procedures
     % as far as we can. We do this by creating specialized versions of
@@ -201,9 +201,9 @@ impl_dep_par_conjs_in_module(!ModuleInfo) :-
         Pushability0, Pushability, RevProcMap0, RevProcMap),
     add_requested_specialized_par_procs(PendingParProcs, Pushability,
         DoneParProcs0, InitialModuleInfo, !ModuleInfo, RevProcMap, _,
-        TSStringTable1, TSStringTable),
-    module_info_set_ts_rev_string_table(TSStringTable ^ st_size,
-        TSStringTable ^ st_rev_table, !ModuleInfo).
+        PPStringTable1, PPStringTable),
+    module_info_set_parprof_rev_string_table(PPStringTable ^ pp_size,
+        PPStringTable ^ pp_rev_table, !ModuleInfo).
 
 %-----------------------------------------------------------------------------%
 %-----------------------------------------------------------------------------%
@@ -237,29 +237,29 @@ impl_dep_par_conjs_in_module(!ModuleInfo) :-
                 % The current procedure.
                 sync_this_proc              :: pred_proc_id,
 
-                % The current threadscope string table.
-                sync_ts_string_table        :: ts_string_table
+                % The current parallel profiling string table.
+                sync_pp_string_table        :: pp_string_table
             ).
 
 :- pred maybe_sync_dep_par_conjs_in_pred(pred_id::in,
     module_info::in, module_info::out,
     list(pred_proc_id)::in, list(pred_proc_id)::out,
-    ts_string_table::in, ts_string_table::out) is det.
+    pp_string_table::in, pp_string_table::out) is det.
 
 maybe_sync_dep_par_conjs_in_pred(PredId, !ModuleInfo, !ProcsToScan,
-        !TSStringTable) :-
+        !PPStringTable) :-
     module_info_pred_info(!.ModuleInfo, PredId, PredInfo),
     ProcIds = pred_info_non_imported_procids(PredInfo),
     list.foldl3(maybe_sync_dep_par_conjs_in_proc(PredId), ProcIds,
-        !ModuleInfo, !ProcsToScan, !TSStringTable).
+        !ModuleInfo, !ProcsToScan, !PPStringTable).
 
 :- pred maybe_sync_dep_par_conjs_in_proc(pred_id::in, proc_id::in,
     module_info::in, module_info::out,
     list(pred_proc_id)::in, list(pred_proc_id)::out,
-    ts_string_table::in, ts_string_table::out) is det.
+    pp_string_table::in, pp_string_table::out) is det.
 
 maybe_sync_dep_par_conjs_in_proc(PredId, ProcId, !ModuleInfo, !ProcsToScan,
-        !TSStringTable) :-
+        !PPStringTable) :-
     module_info_proc_info(!.ModuleInfo, PredId, ProcId, ProcInfo),
     proc_info_get_has_parallel_conj(ProcInfo, HasParallelConj),
     (
@@ -267,16 +267,16 @@ maybe_sync_dep_par_conjs_in_proc(PredId, ProcId, !ModuleInfo, !ProcsToScan,
     ;
         HasParallelConj = yes,
         sync_dep_par_conjs_in_proc(PredId, ProcId, set_of_var.init,
-            !ModuleInfo, !ProcsToScan, !TSStringTable)
+            !ModuleInfo, !ProcsToScan, !PPStringTable)
     ).
 
 :- pred sync_dep_par_conjs_in_proc(pred_id::in, proc_id::in,
     set_of_progvar::in, module_info::in, module_info::out,
     list(pred_proc_id)::in, list(pred_proc_id)::out,
-    ts_string_table::in, ts_string_table::out) is det.
+    pp_string_table::in, pp_string_table::out) is det.
 
 sync_dep_par_conjs_in_proc(PredId, ProcId, IgnoreVars, !ModuleInfo,
-        !ProcsToScan, !TSStringTable) :-
+        !ProcsToScan, !PPStringTable) :-
     some [!PredInfo, !ProcInfo, !Goal, !VarSet, !VarTypes, !SyncInfo] (
         module_info_pred_proc_info(!.ModuleInfo, PredId, ProcId,
             !:PredInfo, !:ProcInfo),
@@ -295,10 +295,10 @@ sync_dep_par_conjs_in_proc(PredId, ProcId, IgnoreVars, !ModuleInfo,
 
         GoalBeforeDepParConj = !.Goal,
         !:SyncInfo = sync_info(!.ModuleInfo, IgnoreVars, AllowSomePathsOnly,
-            !.VarSet, !.VarTypes, proc(PredId, ProcId), !.TSStringTable),
+            !.VarSet, !.VarTypes, proc(PredId, ProcId), !.PPStringTable),
         sync_dep_par_conjs_in_goal(!Goal, InstMap0, _, !SyncInfo),
         !.SyncInfo = sync_info(_, _, _, !:VarSet, !:VarTypes, _,
-            !:TSStringTable),
+            !:PPStringTable),
         % XXX RTTI varmaps may need to be updated
 
         trace [compile_time(flag("debug-dep-par-conj")), io(!IO)] (
@@ -467,7 +467,7 @@ sync_dep_par_conjs_in_cases([Case0 | Cases0], [Case | Cases], InstMap0,
 
 maybe_sync_dep_par_conj(Conjuncts, GoalInfo, NewGoal, InstMap, !SyncInfo) :-
     !.SyncInfo = sync_info(ModuleInfo0, IgnoreVars, AllowSomePathsOnly,
-        VarSet0, VarTypes0, PredProcId, TSStringTable0),
+        VarSet0, VarTypes0, PredProcId, PPStringTable0),
     % Find the variables that are shared between conjuncts.
     SharedVars0 = find_shared_variables(ModuleInfo0, InstMap, Conjuncts),
 
@@ -487,7 +487,7 @@ maybe_sync_dep_par_conj(Conjuncts, GoalInfo, NewGoal, InstMap, !SyncInfo) :-
             reorder_indep_par_conj(PredProcId, VarTypes0, InstMap, Conjuncts,
                 GoalInfo, NewGoal, ModuleInfo0, ModuleInfo),
             !:SyncInfo = sync_info(ModuleInfo, IgnoreVars, AllowSomePathsOnly,
-                VarSet0, VarTypes0, PredProcId, TSStringTable0)
+                VarSet0, VarTypes0, PredProcId, PPStringTable0)
         ;
             ParLoopControl = yes,
             % Don't swap the conjuncts, parallel loop control can do a better
@@ -497,10 +497,10 @@ maybe_sync_dep_par_conj(Conjuncts, GoalInfo, NewGoal, InstMap, !SyncInfo) :-
     ;
         sync_dep_par_conj(ModuleInfo0, AllowSomePathsOnly, SharedVars,
             Conjuncts, GoalInfo, NewGoal, InstMap,
-            VarSet0, VarSet, VarTypes0, VarTypes, TSStringTable0,
-            TSStringTable),
+            VarSet0, VarSet, VarTypes0, VarTypes, PPStringTable0,
+            PPStringTable),
         !:SyncInfo = sync_info(ModuleInfo0, IgnoreVars, AllowSomePathsOnly,
-            VarSet, VarTypes, PredProcId, TSStringTable)
+            VarSet, VarTypes, PredProcId, PPStringTable)
     ).
 
     % Transforming the parallel conjunction.
@@ -530,14 +530,14 @@ maybe_sync_dep_par_conj(Conjuncts, GoalInfo, NewGoal, InstMap, !SyncInfo) :-
 :- pred sync_dep_par_conj(module_info::in, bool::in, set_of_progvar::in,
     list(hlds_goal)::in, hlds_goal_info::in, hlds_goal::out, instmap::in,
     prog_varset::in, prog_varset::out, vartypes::in, vartypes::out,
-    ts_string_table::in, ts_string_table::out) is det.
+    pp_string_table::in, pp_string_table::out) is det.
 
 sync_dep_par_conj(ModuleInfo, AllowSomePathsOnly, SharedVars, Goals, GoalInfo,
-        NewGoal, InstMap, !VarSet, !VarTypes, !TSStringTable) :-
+        NewGoal, InstMap, !VarSet, !VarTypes, !PPStringTable) :-
     SharedVarsList = set_of_var.to_sorted_list(SharedVars),
     list.map_foldl4(allocate_future(ModuleInfo), SharedVarsList,
         AllocateFuturesGoals, !VarSet, !VarTypes, map.init, FutureMap,
-        !TSStringTable),
+        !PPStringTable),
     list.condense(AllocateFuturesGoals, AllocateFutures),
     list.map_foldl3(
         sync_dep_par_conjunct(ModuleInfo, AllowSomePathsOnly, SharedVars,
@@ -1603,11 +1603,11 @@ find_specialization_requests_in_proc(DoneProcs, InitialModuleInfo, PredProcId,
 :- pred add_requested_specialized_par_procs(pending_par_procs::in,
     pushable_args_map::in, done_par_procs::in, module_info::in,
     module_info::in, module_info::out, rev_proc_map::in, rev_proc_map::out,
-    ts_string_table::in, ts_string_table::out) is det.
+    pp_string_table::in, pp_string_table::out) is det.
 
 add_requested_specialized_par_procs(!.PendingParProcs, !.Pushability,
         !.DoneParProcs, InitialModuleInfo, !ModuleInfo, !RevProcMap,
-        !TSStringTable) :-
+        !PPStringTable) :-
     (
         !.PendingParProcs = []
     ;
@@ -1617,10 +1617,10 @@ add_requested_specialized_par_procs(!.PendingParProcs, !.Pushability,
         map.det_insert(CallPattern, NewProc, !DoneParProcs),
         add_requested_specialized_par_proc(CallPattern, NewProc,
             !PendingParProcs, !Pushability, !.DoneParProcs, InitialModuleInfo,
-            !ModuleInfo, !RevProcMap, !TSStringTable),
+            !ModuleInfo, !RevProcMap, !PPStringTable),
         add_requested_specialized_par_procs(!.PendingParProcs, !.Pushability,
             !.DoneParProcs, InitialModuleInfo, !ModuleInfo, !RevProcMap,
-            !TSStringTable)
+            !PPStringTable)
     ).
 
 :- pred add_requested_specialized_par_proc(par_proc_call_pattern::in,
@@ -1628,11 +1628,11 @@ add_requested_specialized_par_procs(!.PendingParProcs, !.Pushability,
     pushable_args_map::in, pushable_args_map::out, done_par_procs::in,
     module_info::in, module_info::in, module_info::out,
     rev_proc_map::in, rev_proc_map::out,
-    ts_string_table::in, ts_string_table::out) is det.
+    pp_string_table::in, pp_string_table::out) is det.
 
 add_requested_specialized_par_proc(CallPattern, NewProc, !PendingParProcs,
         !Pushability, DoneParProcs, InitialModuleInfo, !ModuleInfo,
-        !RevProcMap, !TSStringTable) :-
+        !RevProcMap, !PPStringTable) :-
     CallPattern = par_proc_call_pattern(OldPredProcId, FutureArgs),
     NewProc = new_par_proc(NewPredProcId, _Name),
     OldPredProcId = proc(OldPredId, OldProcId),
@@ -1697,7 +1697,7 @@ add_requested_specialized_par_proc(CallPattern, NewProc, !PendingParProcs,
         % placeholder) specialized procedure.
         IgnoreVars = set_of_var.sorted_list_to_set(map.keys(FutureMap)),
         sync_dep_par_conjs_in_proc(NewPredId, NewProcId, IgnoreVars,
-            !ModuleInfo, [], _ProcsToScan, !TSStringTable),
+            !ModuleInfo, [], _ProcsToScan, !PPStringTable),
         find_specialization_requests_in_proc(DoneParProcs, InitialModuleInfo,
             NewPredProcId, !ModuleInfo, !PendingParProcs, !Pushability,
             !RevProcMap)
@@ -3108,17 +3108,17 @@ seen_more_signal_2(seen_signal_non_negligible_cost_after,
     %
 :- pred allocate_future(module_info::in, prog_var::in, hlds_goals::out,
     prog_varset::in, prog_varset::out, vartypes::in, vartypes::out,
-    future_map::in, future_map::out, ts_string_table::in, ts_string_table::out)
+    future_map::in, future_map::out, pp_string_table::in, pp_string_table::out)
     is det.
 
 allocate_future(ModuleInfo, SharedVar, Goals, !VarSet, !VarTypes,
-        !FutureMap, !TSStringTable) :-
+        !FutureMap, !PPStringTable) :-
     lookup_var_type(!.VarTypes, SharedVar, SharedVarType),
     varset.lookup_name(!.VarSet, SharedVar, SharedVarName),
     make_future_var(SharedVarName, SharedVarType, FutureVar, FutureVarType,
         !VarSet, !VarTypes),
     make_future_name_var_and_goal(SharedVarName, FutureNameVar, SetNameGoal,
-        !VarSet, !VarTypes, !TSStringTable),
+        !VarSet, !VarTypes, !PPStringTable),
     map.det_insert(SharedVar, FutureVar, !FutureMap),
 
     ModuleName = mercury_par_builtin_module,
@@ -3164,13 +3164,14 @@ make_future_var(SharedVarName, SharedVarType, FutureVar, FutureVarType,
 
 :- pred make_future_name_var_and_goal(string::in, prog_var::out, hlds_goal::out,
     prog_varset::in, prog_varset::out, vartypes::in, vartypes::out,
-    ts_string_table::in, ts_string_table::out) is det.
+    pp_string_table::in, pp_string_table::out) is det.
 
-make_future_name_var_and_goal(Name, FutureNameVar, Goal, !VarSet, !VarTypes, !TSStringTable) :-
+make_future_name_var_and_goal(Name, FutureNameVar, Goal, !VarSet, !VarTypes,
+        !PPStringTable) :-
     varset.new_named_var("FutureName" ++ Name, FutureNameVar, !VarSet),
     IntType = builtin_type(builtin_type_int),
     add_var_type(FutureNameVar, IntType, !VarTypes),
-    allocate_ts_string(Name, NameId, !TSStringTable),
+    allocate_pp_string(Name, NameId, !PPStringTable),
     Ground = ground(unique, none),
     GoalExpr = unify(FutureNameVar, rhs_functor(int_const(NameId), no, []),
         (free(IntType) -> Ground) - (Ground -> Ground),
@@ -3303,7 +3304,7 @@ signal_future_pred_name = "signal_future".
 :- func new_future_code = string.
 
 new_future_code = "
-    #ifdef MR_THREADSCOPE
+    #ifdef MR_PARPROF
         MR_par_builtin_new_future(Name, Future);
     #else
         MR_par_builtin_new_future(Future);
@@ -3471,21 +3472,21 @@ var_not_in_nonlocals(Var, Goal) :-
 
 %-----------------------------------------------------------------------------%
 %
-% Threadscope support used in this module.
+% Code used within this module for profiling parallel Mercury programs.
 %
 
-:- type ts_string_table
-    --->    ts_string_table(
-                st_lookup_map       :: map(string, int),
-                st_rev_table        :: list(string),
-                st_size             :: int
+:- type pp_string_table
+    --->    pp_string_table(
+                pp_lookup_map       :: map(string, int),
+                pp_rev_table        :: list(string),
+                pp_size             :: int
             ).
 
-:- pred allocate_ts_string(string::in, int::out,
-    ts_string_table::in, ts_string_table::out) is det.
+:- pred allocate_pp_string(string::in, int::out,
+    pp_string_table::in, pp_string_table::out) is det.
 
-allocate_ts_string(String, Id, !Table) :-
-    !.Table = ts_string_table(Map0, RevTable0, Size0),
+allocate_pp_string(String, Id, !Table) :-
+    !.Table = pp_string_table(Map0, RevTable0, Size0),
     ( map.search(Map0, String, ExistingId) ->
         Id = ExistingId
     ;
@@ -3493,20 +3494,20 @@ allocate_ts_string(String, Id, !Table) :-
         Size = Size0 + 1,
         RevTable = [String | RevTable0],
         map.det_insert(String, Id, Map0, Map),
-        !:Table = ts_string_table(Map, RevTable, Size)
+        !:Table = pp_string_table(Map, RevTable, Size)
     ).
 
-:- pred make_ts_string_table(list(string)::in, ts_string_table::out) is det.
+:- pred make_pp_string_table(list(string)::in, pp_string_table::out) is det.
 
-make_ts_string_table(RevTable, ts_string_table(Map, RevTable, Size)) :-
-    make_ts_string_table_2(RevTable, Size, map.init, Map).
+make_pp_string_table(RevTable, pp_string_table(Map, RevTable, Size)) :-
+    make_pp_string_table_2(RevTable, Size, map.init, Map).
 
-:- pred make_ts_string_table_2(list(string)::in, int::out,
+:- pred make_pp_string_table_2(list(string)::in, int::out,
     map(string, int)::in, map(string, int)::out) is det.
 
-make_ts_string_table_2([], 0, !Map).
-make_ts_string_table_2([Str | Strs], Size, !Map) :-
-    make_ts_string_table_2(Strs, Size0, !Map),
+make_pp_string_table_2([], 0, !Map).
+make_pp_string_table_2([Str | Strs], Size, !Map) :-
+    make_pp_string_table_2(Strs, Size0, !Map),
     Size = Size0 + 1,
     map.det_insert(Str, Size0, !Map).
 

@@ -263,8 +263,8 @@ extern  void    MR_print_deep_prof_var(FILE *fp, const char *name,
                     MR_CallSiteDynamic *csd);
 
 /*
-** Log a message for debugging purposes. This will log the message with
-** threadscope if available. In other parallel grades it will print the
+** Log a message for debugging purposes. This will log the message for 
+** parallel profiling if enabled. In other parallel grades it will print the
 ** address of the MercuryEngine structure with the message to stdout.
 ** In all other grades, it will print the message to standard output.
 ** There is never any need to put a newline character at the end

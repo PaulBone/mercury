@@ -1034,18 +1034,18 @@ static void
 leave_signal_handler(int sig)
 {
     fprintf(stderr, "exiting from signal handler\n");
-#if defined(MR_THREAD_SAFE) && defined(MR_THREADSCOPE)
+#if defined(MR_THREAD_SAFE) && defined(MR_PARPROF)
     if (MR_all_engine_bases) {
         int i;
         for (i = 0; i < MR_num_threads; i++) {
             if (MR_all_engine_bases[i] &&
                 MR_all_engine_bases[i]->MR_eng_ts_buffer)
             {
-                MR_threadscope_finalize_engine(MR_all_engine_bases[i]);
+                MR_parprof_finalize_engine(MR_all_engine_bases[i]);
             }
         }
     }
-    MR_finalize_threadscope();
+    MR_finalize_parprof();
 #endif
     MR_reset_signal(sig);
     raise(sig);

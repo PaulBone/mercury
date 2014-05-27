@@ -317,7 +317,7 @@ case $thread_safe in
 esac
 
 case $threadscope in
-    true)       THREADSCOPE_OPTS="-DMR_THREADSCOPE" ;;
+    true)       THREADSCOPE_OPTS="-DMR_PARPROF" ;;
     false)      THREADSCOPE_OPTS="" ;;
 esac
 

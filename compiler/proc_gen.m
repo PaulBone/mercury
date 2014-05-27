@@ -369,7 +369,7 @@ generate_proc_code(ModuleInfo0, ConstStructMap, PredId, PredInfo,
     % for model_det procedures, always needed for model_semi procedures, and
     % needed for model_non procedures only if we are doing execution tracing.
     global_data_get_static_cell_info(!.GlobalData, StaticCellInfo0),
-    global_data_get_threadscope_rev_string_table(!.GlobalData,
+    global_data_get_parprof_rev_string_table(!.GlobalData,
         TSRevStringTable0, TSStringTableSize0),
 
     code_info_init(SaveSuccip, Globals, PredId, ProcId, PredInfo,
@@ -400,10 +400,10 @@ generate_proc_code(ModuleInfo0, ConstStructMap, PredId, PredInfo,
     get_static_cell_info(CodeInfo, StaticCellInfo),
     global_data_set_static_cell_info(StaticCellInfo, !GlobalData),
 
-    get_threadscope_rev_string_table(CodeInfo,
-        TSRevStringTable, TSStringTableSize),
-    global_data_set_threadscope_rev_string_table(TSRevStringTable,
-        TSStringTableSize, !GlobalData),
+    get_parprof_rev_string_table(CodeInfo,
+        PPRevStringTable, PPStringTableSize),
+    global_data_set_parprof_rev_string_table(PPRevStringTable,
+        PPStringTableSize, !GlobalData),
 
     get_created_temp_frame(CodeInfo, CreatedTempFrame),
     get_proc_trace_events(CodeInfo, ProcTraceEvents),

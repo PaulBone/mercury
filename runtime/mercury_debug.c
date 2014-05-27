@@ -1339,9 +1339,9 @@ MR_debug_log_message(const char *format, ...)
         buffer = MR_GC_realloc(buffer, len);
     }
 
-#if defined(MR_THREADSCOPE) && defined(MR_THREAD_SAFE)
-    MR_threadscope_post_log_msg(buffer);
-#elif defined(MR_THREADSCOPE)
+#if defined(MR_PARPROF) && defined(MR_THREAD_SAFE)
+    MR_parprof_post_log_msg(buffer);
+#elif defined(MR_PARPROF)
     printf("Eng %p: %s\n", MR_thread_engine_base, buffer);
 #else
     printf("%s\n", buffer);

@@ -358,9 +358,9 @@ typedef struct {
 **              to the start of the program.
 **
 ** ts_buffer
-**              The buffer object used by threadscope for this engine.
+**              The buffer object used by parallel profiling for this engine.
 **
-** id           The ID of this engine which is used by threadscope.
+** id           The ID of this engine which is used by parallel profiling.
 **
 ** next_spark_id
 **              In threadscope grades sparks are given IDs to help us track
@@ -426,14 +426,14 @@ typedef struct MR_mercury_engine_struct {
     MR_EngineId         MR_eng_id;
     MercuryThread       MR_eng_owner_thread;
     MR_Unsigned         MR_eng_c_depth;
-  #ifdef MR_THREADSCOPE
+  #ifdef MR_PARPROF
     /*
     ** For each profiling event add this offset to the time so that events on
     ** different engines that occur at the same time have the same time in
     ** clock ticks.
     */
     MR_int_least64_t                    MR_eng_cpu_clock_ticks_offset;
-    struct MR_threadscope_event_buffer  *MR_eng_ts_buffer;
+    struct MR_parprof_event_buffer      *MR_eng_ts_buffer;
     MR_uint_least32_t                   MR_eng_next_spark_id;
   #endif
   #ifdef MR_LL_PARALLEL_CONJ

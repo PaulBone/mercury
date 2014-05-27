@@ -93,25 +93,25 @@ vim: ft=c ts=4 sw=4 et
             Future->MR_fut_suspended = NULL;                                \
         } while (0)
 
-  #ifdef MR_THREADSCOPE
+  #ifdef MR_PARPROF
     /*
     ** In threadscope grades we need to pass the name of the future to the
-    ** threadscope event.
+    ** parallel profiling event.
     */
     #define MR_par_builtin_new_future(Future, Name)                         \
         do {                                                                \
             MR_par_builtin_new_future_2(Future);                            \
-            MR_threadscope_post_new_future(Future, Name);                   \
+            MR_parprof_post_new_future(Future, Name);                       \
         } while (0)
 
-  #else /* ! MR_THREADSCOPE */
+  #else /* ! MR_PARPROF */
 
     #define MR_par_builtin_new_future(Future)                               \
         do {                                                                \
             MR_par_builtin_new_future_2(Future);                            \
         } while (0)
 
-  #endif /* ! MR_THREADSCOPE */
+  #endif /* ! MR_PARPROF */
 
     /*
     ** If MR_fut_signalled is true, then we guarantee that reading MR_fut_value
@@ -186,8 +186,8 @@ vim: ft=c ts=4 sw=4 et
             MR_Context *next;                                               \
                                                                             \
             /*                                                              \
-            ** Post the threadscope signal future message before waking any \
-            ** threads (and posting those messages).                        \
+            ** Post the parallel profiling signal future message before     \
+            ** waking any threads (and posting those messages).             \
             */                                                              \
             MR_maybe_post_signal_future(Future);                            \
             MR_LOCK(&(Future->MR_fut_lock), "future.signal");               \
@@ -220,25 +220,25 @@ vim: ft=c ts=4 sw=4 et
             MR_UNLOCK(&(Future->MR_fut_lock), "future.signal");             \
         } while (0)
 
-#ifdef MR_THREADSCOPE
+#ifdef MR_PARPROF
     #define MR_maybe_post_stop_context                                      \
         do {                                                                \
-            MR_threadscope_post_stop_context(MR_TS_STOP_REASON_BLOCKED);    \
+            MR_parprof_post_stop_context(MR_PARPROF_STOP_REASON_BLOCKED);   \
         } while (0)
 
     #define MR_maybe_post_wait_future_nosuspend(future)                     \
         do {                                                                \
-            MR_threadscope_post_wait_future_nosuspend(future);              \
+            MR_parprof_post_wait_future_nosuspend(future);                  \
         } while (0)
 
     #define MR_maybe_post_wait_future_suspended(future)                     \
         do {                                                                \
-            MR_threadscope_post_wait_future_suspended(future);              \
+            MR_parprof_post_wait_future_suspended(future);                  \
         } while (0)
 
     #define MR_maybe_post_signal_future(future)                             \
         do {                                                                \
-            MR_threadscope_post_signal_future(future);                      \
+            MR_parprof_post_signal_future(future);                          \
         } while (0)
 
 #else

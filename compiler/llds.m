@@ -642,7 +642,7 @@
             % address of the synchronization term.  The second argument
             % indicates how many branches we expect to join at the end of the
             % parallel conjunction.  The third argument is an index into the
-            % threadscope string table.  The string that it refers to
+            % parallel profiling string table.  The string that it refers to
             % identifies this parallel conjunction within the source code.
             % (See the documentation in par_conj_gen.m and
             % runtime/mercury_context.{c,h} for further information about
