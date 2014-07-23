@@ -1525,36 +1525,8 @@ combine_hash(X, H0, H) :-
 #include ""mercury_type_info.h""
 ").
 
-:- pragma foreign_code("Java", "
-public static class MercuryBitmap implements java.io.Serializable {
-    public int num_bits;
-    public byte[] elements;
-
-    public MercuryBitmap(int numBits) {
-        this.num_bits = numBits;
-        this.elements = new byte[numBits / 8 + (((numBits % 8) != 0) ? 1 : 0)];
-    }
-
-    public MercuryBitmap(int numBits, byte[] elements) {
-        // This is provided so that foreign code can construct bitmaps from an
-        // existing byte array.
-        this.num_bits = numBits;
-        this.elements = elements;
-    }
-
-    @Override
-    public boolean equals(Object that) {
-        if (this == that) {
-            return true;
-        }
-        if (that instanceof MercuryBitmap) {
-            MercuryBitmap other = (MercuryBitmap)that;
-            return this.num_bits == other.num_bits
-                && java.util.Arrays.equals(this.elements, other.elements);
-        }
-        return false;
-    }
-}
+:- pragma foreign_decl("Java", "
+import jmercury.runtime.MercuryBitmap;
 ").
 
 :- pragma foreign_code("C#", "
@@ -1593,7 +1565,7 @@ public class MercuryBitmap {
 :- pragma foreign_type("C", bitmap, "MR_BitmapPtr",
         [can_pass_as_mercury_type])
     where equality is bitmap_equal, comparison is bitmap_compare.
-:- pragma foreign_type("Java", bitmap, "bitmap.MercuryBitmap")
+:- pragma foreign_type("Java", bitmap, "jmercury.runtime.MercuryBitmap")
     where equality is bitmap_equal, comparison is bitmap_compare.
 :- pragma foreign_type("C#", bitmap, "bitmap.MercuryBitmap")
     where equality is bitmap_equal, comparison is bitmap_compare.
@@ -1954,7 +1926,7 @@ _ ^ unsafe_byte(_) = _ :- private_builtin.sorry("bitmap.unsafe_byte").
     allocate_bitmap(N::in) = (BM::bitmap_uo),
     [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail],
 "
-    BM = new bitmap.MercuryBitmap(N);
+    BM = new MercuryBitmap(N);
 ").
 
 :- pragma foreign_proc("C#",
@@ -2000,7 +1972,7 @@ resize_bitmap(OldBM, N) =
     copy(BM0::in) = (BM::bitmap_uo),
     [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail],
 "
-    BM = new bitmap.MercuryBitmap(BM0.num_bits);
+    BM = new MercuryBitmap(BM0.num_bits);
     System.arraycopy(BM0.elements, 0, BM.elements, 0, BM0.elements.length);
 ").
 
