@@ -1534,6 +1534,7 @@ import jmercury.runtime.MercuryBitmap;
 public class MercuryBitmap {
     public int num_bits;
     public byte[] elements;
+    public static int BITS_PER_BYTE = 0;
 
     public MercuryBitmap(int numBits) {
         num_bits = numBits;
@@ -1558,6 +1559,38 @@ public class MercuryBitmap {
 
     public override int GetHashCode() {
         return num_bits ^ elements.GetHashCode();
+    }
+
+    public bool GetBit(int bit)
+    {
+        return (elements[ByteIndexForBit(bit)]
+            & (1 << BitIndexWithinByte(bit))) != 0;
+    }
+
+    public void SetBit(int bit)
+    {
+        byte b;
+
+        b = elements[ByteIndexForBit(bit)];
+        b |= (byte) 1 << BitIndexWithinByte(bit);
+        elements[ByteIndexForBit(bit)] = b;
+    }
+
+    public void ClearBit(int bit)
+    {
+        byte b;
+
+        b = elements[ByteIndexForBit(bit)];
+        b &= (byte) ~(1 << BitIndexWithinByte(bit));
+        elements[ByteIndexForBit(bit)] = b;
+    }
+
+    public int ByteIndexForBit(int bit) {
+        return bit / BITS_PER_BYTE;
+    }
+
+    public int BitIndexWithinByte(int bit) {
+        return bit % BITS_PER_BYTE;
     }
 }
 ").

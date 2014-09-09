@@ -1632,9 +1632,10 @@ public class ML_uva : ML_va {
 
     private void rewind_into(ML_uva VA)
     {
-        int     I;
-        object  X;
-        ML_uva  cur;
+        int                     I;
+        object                  X;
+        ML_uva                  cur;
+        MercuryBitmap           bitmap;
 
         if (this.is_latest()) {
             /* Shortcut */
@@ -1642,29 +1643,22 @@ public class ML_uva : ML_va {
         }
 
         /*
-        ** Copy elements in the reverse order that they were updated into the
-        ** latest array, then return the latest array.
+        ** Rewind elements from the oldest to the newest, undoing their changes.
+        ** So that we undo elements in the correct order we use a bitmap to
+        ** ensure that we never update an array slot twice.
         */
-        cur = this.latest();
-        /* start from first 'update' record */
-        cur = (cur.prev != null ? (ML_uva)cur.prev.Target : null);
-        while (cur != this) {
+        cur = this;
+        bitmap = new MercuryBitmap(cur.size());
+        while (!cur.is_latest()) {
             I = cur.index;
             X = cur.value;
-            if (I < VA.size()) {
+            if (I < VA.size() && !bitmap.GetBit(I)) {
                 VA.array()[I] = X;
+                bitmap.SetBit(I);
             }
 
-            cur = cur.prev != null ? (ML_uva)cur.prev.Target : null;
+            cur = cur.next();
         }
-
-        /*
-         * This loop must be inclusive of the update in VA.
-         */
-        I = cur.index;
-        X = cur.value;
-
-        VA.array()[I] = X;
     }
 
     public ML_va rewind()
@@ -1674,60 +1668,43 @@ public class ML_uva : ML_va {
 
     public ML_uva rewind_uva()
     {
-        int     I;
-        object  X;
-        ML_uva  VA = this;
-        ML_uva  cur;
-        ML_uva  last_visited;
+        int                     I;
+        object                  X;
+        ML_uva                  cur;
+        MercuryBitmap           bitmap;
+        object[]                array;
 
-        if (VA.is_latest()) {
-            return VA;
+        if (is_latest()) {
+            return this;
         }
 
         /*
-        ** last_visited is the last element we interated through, we
-        ** remember it because we update it's prev pointer after the
-        ** loop.
+        ** Rewind elements from the oldest to the newest, undoing their changes.
+        ** So that we undo elements in the correct order we use a bitmap to
+        ** ensure that we never update an array slot twice.
         */
-        last_visited = null;
-
-        /*
-        ** Copy elements in the reverse order that they were updated into
-        ** the latest array, then return the latest array.
-        */
-        cur = VA.latest();
-        VA.rest = cur.array();
-        cur = cur.prev != null ? (ML_uva)cur.prev.Target : null;
-        while (cur != VA) {
+        cur = this;
+        array = latest().array();
+        bitmap = new MercuryBitmap(array.length);
+        while (!cur.is_latest()) {
             I = cur.index;
             X = cur.value;
 
-            VA.array()[I] = X;
+            if (!bitmap.GetBit(I)) {
+                array[I] = X;
+                bitmap.SetBit(I);
+            }
 
-            last_visited = cur;
-            cur = cur.prev != null ? (ML_uva)cur.prev.Target : null;
+            cur = cur.next();
         }
-        /*
-        ** This loop must be inclusive of the update in VA.
-        */
-        I = cur.index;
-        X = cur.value;
-
-        VA.array()[I] = X;
+        rest = array;
 
         /*
-        ** Clear the prev pointer since we've broken the chain.
-        */
-        if (null != last_visited) {
-            last_visited.prev = null;
-        }
-
-        /*
-        ** This element is no-longer an update element.
-        */
-        VA.index = -1;
-        VA.value = 0;
-        return VA;
+         * This element is no-longer an update element.
+         */
+        index = -1;
+        value = 0;
+        return this;
     }
 }
 
