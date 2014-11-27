@@ -22,6 +22,7 @@
 :- import_module ll_backend.layout.
 :- import_module ll_backend.llds.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 
 :- import_module bool.
@@ -38,7 +39,7 @@
                 lout_internal_label_to_layout   :: map(label,
                                                     layout_slot_name),
                 lout_entry_label_to_layout      :: map(label, data_id),
-                lout_table_io_decl_map          :: map(pred_proc_id,
+                lout_table_io_entry_map         :: map(pred_proc_id,
                                                     layout_slot_name),
                 lout_alloc_site_map             :: map(alloc_site_id,
                                                     layout_slot_name),
@@ -115,7 +116,7 @@
 %----------------------------------------------------------------------------%
 
 init_llds_out_info(ModuleName, SourceFileName, Globals,
-        InternalLabelToLayoutMap, EntryLabelToLayoutMap, TableIoDeclMap,
+        InternalLabelToLayoutMap, EntryLabelToLayoutMap, TableIoEntryMap,
         AllocSiteMap) = Info :-
     MangledModuleName = sym_name_mangle(ModuleName),
     globals.lookup_bool_option(Globals, auto_comments, AutoComments),
@@ -136,7 +137,7 @@ init_llds_out_info(ModuleName, SourceFileName, Globals,
         UseMacroForRedoFail),
     globals.get_trace_level(Globals, TraceLevel),
     Info = llds_out_info(ModuleName, MangledModuleName, SourceFileName,
-        InternalLabelToLayoutMap, EntryLabelToLayoutMap, TableIoDeclMap,
+        InternalLabelToLayoutMap, EntryLabelToLayoutMap, TableIoEntryMap,
         AllocSiteMap,
         AutoComments, LineNumbers,
         EmitCLoops, GenerateBytecode, LocalThreadEngineBase,
@@ -187,5 +188,5 @@ output_indent(FirstIndent, LaterIndent, N0, !IO) :-
     ).
 
 %---------------------------------------------------------------------------%
-:- end_module llds_out_util.
+:- end_module ll_backend.llds_out.llds_out_util.
 %---------------------------------------------------------------------------%

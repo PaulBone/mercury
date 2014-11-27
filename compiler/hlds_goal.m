@@ -23,13 +23,13 @@
 :- import_module hlds.instmap.
 :- import_module mdbcomp.
 :- import_module mdbcomp.goal_path.
+:- import_module mdbcomp.sym_name.
 :- import_module mdbcomp.prim_data.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.set_of_var.
 
 :- import_module assoc_list.
 :- import_module bool.
-:- import_module char.
 :- import_module list.
 :- import_module map.
 :- import_module maybe.
@@ -38,9 +38,7 @@
 :- import_module term.
 
 %-----------------------------------------------------------------------------%
-%
-% Goal representation.
-%
+%-----------------------------------------------------------------------------%
 
 :- type hlds_goals  == list(hlds_goal).
 
@@ -52,6 +50,13 @@
 
 :- func get_hlds_goal_expr(hlds_goal) = hlds_goal_expr.
 :- func get_hlds_goal_info(hlds_goal) = hlds_goal_info.
+
+%-----------------------------------------------------------------------------%
+%-----------------------------------------------------------------------------%
+%
+% The types that represent the kinds of goals in the internal form of
+% Mercury programs.
+%
 
 :- type hlds_goal_expr
 
@@ -244,10 +249,8 @@
 :- inst goal_expr_shorthand
     --->    shorthand(ground).
 
-:- inst plain_call_expr
-    --->    plain_call(ground, ground, ground, ground, ground, ground).
-:- inst plain_call
-    --->    hlds_goal(plain_call_expr, ground).
+:- inst goal_plain_call
+    --->    hlds_goal(goal_expr_plain_call, ground).
 
 :- type conj_type
     --->    plain_conj
@@ -485,6 +488,13 @@
             % This scope reason should not exist after the first invocation
             % of simplification.
 
+    ;       require_switch_arms_detism(prog_var, determinism)
+            % If the wrapped subgoal is a switch on the given variable,
+            % require every arm of that switch to have the specified
+            % determinism. If it does not, report an error.
+            % This scope reason should not exist after the first invocation
+            % of simplification.
+
     ;       commit(force_pruning)
             % This scope exists to delimit a piece of code
             % with at_most_many components but with no outputs,
@@ -589,7 +599,7 @@
 
 %-----------------------------------------------------------------------------%
 %
-% Information for calls
+% Information for calls.
 %
 
     % There may be two sorts of "builtin" predicates - those that we open-code
@@ -605,7 +615,7 @@
 
 %-----------------------------------------------------------------------------%
 %
-% Information for call_foreign_proc
+% Information for call_foreign_proc.
 %
 
     % In the usual case, the arguments of a foreign_proc are the arguments
@@ -642,29 +652,33 @@
 
 %-----------------------------------------------------------------------------%
 %
-% Information for generic_calls
+% Information for generic_calls.
 %
 
 :- type generic_call
     --->    higher_order(
                 ho_call_var     :: prog_var,
                 ho_call_purity  :: purity,
+
+                % call/N (pred) or apply/N (func)
                 ho_call_kind    :: pred_or_func,
-                                % call/N (pred) or apply/N (func)
+
+                % number of arguments (including the higher-order term)
                 ho_call_arity   :: arity
-                                % number of arguments (including the
-                                % higher-order term)
             )
 
     ;       class_method(
+                % The variable that holds the typeclass_info for the instance.
                 method_tci      :: prog_var,
-                                % typeclass_info for the instance
+
+                % The number of the called method.
                 method_num      :: int,
-                                % number of the called method
+
+                % The name and arity of the class.
                 method_class_id :: class_id,
-                                % name and arity of the class
+
+                % The name of the called method.
                 method_name     :: simple_call_id
-                                % name of the called method
             )
 
     ;       event_call(
@@ -672,9 +686,9 @@
             )
 
     ;       cast(
+                % A cast generic_call with two arguments, Input and Output,
+                % assigns `Input' to `Output', performing a cast of this kind.
                 cast_kind       :: cast_kind
-                % cast(Input, Output): Assigns `Input' to `Output', performing
-                % a type and/or inst cast.
             ).
 
     % The various kinds of casts that we can do.
@@ -709,7 +723,7 @@
 
 %-----------------------------------------------------------------------------%
 %
-% Information for unifications
+% Information for unifications.
 %
 
     % Initially all unifications are represented as
@@ -724,7 +738,7 @@
                 % The `is_existential_construction' field is only used
                 % after polymorphism.m strips off the `new ' prefix from
                 % existentially typed constructions.
-                rhs_is_exist_constr :: is_existential_construction,
+                rhs_is_exist_constr :: is_exist_constr,
                 rhs_args            :: list(prog_var)
             )
     ;       rhs_lambda_goal(
@@ -738,7 +752,7 @@
                 % Currently, we don't support any other value than `normal'.
                 rhs_eval_method     :: lambda_eval_method,
 
-                % Non-locals of the goal excluding the lambda quantified
+                % The nonlocals of the goal excluding the lambda quantified
                 % variables, in no particular order.
                 rhs_nonlocals       :: list(prog_var),
 
@@ -758,7 +772,9 @@
 
     % Was the constructor originally of the form 'new ctor'(...).
     %
-:- type is_existential_construction == bool.
+:- type is_exist_constr
+    --->    is_not_exist_constr
+    ;       is_exist_constr.
 
     % This type contains the fields of a construct unification that are needed
     % only rarely. If a value of this type is bound to no_construct_sub_info,
@@ -868,7 +884,7 @@
                 % Y = X where the type of Y and X is not an atomic type,
                 % and where the top-level node of both Y and X is input.
                 % May involve bi-directional data flow. Implemented using
-                % out-of-line call to a compiler generated unification
+                % an out-of-line call to a compiler generated unification
                 % predicate for that type & mode.
 
                 % The mode of the unification.
@@ -893,6 +909,17 @@
                 % if it ends up being a complicated unify.
                 compl_unify_typeinfos   :: list(prog_var)
             ).
+
+:- inst unification_construct
+    --->    construct(ground, ground, ground, ground, ground, ground, ground).
+:- inst unification_deconstruct
+    --->    deconstruct(ground, ground, ground, ground, ground, ground).
+:- inst unification_assign
+    --->    assign(ground, ground).
+:- inst unification_simple_test
+    --->    simple_test(ground, ground).
+:- inst unification_complicated_unify
+    --->    complicated_unify(ground, ground, ground).
 
 :- type term_size_value
     --->    known_size(
@@ -998,11 +1025,14 @@
 :- type cell_to_reuse
     --->    cell_to_reuse(
                 prog_var,
-                list(cons_id), % The cell to be reused may be tagged
-                                    % with one of these cons_ids.
-                list(needs_update)  % Whether the corresponding
-                                    % argument already has the correct value
-                                    % and does not need to be filled in.
+
+                % The cell to be reused may be tagged with one of these
+                % cons_ids.
+                list(cons_id),
+
+                % Whether the corresponding argument already has
+                % the correct value and does not need to be filled in.
+                list(needs_update)
             ).
 
     % Cells marked `cell_is_shared' can be allocated in read-only memory,
@@ -1052,13 +1082,10 @@
             ).
 
 %-----------------------------------------------------------------------------%
+%-----------------------------------------------------------------------------%
 %
 % Information for all kinds of goals.
 %
-
-% Access predicates for the hlds_goal_info data structure.
-% For documentation on the meaning of the fields that these
-% procedures access, see the definition of the hlds_goal_info type.
 
 :- type hlds_goal_info.
 
@@ -1229,6 +1256,8 @@
 
 :- type missed_message == string.
 
+%-----------------------------------------------------------------------------%
+
     % Information about the goal used by the deep profiler.
     %
 :- type dp_goal_info
@@ -1265,6 +1294,159 @@
 :- type port_counts_give_coverage_after
     --->    port_counts_give_coverage_after
     ;       no_port_counts_give_coverage_after.
+
+:- type goal_feature
+    --->    feature_constraint
+            % This is included if the goal is a constraint. See constraint.m
+            % for the definition of this.
+
+    ;       feature_from_head
+            % This goal was originally in the head of the clause, and was
+            % put into the body by the superhomogeneous form transformation.
+
+    ;       feature_not_impure_for_determinism
+            % This goal should not be treated as impure for the purpose of
+            % computing its determinism. This is intended to be used by program
+            % transformations that insert impure code into existing goals,
+            % and wish to keep the old determinism of those goals.
+
+    ;       feature_stack_opt
+            % This goal was created by stack slot optimization. Other
+            % optimizations should assume that it is there for a reason, and
+            % therefore should refrain from "optimizing" it away, even though
+            % it is a copy of another, previous goal.
+
+    ;       feature_tuple_opt
+            % This goal was create by the tupling optimization.
+            % The comment for the stack slot optimization above
+            % applies here.
+
+    ;       feature_call_table_gen
+            % This goal generates the variable that represents the call table
+            % tip. If debugging is enabled, the code generator needs to save
+            % the value of this variable in its stack slot as soon as it is
+            % generated; this marker tells the code generator when this
+            % happens.
+
+    ;       feature_preserve_backtrack_into
+            % Determinism analysis should preserve backtracking into goals
+            % marked with this feature, even if their determinism puts an
+            % at_most_zero upper bound on the number of solutions they have.
+
+    ;       feature_save_deep_excp_vars
+            % This goal generates the deep profiling variables that the
+            % exception handler needs to execute the exception port code.
+
+    ;       feature_hide_debug_event
+            % The events associated with this goal should be hidden. This is
+            % used e.g. by the tabling transformation to preserve the set
+            % of events generated by a tabled procedure.
+
+    ;       feature_deep_tail_rec_call
+            % This goal represents a tail recursive call. This marker is used
+            % by deep profiling.
+
+    ;       feature_debug_tail_rec_call
+            % This goal represents a tail recursive call. This marker is used
+            % by code generation for execution tracing.
+
+    ;       feature_keep_constant_binding
+            % This feature should only be attached to unsafe_cast goals
+            % that cast a value of an user-defined type to an integer.
+            % It tells the mode checker that if the first variable is known
+            % to be bound to a given constant, then the second variable
+            % should be set to the corresponding local tag value.
+
+    ;       feature_dont_warn_singleton
+            % Don't warn about singletons in this goal. Intended to be used
+            % by the state variable transformation, for situations such as the
+            % following:
+            %
+            % p(X, !.S, ...) :-
+            %   (
+            %       X = a,
+            %       !:S = f(!.S, ...)
+            %   ;
+            %       X = b,
+            %       <code A>
+            %   ),
+            %   <code B>.
+            %
+            % The state variable transformation creates a new variable for
+            % the new value of !:S in the disjunction. If code A doesn't define
+            % !:S, the state variable transformation inserts an unification
+            % after it, unifying the variables representing !.S and !:S.
+            % If code B doesn't refer to S, then quantification will restrict
+            % the scope of the variable representing !:S to each disjunct,
+            % and the unification inserted after code A will refer to a
+            % singleton variable.
+            %
+            % Since it is not reasonable to expect the state variable
+            % transformation to do the job of quantification as well,
+            % we simply make it mark the unifications it creates, and get
+            % the singleton warning code to respect it.
+
+    ;       feature_duplicated_for_switch
+            % This goal was created by switch detection by duplicating
+            % the source code written by the user.
+
+    ;       feature_mode_check_clauses_goal
+            % This goal is the main disjunction of a predicate with the
+            % mode_check_clauses pragma. No compiler pass should try to invoke
+            % quadratic or worse algorithms on the arms of this goal, since it
+            % probably has many arms (possibly several thousand). This feature
+            % may be attached to switches as well as disjunctions.
+
+    ;       feature_will_not_modify_trail
+            % This goal will not modify the trail, so it is safe for the
+            % compiler to omit trailing primitives when generating code
+            % for this goal.
+
+    ;       feature_will_not_call_mm_tabled
+            % This goal will never call a procedure that is evaluted using
+            % minimal model tabling. It is safe for the code generator to omit
+            % the pneg context wrappers when generating code for this goal.
+
+    ;       feature_contains_trace
+            % This goal contains a scope goal whose scope_reason is
+            % trace_goal(...).
+
+    ;       feature_pretest_equality
+            % This goal is an if-then-else in a compiler-generated
+            % type-constructor-specific unify or compare predicate
+            % whose condition is a test of whether the two input arguments
+            % are equal or not. The goal feature exists because in some
+            % circumstances we need to strip off this pretest, and replace
+            % the if-then-else with just its else branch.
+
+    ;       feature_pretest_equality_condition
+            % This goal is the unification in the condition of a
+            % pretest-equality if-then-else goal. The goal feature is required
+            % to allow pointer comparisons generated by the compiler.
+
+    ;       feature_lambda_undetermined_mode
+            % This goal is a lambda goal converted from a higher order term
+            % for which we don't know the mode of the call to the underlying
+            % predicate. These can be produced by the polymorphism
+            % transformation but should be removed by the end of mode
+            % checking.
+
+    ;       feature_contains_stm_inner_outer
+            % This goal is a goal inside an atomic scope, for which the calls
+            % to convert inner and outer variables have been inserted.
+
+    ;       feature_do_not_tailcall.
+            % This goal is a call that should not be executed as a tail call.
+            % Currently this is only used by the loop control optimization
+            % since a spawned off task may need to use the parent's stack frame
+            % even after the parent makes a tail call.
+
+%-----------------------------------------------------------------------------%
+%
+% Access predicates for the hlds_goal_info data structure.
+% For documentation on the meaning of the fields that these
+% procedures access, see the definition of the hlds_goal_info type.
+%
 
 :- pred goal_info_init(hlds_goal_info::out) is det.
 :- pred goal_info_init(prog_context::in, hlds_goal_info::out) is det.
@@ -1434,152 +1616,6 @@
     is det.
 :- pred goal_has_feature(hlds_goal::in, goal_feature::in) is semidet.
 
-:- type goal_feature
-    --->    feature_constraint
-            % This is included if the goal is a constraint. See constraint.m
-            % for the definition of this.
-
-    ;       feature_from_head
-            % This goal was originally in the head of the clause, and was
-            % put into the body by the superhomogeneous form transformation.
-
-    ;       feature_not_impure_for_determinism
-            % This goal should not be treated as impure for the purpose of
-            % computing its determinism. This is intended to be used by program
-            % transformations that insert impure code into existing goals,
-            % and wish to keep the old determinism of those goals.
-
-    ;       feature_stack_opt
-            % This goal was created by stack slot optimization. Other
-            % optimizations should assume that it is there for a reason, and
-            % therefore should refrain from "optimizing" it away, even though
-            % it is a copy of another, previous goal.
-
-    ;       feature_tuple_opt
-            % This goal was create by the tupling optimization.
-            % The comment for the stack slot optimization above
-            % applies here.
-
-    ;       feature_call_table_gen
-            % This goal generates the variable that represents the call table
-            % tip. If debugging is enabled, the code generator needs to save
-            % the value of this variable in its stack slot as soon as it is
-            % generated; this marker tells the code generator when this
-            % happens.
-
-    ;       feature_preserve_backtrack_into
-            % Determinism analysis should preserve backtracking into goals
-            % marked with this feature, even if their determinism puts an
-            % at_most_zero upper bound on the number of solutions they have.
-
-    ;       feature_save_deep_excp_vars
-            % This goal generates the deep profiling variables that the
-            % exception handler needs to execute the exception port code.
-
-    ;       feature_hide_debug_event
-            % The events associated with this goal should be hidden. This is
-            % used e.g. by the tabling transformation to preserve the set
-            % of events generated by a tabled procedure.
-
-    ;       feature_deep_tail_rec_call
-            % This goal represents a tail recursive call. This marker is used
-            % by deep profiling.
-
-    ;       feature_debug_tail_rec_call
-            % This goal represents a tail recursive call. This marker is used
-            % by code generation for execution tracing.
-
-    ;       feature_keep_constant_binding
-            % This feature should only be attached to unsafe_cast goals
-            % that cast a value of an user-defined type to an integer.
-            % It tells the mode checker that if the first variable is known
-            % to be bound to a given constant, then the second variable
-            % should be set to the corresponding local tag value.
-
-    ;       feature_dont_warn_singleton
-            % Don't warn about singletons in this goal. Intended to be used
-            % by the state variable transformation, for situations such as the
-            % following:
-            %
-            % p(X, !.S, ...) :-
-            %   (
-            %       X = a,
-            %       !:S = f(!.S, ...)
-            %   ;
-            %       X = b,
-            %       <code A>
-            %   ),
-            %   <code B>.
-            %
-            % The state variable transformation creates a new variable for
-            % the new value of !:S in the disjunction. If code A doesn't define
-            % !:S, the state variable transformation inserts an unification
-            % after it, unifying the variables representing !.S and !:S.
-            % If code B doesn't refer to S, then quantification will restrict
-            % the scope of the variable representing !:S to each disjunct,
-            % and the unification inserted after code A will refer to a
-            % singleton variable.
-            %
-            % Since it is not reasonable to expect the state variable
-            % transformation to do the job of quantification as well,
-            % we simply make it mark the unifications it creates, and get
-            % the singleton warning code to respect it.
-
-    ;       feature_duplicated_for_switch
-            % This goal was created by switch detection by duplicating
-            % the source code written by the user.
-
-    ;       feature_mode_check_clauses_goal
-            % This goal is the main disjunction of a predicate with the
-            % mode_check_clauses pragma. No compiler pass should try to invoke
-            % quadratic or worse algorithms on the arms of this goal, since it
-            % probably has many arms (possibly several thousand). This feature
-            % may be attached to switches as well as disjunctions.
-
-    ;       feature_will_not_modify_trail
-            % This goal will not modify the trail, so it is safe for the
-            % compiler to omit trailing primitives when generating code
-            % for this goal.
-
-    ;       feature_will_not_call_mm_tabled
-            % This goal will never call a procedure that is evaluted using
-            % minimal model tabling. It is safe for the code generator to omit
-            % the pneg context wrappers when generating code for this goal.
-
-    ;       feature_contains_trace
-            % This goal contains a scope goal whose scope_reason is
-            % trace_goal(...).
-
-    ;       feature_pretest_equality
-            % This goal is an if-then-else in a compiler-generated
-            % type-constructor-specific unify or compare predicate
-            % whose condition is a test of whether the two input arguments
-            % are equal or not. The goal feature exists because in some
-            % circumstances we need to strip off this pretest, and replace
-            % the if-then-else with just its else branch.
-
-    ;       feature_pretest_equality_condition
-            % This goal is the unification in the condition of a
-            % pretest-equality if-then-else goal. The goal feature is required
-            % to allow pointer comparisons generated by the compiler.
-
-    ;       feature_lambda_undetermined_mode
-            % This goal is a lambda goal converted from a higher order term
-            % for which we don't know the mode of the call to the underlying
-            % predicate. These can be produced by the polymorphism
-            % transformation but should be removed by the end of mode
-            % checking.
-
-    ;       feature_contains_stm_inner_outer
-            % This goal is a goal inside an atomic scope, for which the calls
-            % to convert inner and outer variables have been inserted.
-
-    ;       feature_do_not_tailcall.
-            % This goal is a call that should not be executed as a tail call.
-            % Currently this is only used by the loop control optimization
-            % since a spawned off task may need to use the parent's stack frame
-            % even after the parent makes a tail call.
-
 %-----------------------------------------------------------------------------%
 %
 % The rename_var* predicates take a structure and a mapping from var -> var
@@ -1683,37 +1719,6 @@
     %
 :- pred negate_goal(hlds_goal::in, hlds_goal_info::in, hlds_goal::out) is det.
 
-    % Returns yes if the goal, or subgoal contained within, contains
-    % any foreign code.
-    %
-:- func goal_has_foreign(hlds_goal) = bool.
-
-:- type has_subgoals
-    --->    has_subgoals
-    ;       does_not_have_subgoals.
-
-    % A goal is primitive iff it doesn't contain any sub-goals
-    % (except possibly goals inside lambda expressions --
-    % but lambda expressions will get transformed into separate
-    % predicates by the polymorphism.m pass).
-    %
-:- func goal_expr_has_subgoals(hlds_goal_expr) = has_subgoals.
-
-    % Return the HLDS equivalent of `true'.
-    %
-:- func true_goal = hlds_goal.
-:- func true_goal_expr = hlds_goal_expr.
-
-:- func true_goal_with_context(prog_context) = hlds_goal.
-
-    % Return the HLDS equivalent of `fail'.
-    %
-:- func fail_goal = hlds_goal.
-:- func fail_goal_expr = hlds_goal_expr.
-:- func fail_goal_info = hlds_goal_info.
-
-:- func fail_goal_with_context(prog_context) = hlds_goal.
-
     % Return the union of all the nonlocals of a list of goals.
     %
 :- pred goal_list_nonlocals(list(hlds_goal)::in, set_of_progvar::out) is det.
@@ -1737,111 +1742,6 @@
     % context.
     %
 :- pred set_goal_contexts(prog_context::in, hlds_goal::in, hlds_goal::out)
-    is det.
-
-    % Create the hlds_goal for a unification, filling in all the as yet
-    % unknown slots with dummy values. The unification is constructed as a
-    % complicated unification; turning it into some other kind of unification,
-    % if appropriate is left to mode analysis. Therefore this predicate
-    % shouldn't be used unless you know mode analysis will be run on its
-    % output.
-    %
-:- pred create_atomic_complicated_unification(prog_var::in, unify_rhs::in,
-    prog_context::in, unify_main_context::in, unify_sub_contexts::in,
-    purity::in, hlds_goal::out) is det.
-
-    % As above, but with default purity pure.
-    %
-:- pred create_pure_atomic_complicated_unification(prog_var::in, unify_rhs::in,
-    prog_context::in, unify_main_context::in, unify_sub_contexts::in,
-    hlds_goal::out) is det.
-
-    % Create the hlds_goal for a unification that assigns the second variable
-    % to the first. The initial inst of the second variable should be
-    % ground_inst. The resulting goal has all its fields filled in.
-    %
-:- pred make_simple_assign(prog_var::in, prog_var::in,
-    unify_main_context::in, unify_sub_contexts::in, hlds_goal::out) is det.
-
-    % Create the hlds_goal for a unification that tests the equality of two
-    % values of atomic types. The resulting goal has all its fields filled in.
-    %
-:- pred make_simple_test(prog_var::in, prog_var::in,
-    unify_main_context::in, unify_sub_contexts::in, hlds_goal::out) is det.
-
-    % Produce a goal to construct a given constant. These predicates all
-    % fill in the non-locals, instmap_delta and determinism fields of the
-    % goal_info of the returned goal. With alias tracking, the instmap_delta
-    % will be correct only if the variable being assigned to has no aliases.
-    %
-    % Ths cons_id passed to make_const_construction must be fully module
-    % qualified.
-    %
-:- pred make_int_const_construction(prog_var::in, int::in,
-    hlds_goal::out) is det.
-:- pred make_string_const_construction(prog_var::in, string::in,
-    hlds_goal::out) is det.
-:- pred make_float_const_construction(prog_var::in, float::in,
-    hlds_goal::out) is det.
-:- pred make_char_const_construction(prog_var::in, char::in,
-    hlds_goal::out) is det.
-:- pred make_const_construction(prog_var::in, cons_id::in,
-    hlds_goal::out) is det.
-
-:- pred make_int_const_construction_alloc(int::in, maybe(string)::in,
-    hlds_goal::out, prog_var::out,
-    prog_varset::in, prog_varset::out, vartypes::in, vartypes::out) is det.
-:- pred make_string_const_construction_alloc(string::in, maybe(string)::in,
-    hlds_goal::out, prog_var::out,
-    prog_varset::in, prog_varset::out, vartypes::in, vartypes::out) is det.
-:- pred make_float_const_construction_alloc(float::in, maybe(string)::in,
-    hlds_goal::out, prog_var::out,
-    prog_varset::in, prog_varset::out, vartypes::in, vartypes::out) is det.
-:- pred make_char_const_construction_alloc(char::in, maybe(string)::in,
-    hlds_goal::out, prog_var::out,
-    prog_varset::in, prog_varset::out, vartypes::in, vartypes::out) is det.
-:- pred make_const_construction_alloc(cons_id::in, mer_type::in,
-    maybe(string)::in, hlds_goal::out, prog_var::out,
-    prog_varset::in, prog_varset::out, vartypes::in, vartypes::out) is det.
-
-:- pred make_int_const_construction_alloc_in_proc(int::in,
-    maybe(string)::in, hlds_goal::out, prog_var::out,
-    proc_info::in, proc_info::out) is det.
-:- pred make_string_const_construction_alloc_in_proc(string::in,
-    maybe(string)::in, hlds_goal::out, prog_var::out,
-    proc_info::in, proc_info::out) is det.
-:- pred make_float_const_construction_alloc_in_proc(float::in,
-    maybe(string)::in, hlds_goal::out, prog_var::out,
-    proc_info::in, proc_info::out) is det.
-:- pred make_char_const_construction_alloc_in_proc(char::in,
-    maybe(string)::in, hlds_goal::out, prog_var::out,
-    proc_info::in, proc_info::out) is det.
-:- pred make_const_construction_alloc_in_proc(cons_id::in, mer_type::in,
-    maybe(string)::in, hlds_goal::out, prog_var::out,
-    proc_info::in, proc_info::out) is det.
-
-    % Given the variable info field from a pragma foreign_code, get
-    % all the variable names.
-    %
-:- pred get_pragma_foreign_var_names(list(maybe(pair(string, mer_mode)))::in,
-    list(string)::out) is det.
-
-    % Produce a goal to construct or deconstruct a unification with
-    % a functor.  It fills in the non-locals, instmap_delta and
-    % determinism fields of the goal_info.
-    %
-:- pred construct_functor(prog_var::in, cons_id::in, list(prog_var)::in,
-    hlds_goal::out) is det.
-:- pred deconstruct_functor(prog_var::in, cons_id::in, list(prog_var)::in,
-    hlds_goal::out) is det.
-
-    % Produce a goal to construct or deconstruct a tuple containing
-    % the given list of arguments, filling in the non-locals,
-    % instmap_delta and determinism fields of the goal_info.
-    %
-:- pred construct_tuple(prog_var::in, list(prog_var)::in, hlds_goal::out)
-    is det.
-:- pred deconstruct_tuple(prog_var::in, list(prog_var)::in, hlds_goal::out)
     is det.
 
 %-----------------------------------------------------------------------------%
@@ -2032,6 +1932,20 @@ goal_info_init(NonLocals, InstMapDelta, Detism, Purity, Context, GoalInfo) :-
         Features, GoalId, no_code_gen_info,
         hlds_goal_extra_info_init(Context)).
 
+:- func hlds_goal_extra_info_init(term.context) = hlds_goal_extra_info.
+
+hlds_goal_extra_info_init(Context) = ExtraInfo :-
+    HO_Values = map.init,
+    ExtraInfo = extra_goal_info(Context, rgp_nil, HO_Values, no, no, no, no).
+
+:- func ctgc_goal_info_init = ctgc_goal_info.
+
+ctgc_goal_info_init =
+    ctgc_goal_info(set_of_var.init, set_of_var.init, no_reuse_info).
+
+rbmm_info_init = rbmm_goal_info(set.init, set.init, set.init, set.init,
+    set.init).
+
 impure_init_goal_info(NonLocals, InstMapDelta, Determinism) = GoalInfo :-
     goal_info_init(NonLocals, InstMapDelta, Determinism, purity_impure,
         GoalInfo0),
@@ -2056,11 +1970,6 @@ goal_info_add_nonlocals_make_impure(!.GoalInfo, NewNonLocals) = !:GoalInfo :-
     goal_info_set_nonlocals(NonLocals, !GoalInfo),
     make_impure(!GoalInfo).
 
-fail_goal_info = GoalInfo :-
-    instmap_delta_init_unreachable(InstMapDelta),
-    goal_info_init(set_of_var.init, InstMapDelta, detism_failure, purity_pure,
-        GoalInfo).
-
 make_impure(!GoalInfo) :-
     ( goal_info_get_purity(!.GoalInfo) = purity_impure ->
         % We don't add not_impure_for_determinism, since we want to
@@ -2079,20 +1988,6 @@ add_impurity_if_needed(AddedImpurity, !GoalInfo) :-
         make_impure(!GoalInfo)
     ).
 
-:- func hlds_goal_extra_info_init(term.context) = hlds_goal_extra_info.
-
-hlds_goal_extra_info_init(Context) = ExtraInfo :-
-    HO_Values = map.init,
-    ExtraInfo = extra_goal_info(Context, rgp_nil, HO_Values, no, no, no, no).
-
-:- func ctgc_goal_info_init = ctgc_goal_info.
-
-ctgc_goal_info_init =
-    ctgc_goal_info(set_of_var.init, set_of_var.init, no_reuse_info).
-
-rbmm_info_init = rbmm_goal_info(set.init, set.init, set.init, set.init,
-    set.init).
-
 goal_info_get_determinism(GoalInfo) = GoalInfo ^ gi_determinism.
 goal_info_get_instmap_delta(GoalInfo) = GoalInfo ^ gi_instmap_delta.
 goal_info_get_nonlocals(GoalInfo) = GoalInfo ^ gi_nonlocals.
@@ -2110,34 +2005,59 @@ goal_info_get_maybe_mode_constr(GoalInfo) =
 goal_info_get_maybe_ctgc(GoalInfo) = GoalInfo ^ gi_extra ^ egi_maybe_ctgc.
 goal_info_get_maybe_dp_info(GoalInfo) = GoalInfo ^ gi_extra ^ egi_maybe_dp.
 
-goal_info_set_determinism(Determinism, !GoalInfo) :-
-    !GoalInfo ^ gi_determinism := Determinism.
-goal_info_set_instmap_delta(InstMapDelta, !GoalInfo) :-
-    !GoalInfo ^ gi_instmap_delta := InstMapDelta.
-goal_info_set_nonlocals(NonLocals, !GoalInfo) :-
-    !GoalInfo ^ gi_nonlocals := NonLocals.
-goal_info_set_purity(Purity, !GoalInfo) :-
-    !GoalInfo ^ gi_purity := Purity.
-goal_info_set_features(Features, !GoalInfo) :-
-    !GoalInfo ^ gi_features := Features.
-goal_info_set_goal_id(GoalId, !GoalInfo) :-
-    !GoalInfo ^ gi_goal_id := GoalId.
-goal_info_set_reverse_goal_path(RevGoalPath, !GoalInfo) :-
-    !GoalInfo ^ gi_extra ^ egi_rev_goal_path := RevGoalPath.
-goal_info_set_code_gen_info(CodeGenInfo, !GoalInfo) :-
-    !GoalInfo ^ gi_code_gen_info := CodeGenInfo.
-goal_info_set_context(Context, !GoalInfo) :-
-    !GoalInfo ^ gi_extra ^ egi_context := Context.
-goal_info_set_ho_values(Values, !GoalInfo) :-
-    !GoalInfo ^ gi_extra ^ egi_ho_vals := Values.
-goal_info_set_maybe_rbmm(RBMMInfo, !GoalInfo) :-
-    !GoalInfo ^ gi_extra ^ egi_maybe_rbmm := RBMMInfo.
-goal_info_set_maybe_mode_constr(ModeConstrInfo, !GoalInfo) :-
-    !GoalInfo ^ gi_extra ^ egi_maybe_mode_constr := ModeConstrInfo.
-goal_info_set_maybe_ctgc(CTGCInfo, !GoalInfo) :-
-    !GoalInfo ^ gi_extra ^ egi_maybe_ctgc := CTGCInfo.
-goal_info_set_maybe_dp_info(DPInfo, !GoalInfo) :-
-    !GoalInfo ^ gi_extra ^ egi_maybe_dp := DPInfo.
+goal_info_set_determinism(X, !GoalInfo) :-
+    !GoalInfo ^ gi_determinism := X.
+goal_info_set_instmap_delta(X, !GoalInfo) :-
+    ( if private_builtin.pointer_equal(X, !.GoalInfo ^ gi_instmap_delta) then
+        true
+    else
+        !GoalInfo ^ gi_instmap_delta := X
+    ).
+goal_info_set_nonlocals(X, !GoalInfo) :-
+    !GoalInfo ^ gi_nonlocals := X.
+goal_info_set_purity(X, !GoalInfo) :-
+    ( if X = !.GoalInfo ^ gi_purity then
+        true
+    else
+        !GoalInfo ^ gi_purity := X
+    ).
+goal_info_set_features(X, !GoalInfo) :-
+    !GoalInfo ^ gi_features := X.
+goal_info_set_goal_id(X, !GoalInfo) :-
+    !GoalInfo ^ gi_goal_id := X.
+goal_info_set_reverse_goal_path(X, !GoalInfo) :-
+    !GoalInfo ^ gi_extra ^ egi_rev_goal_path := X.
+goal_info_set_code_gen_info(X, !GoalInfo) :-
+    !GoalInfo ^ gi_code_gen_info := X.
+goal_info_set_context(X, !GoalInfo) :-
+    !GoalInfo ^ gi_extra ^ egi_context := X.
+goal_info_set_ho_values(X, !GoalInfo) :-
+    ( if private_builtin.pointer_equal(X, !.GoalInfo ^ gi_extra ^ egi_ho_vals)
+    then
+        true
+    else
+        !GoalInfo ^ gi_extra ^ egi_ho_vals := X
+    ).
+goal_info_set_maybe_rbmm(X, !GoalInfo) :-
+    !GoalInfo ^ gi_extra ^ egi_maybe_rbmm := X.
+goal_info_set_maybe_mode_constr(X, !GoalInfo) :-
+    !GoalInfo ^ gi_extra ^ egi_maybe_mode_constr := X.
+goal_info_set_maybe_ctgc(X, !GoalInfo) :-
+    !GoalInfo ^ gi_extra ^ egi_maybe_ctgc := X.
+goal_info_set_maybe_dp_info(X, !GoalInfo) :-
+    !GoalInfo ^ gi_extra ^ egi_maybe_dp := X.
+
+%  i       same      diff   same%
+%  0     389614   2409489  13.919%  determinism
+%  1   10027360  13578654  42.478%  instmap_delta
+%  2     497826  15861153   3.043%  nonlocals
+%  3   10060683     41741  99.587%  purity
+%  4       8442   4617849   0.182%  features
+%  5      19010   3313840   0.570%  goal_id
+%  6        164      2328   6.581%  rev_goal_path
+%  7          0   4323322   0.000%  code_gen_info
+%  8    1761371   2616953  40.229%  context
+%  9        174         3  98.305%  ho_values
 
     % The code-gen non-locals are always the same as the
     % non-locals when structure reuse is not being performed.
@@ -2571,12 +2491,16 @@ rename_vars_in_goal_expr(Must, Subn, Expr0, Expr) :-
             rename_var_list(Must, Subn, Vars0, Vars),
             Reason = promise_solutions(Vars, Kind)
         ;
+            Reason0 = require_detism(_Detism),
+            Reason = Reason0
+        ;
             Reason0 = require_complete_switch(Var0),
             rename_var(Must, Subn, Var0, Var),
             Reason = require_complete_switch(Var)
         ;
-            Reason0 = require_detism(_),
-            Reason = Reason0
+            Reason0 = require_switch_arms_detism(Var0, Detism),
+            rename_var(Must, Subn, Var0, Var),
+            Reason = require_switch_arms_detism(Var, Detism)
         ;
             Reason0 = barrier(_),
             Reason = Reason0
@@ -2809,12 +2733,16 @@ incremental_rename_vars_in_goal_expr(Subn, SubnUpdates, Expr0, Expr) :-
             rename_var_list(need_not_rename, Subn, Vars0, Vars),
             Reason = promise_solutions(Vars, Kind)
         ;
+            Reason0 = require_detism(_Detism),
+            Reason = Reason0
+        ;
             Reason0 = require_complete_switch(Var0),
             rename_var(need_not_rename, Subn, Var0, Var),
             Reason = require_complete_switch(Var)
         ;
-            Reason0 = require_detism(_),
-            Reason = Reason0
+            Reason0 = require_switch_arms_detism(Var0, Detism),
+            rename_var(need_not_rename, Subn, Var0, Var),
+            Reason = require_switch_arms_detism(Var, Detism)
         ;
             Reason0 = barrier(_),
             Reason = Reason0
@@ -3264,152 +3192,6 @@ all_negated([hlds_goal(conj(plain_conj, NegatedConj), _) | NegatedGoals],
 
 %-----------------------------------------------------------------------------%
 
-goal_has_foreign(Goal) = HasForeign :-
-    Goal = hlds_goal(GoalExpr, _),
-    (
-        ( GoalExpr = plain_call(_, _, _, _, _, _)
-        ; GoalExpr = generic_call(_, _, _, _, _)
-        ; GoalExpr = unify(_, _, _, _, _)
-        ),
-        HasForeign = no
-    ;
-        GoalExpr = conj(_, Goals),
-        HasForeign = goal_list_has_foreign(Goals)
-    ;
-        GoalExpr = disj(Goals),
-        HasForeign = goal_list_has_foreign(Goals)
-    ;
-        GoalExpr = switch(_, _, Cases),
-        HasForeign = case_list_has_foreign(Cases)
-    ;
-        GoalExpr = negation(SubGoal),
-        HasForeign = goal_has_foreign(SubGoal)
-    ;
-        GoalExpr = scope(Reason, SubGoal),
-        (
-            Reason = from_ground_term(_, FGT),
-            ( FGT = from_ground_term_construct
-            ; FGT = from_ground_term_deconstruct
-            )
-        ->
-            HasForeign = no
-        ;
-            HasForeign = goal_has_foreign(SubGoal)
-        )
-    ;
-        GoalExpr = if_then_else(_, Cond, Then, Else),
-        (
-            ( goal_has_foreign(Cond) = yes
-            ; goal_has_foreign(Then) = yes
-            ; goal_has_foreign(Else) = yes
-            )
-        ->
-            HasForeign = yes
-        ;
-            HasForeign = no
-        )
-    ;
-        GoalExpr = call_foreign_proc(_, _, _, _, _, _, _),
-        HasForeign = yes
-    ;
-        GoalExpr = shorthand(ShortHand),
-        (
-            ShortHand = atomic_goal(_, _, _, _, _, _, _),
-            HasForeign = yes
-        ;
-            ShortHand = try_goal(_, _, SubGoal),
-            HasForeign = goal_has_foreign(SubGoal)
-        ;
-            ShortHand = bi_implication(GoalA, GoalB),
-            HasForeign = bool.or(goal_has_foreign(GoalA),
-                goal_has_foreign(GoalB))
-        )
-    ).
-
-:- func goal_list_has_foreign(list(hlds_goal)) = bool.
-
-goal_list_has_foreign([]) = no.
-goal_list_has_foreign([Goal | Goals]) = HasForeign :-
-    ( goal_has_foreign(Goal) = yes ->
-        HasForeign = yes
-    ;
-        HasForeign = goal_list_has_foreign(Goals)
-    ).
-
-:- func case_list_has_foreign(list(case)) = bool.
-
-case_list_has_foreign([]) = no.
-case_list_has_foreign([Case | Cases]) = HasForeign :-
-    Case = case(_, _, Goal),
-    ( goal_has_foreign(Goal) = yes ->
-        HasForeign = yes
-    ;
-        HasForeign = case_list_has_foreign(Cases)
-    ).
-
-%-----------------------------------------------------------------------------%
-
-goal_expr_has_subgoals(GoalExpr) = HasSubGoals :-
-    (
-        ( GoalExpr = unify(_, _, _, _, _)
-        ; GoalExpr = generic_call(_, _, _, _, _)
-        ; GoalExpr = plain_call(_, _, _, _, _, _)
-        ; GoalExpr = call_foreign_proc(_, _, _, _, _, _,  _)
-        ),
-        HasSubGoals = does_not_have_subgoals
-    ;
-        ( GoalExpr = conj(_, SubGoals)
-        ; GoalExpr = disj(SubGoals)
-        ),
-        (
-            SubGoals = [],
-            HasSubGoals = does_not_have_subgoals
-        ;
-            SubGoals = [_ | _],
-            HasSubGoals = has_subgoals
-        )
-    ;
-        ( GoalExpr = if_then_else(_, _, _, _)
-        ; GoalExpr = negation(_)
-        ; GoalExpr = switch(_, _, _)
-        ; GoalExpr = scope(_, _)
-        ),
-        HasSubGoals = has_subgoals
-    ;
-        GoalExpr = shorthand(ShortHand),
-        ( ShortHand = atomic_goal(_, _, _, _, _, _, _)
-        ; ShortHand = try_goal(_, _, _)
-        ; ShortHand = bi_implication(_, _)
-        ),
-        HasSubGoals = has_subgoals
-    ).
-
-%-----------------------------------------------------------------------------%
-
-true_goal = hlds_goal(true_goal_expr, GoalInfo) :-
-    instmap_delta_init_reachable(InstMapDelta),
-    goal_info_init(set_of_var.init, InstMapDelta, detism_det, purity_pure,
-        GoalInfo).
-
-true_goal_expr = conj(plain_conj, []).
-
-true_goal_with_context(Context) = hlds_goal(GoalExpr, GoalInfo) :-
-    hlds_goal(GoalExpr, GoalInfo0) = true_goal,
-    goal_info_set_context(Context, GoalInfo0, GoalInfo).
-
-fail_goal = hlds_goal(fail_goal_expr, GoalInfo) :-
-    instmap_delta_init_unreachable(InstMapDelta),
-    goal_info_init(set_of_var.init, InstMapDelta, detism_failure, purity_pure,
-        GoalInfo).
-
-fail_goal_expr = disj([]).
-
-fail_goal_with_context(Context) = hlds_goal(GoalExpr, GoalInfo) :-
-    hlds_goal(GoalExpr, GoalInfo0) = fail_goal,
-    goal_info_set_context(Context, GoalInfo0, GoalInfo).
-
-%-----------------------------------------------------------------------------%
-
 goal_list_nonlocals(Goals, NonLocals) :-
     GoalNonLocals = list.map(goal_get_nonlocals, Goals),
     set_of_var.union_list(GoalNonLocals, NonLocals).
@@ -3506,187 +3288,6 @@ set_case_contexts(Context, Case0, Case) :-
     Case0 = case(MainConsId, OtherConsIds, Goal0),
     set_goal_contexts(Context, Goal0, Goal),
     Case = case(MainConsId, OtherConsIds, Goal).
-
-%-----------------------------------------------------------------------------%
-
-create_pure_atomic_complicated_unification(LHS, RHS, Context,
-        UnifyMainContext, UnifySubContext, Goal) :-
-    create_atomic_complicated_unification(LHS, RHS, Context,
-        UnifyMainContext, UnifySubContext, purity_pure, Goal).
-
-create_atomic_complicated_unification(LHS, RHS, Context,
-        UnifyMainContext, UnifySubContext, Purity, Goal) :-
-    UMode = ((free - free) -> (free - free)),
-    Mode = ((free -> free) - (free -> free)),
-    Unification = complicated_unify(UMode, can_fail, []),
-    UnifyContext = unify_context(UnifyMainContext, UnifySubContext),
-    goal_info_init(Context, GoalInfo0),
-    goal_info_set_purity(Purity, GoalInfo0, GoalInfo),
-    GoalExpr = unify(LHS, RHS, Mode, Unification, UnifyContext),
-    Goal = hlds_goal(GoalExpr, GoalInfo).
-
-%-----------------------------------------------------------------------------%
-
-make_simple_assign(X, Y, UnifyMainContext, UnifySubContext, Goal) :-
-    Ground = ground(shared, none),
-    Mode = ((free -> Ground) - (Ground -> Ground)),
-    Unification = assign(X, Y),
-    UnifyContext = unify_context(UnifyMainContext, UnifySubContext),
-    goal_info_init(set_of_var.list_to_set([X, Y]), instmap_delta_bind_var(X),
-        detism_semi, purity_pure, GoalInfo),
-    GoalExpr = unify(X, rhs_var(Y), Mode, Unification, UnifyContext),
-    Goal = hlds_goal(GoalExpr, GoalInfo).
-
-make_simple_test(X, Y, UnifyMainContext, UnifySubContext, Goal) :-
-    Ground = ground(shared, none),
-    Mode = ((Ground -> Ground) - (Ground -> Ground)),
-    Unification = simple_test(X, Y),
-    UnifyContext = unify_context(UnifyMainContext, UnifySubContext),
-    goal_info_init(set_of_var.list_to_set([X, Y]), instmap_delta_bind_no_var,
-        detism_semi, purity_pure, GoalInfo),
-    GoalExpr = unify(X, rhs_var(Y), Mode, Unification, UnifyContext),
-    Goal = hlds_goal(GoalExpr, GoalInfo).
-
-%-----------------------------------------------------------------------------%
-
-make_int_const_construction_alloc_in_proc(Int, MaybeName, Goal, Var,
-        !ProcInfo) :-
-    proc_info_create_var_from_type(int_type, MaybeName, Var, !ProcInfo),
-    make_int_const_construction(Var, Int, Goal).
-
-make_string_const_construction_alloc_in_proc(String, MaybeName, Goal, Var,
-        !ProcInfo) :-
-    proc_info_create_var_from_type(string_type, MaybeName, Var, !ProcInfo),
-    make_string_const_construction(Var, String, Goal).
-
-make_float_const_construction_alloc_in_proc(Float, MaybeName, Goal, Var,
-        !ProcInfo) :-
-    proc_info_create_var_from_type(float_type, MaybeName, Var, !ProcInfo),
-    make_float_const_construction(Var, Float, Goal).
-
-make_char_const_construction_alloc_in_proc(Char, MaybeName, Goal, Var,
-        !ProcInfo) :-
-    proc_info_create_var_from_type(char_type, MaybeName, Var, !ProcInfo),
-    make_char_const_construction(Var, Char, Goal).
-
-make_const_construction_alloc_in_proc(ConsId, Type, MaybeName, Goal, Var,
-        !ProcInfo) :-
-    proc_info_create_var_from_type(Type, MaybeName, Var, !ProcInfo),
-    make_const_construction(Var, ConsId, Goal).
-
-make_int_const_construction_alloc(Int, MaybeName, Goal, Var,
-        !VarSet, !VarTypes) :-
-    varset.new_maybe_named_var(MaybeName, Var, !VarSet),
-    add_var_type(Var, int_type, !VarTypes),
-    make_int_const_construction(Var, Int, Goal).
-
-make_string_const_construction_alloc(String, MaybeName, Goal, Var,
-        !VarSet, !VarTypes) :-
-    varset.new_maybe_named_var(MaybeName, Var, !VarSet),
-    add_var_type(Var, string_type, !VarTypes),
-    make_string_const_construction(Var, String, Goal).
-
-make_float_const_construction_alloc(Float, MaybeName, Goal, Var,
-        !VarSet, !VarTypes) :-
-    varset.new_maybe_named_var(MaybeName, Var, !VarSet),
-    add_var_type(Var, float_type, !VarTypes),
-    make_float_const_construction(Var, Float, Goal).
-
-make_char_const_construction_alloc(Char, MaybeName, Goal, Var,
-        !VarSet, !VarTypes) :-
-    varset.new_maybe_named_var(MaybeName, Var, !VarSet),
-    add_var_type(Var, char_type, !VarTypes),
-    make_char_const_construction(Var, Char, Goal).
-
-make_const_construction_alloc(ConsId, Type, MaybeName, Goal, Var,
-        !VarSet, !VarTypes) :-
-    varset.new_maybe_named_var(MaybeName, Var, !VarSet),
-    add_var_type(Var, Type, !VarTypes),
-    make_const_construction(Var, ConsId, Goal).
-
-make_int_const_construction(Var, Int, Goal) :-
-    make_const_construction(Var, int_const(Int), Goal).
-
-make_string_const_construction(Var, String, Goal) :-
-    make_const_construction(Var, string_const(String), Goal).
-
-make_float_const_construction(Var, Float, Goal) :-
-    make_const_construction(Var, float_const(Float), Goal).
-
-make_char_const_construction(Var, Char, Goal) :-
-    make_const_construction(Var, char_const(Char), Goal).
-
-make_const_construction(Var, ConsId, hlds_goal(GoalExpr, GoalInfo)) :-
-    RHS = rhs_functor(ConsId, no, []),
-    Inst = bound(unique, inst_test_results_fgtc, [bound_functor(ConsId, [])]),
-    Mode = (free -> Inst) - (Inst -> Inst),
-    Unification = construct(Var, ConsId, [], [],
-        construct_dynamically, cell_is_unique, no_construct_sub_info),
-    Context = unify_context(umc_explicit, []),
-    GoalExpr = unify(Var, RHS, Mode, Unification, Context),
-    NonLocals = set_of_var.make_singleton(Var),
-    instmap_delta_init_reachable(InstMapDelta0),
-    instmap_delta_insert_var(Var, Inst, InstMapDelta0, InstMapDelta),
-    goal_info_init(NonLocals, InstMapDelta, detism_det, purity_pure, GoalInfo).
-
-construct_functor(Var, ConsId, Args, Goal) :-
-    list.length(Args, Arity),
-    Rhs = rhs_functor(ConsId, no, Args),
-    UnifyMode = (free_inst -> ground_inst) - (ground_inst -> ground_inst),
-    UniMode = ((free_inst - ground_inst) -> (ground_inst - ground_inst)),
-    list.duplicate(Arity, UniMode, UniModes),
-    Unification = construct(Var, ConsId, Args, UniModes,
-        construct_dynamically, cell_is_unique, no_construct_sub_info),
-    UnifyContext = unify_context(umc_explicit, []),
-    Unify = unify(Var, Rhs, UnifyMode, Unification, UnifyContext),
-    set_of_var.list_to_set([Var | Args], NonLocals),
-    InstMapDelta = instmap_delta_bind_var(Var),
-    goal_info_init(NonLocals, InstMapDelta, detism_det, purity_pure, GoalInfo),
-    Goal = hlds_goal(Unify, GoalInfo).
-
-deconstruct_functor(Var, ConsId, Args, Goal) :-
-    list.length(Args, Arity),
-    Rhs = rhs_functor(ConsId, no, Args),
-    UnifyMode = (ground_inst -> free_inst) - (ground_inst -> ground_inst),
-    UniMode = ((ground_inst - free_inst) -> (ground_inst - ground_inst)),
-    list.duplicate(Arity, UniMode, UniModes),
-    UnifyContext = unify_context(umc_explicit, []),
-    Unification = deconstruct(Var, ConsId, Args, UniModes, cannot_fail,
-        cannot_cgc),
-    Unify = unify(Var, Rhs, UnifyMode, Unification, UnifyContext),
-    set_of_var.list_to_set([Var | Args], NonLocals),
-    InstMapDelta = instmap_delta_bind_vars(Args),
-    goal_info_init(NonLocals, InstMapDelta, detism_det, purity_pure, GoalInfo),
-    Goal = hlds_goal(Unify, GoalInfo).
-
-construct_tuple(Tuple, Args, Goal) :-
-    list.length(Args, Arity),
-    ConsId = tuple_cons(Arity),
-    construct_functor(Tuple, ConsId, Args, Goal).
-
-deconstruct_tuple(Tuple, Args, Goal) :-
-    list.length(Args, Arity),
-    ConsId = tuple_cons(Arity),
-    deconstruct_functor(Tuple, ConsId, Args, Goal).
-
-%-----------------------------------------------------------------------------%
-
-get_pragma_foreign_var_names(MaybeVarNames, VarNames) :-
-    get_pragma_foreign_var_names_2(MaybeVarNames, [], VarNames0),
-    list.reverse(VarNames0, VarNames).
-
-:- pred get_pragma_foreign_var_names_2(list(maybe(pair(string, mer_mode)))::in,
-    list(string)::in, list(string)::out) is det.
-
-get_pragma_foreign_var_names_2([], !Names).
-get_pragma_foreign_var_names_2([MaybeName | MaybeNames], !Names) :-
-    (
-        MaybeName = yes(Name - _),
-        !:Names = [Name | !.Names]
-    ;
-        MaybeName = no
-    ),
-    get_pragma_foreign_var_names_2(MaybeNames, !Names).
 
 %-----------------------------------------------------------------------------%
 :- end_module hlds.hlds_goal.

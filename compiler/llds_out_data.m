@@ -9,7 +9,7 @@
 % File: llds_out_data.m.
 % Main authors: conway, fjh, zs.
 %
-% This module defines the routines for printing out LLDS lvals, rvals, 
+% This module defines the routines for printing out LLDS lvals, rvals,
 % and global variables.
 %
 %----------------------------------------------------------------------------%
@@ -155,7 +155,8 @@
 :- import_module ll_backend.layout_out.
 :- import_module ll_backend.llds_out.llds_out_code_addr.
 :- import_module ll_backend.rtti_out.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.builtin_modules.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_foreign.
 
 :- import_module int.
@@ -802,7 +803,7 @@ output_record_rvals_decls_format(Info, Rvals @ [_ | _],
     % that do not permit tail recursion, we can free up the stack frames
     % occupied by a bunch of loop iterations before the declarations of *all*
     % the rvals have been output.
-    % 
+    %
 :- pred output_record_rvals_decls_format_count(llds_out_info::in,
     list(rval)::in, list(rval)::out, int::in,
     string::in, string::in, int::in, int::out, decl_set::in,
@@ -1699,9 +1700,9 @@ output_data_id(Info, DataId, !IO) :-
         output_layout_name(LayoutName, !IO)
     ;
         DataId = layout_slot_id(Kind, PredProcId),
-        Kind = table_io_decl_id,
-        TableIoDeclMap = Info ^ lout_table_io_decl_map,
-        map.lookup(TableIoDeclMap, PredProcId, LayoutSlotName),
+        Kind = table_io_entry_id,
+        TableIoEntryMap = Info ^ lout_table_io_entry_map,
+        map.lookup(TableIoEntryMap, PredProcId, LayoutSlotName),
         MangledModuleName = Info ^ lout_mangled_module_name,
         output_layout_slot_id(use_layout_macro, MangledModuleName,
             LayoutSlotName, !IO)

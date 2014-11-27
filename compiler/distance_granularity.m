@@ -150,7 +150,9 @@
 :- import_module hlds.pred_table.
 :- import_module hlds.quantification.
 :- import_module hlds.instmap.
+:- import_module hlds.make_goal.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_mode.
@@ -262,7 +264,7 @@ apply_dg_to_procs(PredId, [ProcId | ProcIds], Distance, PredIdSpecialized,
     module_info_proc_info(!.ModuleInfo, proc(PredId, ProcId), ProcInfo0),
     proc_info_get_has_parallel_conj(ProcInfo0, HasParallelConj),
     (
-        HasParallelConj = yes,
+        HasParallelConj = has_parallel_conj,
         % The procedure contains parallel conjunction(s).
 
         proc_info_get_goal(ProcInfo0, Body),
@@ -285,7 +287,7 @@ apply_dg_to_procs(PredId, [ProcId | ProcIds], Distance, PredIdSpecialized,
             MaybeGranularityVar = no
         )
     ;
-        HasParallelConj = no
+        HasParallelConj = has_no_parallel_conj
         % No need to apply the distance granularity transformation to this
         % procedure as it does not contain any parallel conjunctions.
     ),
@@ -401,7 +403,7 @@ apply_dg_to_goal(!Goal, CallerPredId, CallerProcId, PredIdSpecialized,
     % Apply the distance granularity transformation to a plain call.
     %
 :- pred apply_dg_to_plain_call(
-    hlds_goal_expr::in(plain_call_expr), hlds_goal_expr::out,
+    hlds_goal_expr::in(goal_expr_plain_call), hlds_goal_expr::out,
     pred_id::in, pred_id::in, sym_name::in, proc_id::in, proc_info::in,
     proc_info::out, module_info::in, module_info::out, bool::in,
     maybe(prog_var)::in, maybe(prog_var)::out, bool::out) is det.
@@ -694,7 +696,8 @@ apply_dg_to_else2(!GoalExpr, !IndexInConj, GranularityVar, CallerPredId,
                     MinusCallSymName = qualified(unqualified("int"), "-"),
                     ConsId =
                         cons(MinusCallSymName, 2, cons_id_dummy_type_ctor),
-                    Rhs = rhs_functor(ConsId, no, [GranularityVar, Var]),
+                    Rhs = rhs_functor(ConsId, is_not_exist_constr,
+                        [GranularityVar, Var]),
                     MinusCallUnifyContext = yes(call_unify_context(VarResult,
                         Rhs, unify_context(
                         umc_implicit("distance_granularity"), []))),
@@ -949,7 +952,7 @@ update_original_predicate_goal(!Goal, CallerPredId, CallerProcId,
     % specialized procedure.
     %
 :- pred update_original_predicate_plain_call(
-    hlds_goal::in(plain_call), hlds_goal::out,
+    hlds_goal::in(goal_plain_call), hlds_goal::out,
     pred_id::in, proc_id::in, pred_id::in, sym_name::in,
     proc_info::in, proc_info::out, int::in) is det.
 

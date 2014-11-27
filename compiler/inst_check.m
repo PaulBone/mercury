@@ -53,7 +53,7 @@
 :- import_module hlds.hlds_module.
 :- import_module hlds.hlds_pred.
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_type.
@@ -325,7 +325,7 @@ get_functor_if_must_check_for_type(ConsId, MaybeFunctor) :-
         ; ConsId = ground_term_const(_, _)
         ; ConsId = tabling_info_const(_)
         ; ConsId = deep_profiling_proc_layout(_)
-        ; ConsId = table_io_decl(_)
+        ; ConsId = table_io_entry_desc(_)
         ),
         MaybeFunctor = no
     ).

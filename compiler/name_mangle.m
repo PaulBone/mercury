@@ -29,6 +29,7 @@
 :- import_module backend_libs.rtti.
 :- import_module mdbcomp.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 
 :- import_module bool.
 :- import_module io.
@@ -294,5 +295,5 @@ mercury_vector_common_array_prefix = "mercury_vector_common_".
 mercury_common_type_prefix = "mercury_type_".
 
 %-----------------------------------------------------------------------------%
-:- end_module name_mangle.
+:- end_module backend_libs.name_mangle.
 %-----------------------------------------------------------------------------%

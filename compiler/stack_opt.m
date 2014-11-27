@@ -88,6 +88,8 @@
 :- import_module backend_libs.matching.
 :- import_module check_hlds.mode_util.
 :- import_module check_hlds.simplify.
+:- import_module check_hlds.simplify.simplify_proc.
+:- import_module check_hlds.simplify.simplify_tasks.
 :- import_module check_hlds.type_util.
 :- import_module hlds.arg_info.
 :- import_module hlds.goal_path.
@@ -174,8 +176,8 @@ stack_opt_cell(PredProcId, !ProcInfo, !ModuleInfo) :-
     % This simplication is necessary to fix some bad inputs from
     % getting to the liveness computation.
     % (see tests/valid/stack_opt_simplify.m)
-    Simplications = list_to_simplifications([]),
-    simplify_proc(Simplications, PredId, ProcId, !ModuleInfo, !ProcInfo),
+    SimplifyTasks = list_to_simplify_tasks([]),
+    simplify_proc(SimplifyTasks, PredId, ProcId, !ModuleInfo, !ProcInfo),
     detect_liveness_proc(!.ModuleInfo, PredProcId, !ProcInfo),
     initial_liveness(!.ProcInfo, PredId, !.ModuleInfo, Liveness0),
     module_info_get_globals(!.ModuleInfo, Globals),
@@ -627,7 +629,7 @@ add_anchor_inserts(Goal, ArgVarsViaCellVar, InsertIntervals, Anchor,
     AnchorFollow = anchor_follow_info(_, AnchorIntervals),
     set.intersect(AnchorIntervals, InsertIntervals,
         AnchorInsertIntervals),
-    ( set.non_empty(AnchorInsertIntervals) ->
+    ( set.is_non_empty(AnchorInsertIntervals) ->
         Insert = insert_spec(Goal, ArgVarsViaCellVar),
         InsertMap0 = !.StackOptInfo ^ soi_left_anchor_inserts,
         ( map.search(InsertMap0, Anchor, Inserts0) ->

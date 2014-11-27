@@ -108,6 +108,7 @@
 :- import_module libs.options.
 :- import_module mdbcomp.goal_path.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_util.
 :- import_module parse_tree.set_of_var.
@@ -175,7 +176,8 @@ maybe_par_loop_control_proc(DepInfo, PredProcId, !ProcInfo, !ModuleInfo) :-
     proc_info::in) is semidet.
 
 loop_control_is_applicable(DepInfo, PredProcId, ProcInfo) :-
-    proc_info_get_has_parallel_conj(ProcInfo, yes),
+    proc_info_get_has_parallel_conj(ProcInfo, HasParallelConj),
+    HasParallelConj = has_parallel_conj,
     proc_info_get_inferred_determinism(ProcInfo, Detism),
     % If the predicate itself is not deterministic then its recursive call
     % will not be deterministic and therefore will not be found in a parallel
@@ -646,9 +648,9 @@ create_inner_proc(RecParConjIds, OldPredProcId, OldProcInfo,
         proc_info_get_inferred_determinism(OldProcInfo, Detism),
         proc_info_create(Context, !.VarSet, !.VarTypes, HeadVars, InstVarSet,
             ArgModes, detism_decl_none, Detism, !.Body, RttiVarMaps,
-            address_is_not_taken, map.init, ProcInfo),
+            address_is_not_taken, has_parallel_conj, map.init, ProcInfo),
 
-        % Update the other structures
+        % Update the other structures.
         pred_info_set_arg_types(TypeVarSet, ExistQVars, ArgTypes, !PredInfo),
         pred_info_set_proc_info(ProcId, ProcInfo, !PredInfo),
         module_info_set_pred_info(PredId, !.PredInfo, !ModuleInfo)

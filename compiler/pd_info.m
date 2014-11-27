@@ -117,6 +117,7 @@
 :- implementation.
 
 :- import_module check_hlds.inst_match.
+:- import_module check_hlds.modecheck_util.
 :- import_module hlds.hlds_goal.
 :- import_module hlds.hlds_pred.
 :- import_module mdbcomp.prim_data.
@@ -146,12 +147,14 @@ pd_info_init(ModuleInfo, ProcArgInfos, PDInfo) :-
 
 pd_info_init_unfold_info(PredProcId, PredInfo, ProcInfo, !PDInfo) :-
     pd_info_get_module_info(!.PDInfo, ModuleInfo),
+    proc_info_get_argmodes(ProcInfo, ArgModes),
+    get_constrained_inst_vars(ModuleInfo, ArgModes, HeadInstVars),
     proc_info_get_initial_instmap(ProcInfo, ModuleInfo, InstMap),
     CostDelta = 0,
     pd_term.local_term_info_init(LocalTermInfo),
     Parents = set.make_singleton_set(PredProcId),
-    UnfoldInfo = unfold_info(ProcInfo, InstMap, CostDelta, LocalTermInfo,
-        PredInfo, Parents, PredProcId, no, 0, no),
+    UnfoldInfo = unfold_info(ProcInfo, HeadInstVars, InstMap, CostDelta,
+        LocalTermInfo, PredInfo, Parents, PredProcId, no, 0, no),
     pd_info_set_unfold_info(UnfoldInfo, !PDInfo).
 
 pd_info_get_module_info(PDInfo, PDInfo ^ pdi_module_info).
@@ -224,6 +227,7 @@ pd_info_bind_var_to_functors(Var, MainConsId, OtherConsIds, !PDInfo) :-
 :- type unfold_info
     --->    unfold_info(
                 ufi_proc_info       :: proc_info,
+                ufi_head_inst_vars  :: map(inst_var, mer_inst),
                 ufi_instmap         :: instmap,
 
                 % Improvement in cost measured while processing this procedure.
@@ -275,6 +279,8 @@ pd_info_bind_var_to_functors(Var, MainConsId, OtherConsIds, !PDInfo) :-
 :- type branch_info_map(T)  ==  map(T, set(int)).
 
 :- pred pd_info_get_proc_info(pd_info::in, proc_info::out) is det.
+:- pred pd_info_get_head_inst_vars(pd_info::in, map(inst_var, mer_inst)::out)
+    is det.
 :- pred pd_info_get_instmap(pd_info::in, instmap::out) is det.
 :- pred pd_info_get_cost_delta(pd_info::in, int::out) is det.
 :- pred pd_info_get_local_term_info(pd_info::in, local_term_info::out) is det.
@@ -315,6 +321,8 @@ pd_info_bind_var_to_functors(Var, MainConsId, OtherConsIds, !PDInfo) :-
 :- implementation.
 
 pd_info_get_proc_info(PDInfo, UnfoldInfo ^ ufi_proc_info) :-
+    pd_info_get_unfold_info(PDInfo, UnfoldInfo).
+pd_info_get_head_inst_vars(PDInfo, UnfoldInfo ^ ufi_head_inst_vars) :-
     pd_info_get_unfold_info(PDInfo, UnfoldInfo).
 pd_info_get_instmap(PDInfo, UnfoldInfo ^ ufi_instmap) :-
     pd_info_get_unfold_info(PDInfo, UnfoldInfo).
@@ -658,13 +666,14 @@ pd_info.define_new_pred(Origin, Goal, PredProcId, CallGoal, !PDInfo) :-
     proc_info_get_vartypes(ProcInfo, VarTypes),
     proc_info_get_rtti_varmaps(ProcInfo, RttiVarMaps),
     proc_info_get_inst_varset(ProcInfo, InstVarSet),
+    proc_info_get_has_parallel_conj(ProcInfo, HasParallelConj),
     proc_info_get_var_name_remap(ProcInfo, VarNameRemap),
     % XXX handle the extra typeinfo arguments for
     % --typeinfo-liveness properly.
     hlds_pred.define_new_pred(Origin, Goal, CallGoal, Args, _ExtraArgs,
         InstMap, SymName, TVarSet, VarTypes, ClassContext, RttiVarMaps,
-        VarSet, InstVarSet, Markers, address_is_not_taken, VarNameRemap,
-        ModuleInfo0, ModuleInfo, PredProcId),
+        VarSet, InstVarSet, Markers, address_is_not_taken, HasParallelConj,
+        VarNameRemap, ModuleInfo0, ModuleInfo, PredProcId),
     pd_info_set_module_info(ModuleInfo, !PDInfo).
 
 %-----------------------------------------------------------------------------%
@@ -738,4 +747,6 @@ pd_info.remove_version(PredProcId, !PDInfo) :-
     module_info_remove_predicate(PredId, ModuleInfo0, ModuleInfo),
     pd_info_set_module_info(ModuleInfo, !PDInfo).
 
+%-----------------------------------------------------------------------------%
+:- end_module transform_hlds.pd_info.
 %-----------------------------------------------------------------------------%

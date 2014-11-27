@@ -158,6 +158,7 @@ for common programming tasks --- see the Mercury Library Reference Manual.
 
 @menu
 * Syntax Overview::
+* Character Set::
 * Tokens::
 * Terms::
 * Builtin Operators::
@@ -189,6 +190,12 @@ is a term followed by a period.  Each term is composed of a sequence
 of tokens, and each token is composed of a sequence of characters.
 Like Prolog, Mercury has the Definite Clause Grammar (DCG) notation
 for clauses.
+
+@node Character Set
+@section Character Set
+
+Mercury program source files must be written using the UTF-8 encoding of
+the Unicode character set.
 
 @node Tokens
 @section Tokens
@@ -506,6 +513,14 @@ promise_impure                  fx                950
 promise_pure                    fx                950
 promise_semipure                fx                950
 require_complete_switch         fxy               950
+require_switch_arms_det         fxy               950
+require_switch_arms_semidet     fxy               950
+require_switch_arms_multi       fxy               950
+require_switch_arms_nondet      fxy               950
+require_switch_arms_cc_multi    fxy               950
+require_switch_arms_cc_nondet   fxy               950
+require_switch_arms_erroneous   fxy               950
+require_switch_arms_failure     fxy               950
 require_det                     fx                950
 require_semidet                 fx                950
 require_multi                   fx                950
@@ -917,6 +932,51 @@ is equivalent to @var{Goal}.
 This is intended to allow these scopes to be used
 even if @var{Var} is input to the scope
 only in some but not all modes of the containing predicate.
+
+@item @code{require_switch_arms_det [@var{Var}] @var{Goal}}
+@itemx @code{require_switch_arms_semidet [@var{Var}] @var{Goal}}
+@itemx @code{require_switch_arms_multi [@var{Var}] @var{Goal}}
+@itemx @code{require_switch_arms_nondet [@var{Var}] @var{Goal}}
+@itemx @code{require_switch_arms_cc_multi [@var{Var}] @var{Goal}}
+@itemx @code{require_switch_arms_cc_nondet [@var{Var}] @var{Goal}}
+@itemx @code{require_switch_arms_erroneous [@var{Var}] @var{Goal}}
+@itemx @code{require_switch_arms_failure [@var{Var}] @var{Goal}}
+A determinism check, typically used to enhance the robustness of code.
+@var{Goal} must be a valid goal.
+If @var{Goal} is a switch on @var{Var},
+and all arms of the switch would be allowable in a det context,
+@code{require_switch_arms_det [@var{Var}] @var{Goal}}
+is equivalent to @var{Goal}.
+If @var{Goal} is a switch on @var{Var},
+but some arms of the switch would @emph{not} be allowable in a det context,
+then the compiler is required to generate an error message.
+If @var{Goal} is not a switch on @var{Var},
+then @code{require_switch_arms_det [@var{Var}] @var{Goal}}
+is equivalent to @var{Goal}.
+This is intended to allow these scopes to be used
+even if @var{Var} is input to the scope
+only in some but not all modes of the containing predicate.
+
+The @code{require_switch_arms_det} keyword
+may be replaced with
+@code{require_switch_arms_semidet},
+@code{require_switch_arms_multi},
+@code{require_switch_arms_nondet},
+@code{require_switch_arms_cc_multi},
+@code{require_switch_arms_cc_nondet},
+@code{require_switch_arms_erroneous} or
+@code{require_switch_arms_failure},
+each of which requires
+the arms of the switch on @var{Var} to have a determinism
+that is @emph{at least as tight} as the named determinism.
+The determinism match need not be exact;
+the requirement is that the arms' determinisms should make
+all the promises about the minimum and maximum number of solutions
+as the named determinism does.
+For example, it is ok to have a det switch arm
+in a @code{require_switch_arms_semidet} scope,
+even though it would not be ok
+to have a det goal in a @code{require_semidet} scope.
 
 @item @code{trace @var{Params} @var{Goal}}
 A trace goal, typically used for debugging or logging.
@@ -2376,20 +2436,20 @@ The compiler generates some field access functions for @samp{field1}.
 The functions generated for the other fields are similar.
 
 @example
-+:- func type1 ^ field1 = type2.
-+type1(Field1, _) ^ field1 = Field1.
+:- func type1 ^ field1 = type2.
+type1(Field1, _) ^ field1 = Field1.
 
-+:- func (type1 ^ field1 := type2) = type1.
-+(type1(_, Field2) ^ field1 := Field1) = type1(Field1, Field2).
+:- func (type1 ^ field1 := type2) = type1.
+(type1(_, Field2) ^ field1 := Field1) = type1(Field1, Field2).
 @end example
 
 Using these functions and the syntactic sugar described in
 @ref{Record syntax}, programmers can write code such as
 
 @example
-+:- func type1 ^ increment_field3 = type1.
+:- func type1 ^ increment_field3 = type1.
 
-+Term0 ^ increment_field3 =
+Term0 ^ increment_field3 =
         Term0 ^ field1 ^ field3 := Term0 ^ field1 ^ field3 + 1.
 @end example
 
@@ -4564,9 +4624,24 @@ interface section of its parent module.
 
 If a sub-module is declared but not explicitly defined,
 then there is an implicit definition with an empty implementation section
-for that sub-module (this will result in an error, if the interface
-section includes declarations but not definitions for any types,
-predicates, modes, or (doubly) nested sub-modules).
+for that sub-module.
+This empty implementation section will result in an error
+if the interface section of a sub-module contains any of the following:
+
+@itemize @bullet
+@item
+a declaration for a function or a predicate;
+@item
+an abstract declaration for a type, inst, mode or typeclass,
+i.e.@ a declaration that does not itself serve as a definition
+of that type, inst, mode or typeclass;
+@item
+an abstract declaration of a typeclass instance; or
+@item
+a (doubly, triply, etc) nested sub-module
+(which perforce has only an interface section, and no implementation section)
+and which contains any of the above.
+@end itemize
 
 @node Separate sub-modules
 @subsection Separate sub-modules
@@ -7891,8 +7966,8 @@ implementation-dependent.
 The following text describes how it is done for the University of Melbourne
 Mercury implementation.
 
-To link an existing object file into your Mercury code, use the command line
-option @samp{--link-object}.
+To link an existing object file or archive of object files into your Mercury
+code, use the command line option @samp{--link-object}.
 For example, the following will link the object file @samp{my_function.o} from
 the current directory when compiling the program @samp{prog}:
 
@@ -7907,7 +7982,7 @@ or perhaps the shared version @samp{libfancy_library.so}, from the directory
 @samp{/usr/local/contrib/lib}, when compiling the program @samp{prog}:
 
 @example
-mmc -R/usr/local/contrib/lib -L/usr/local/contrib/lib --lfancy_library prog
+mmc -R/usr/local/contrib/lib -L/usr/local/contrib/lib -lfancy_library prog
 @end example
 
 As illustrated by the example, the command line options @samp{-R}, @samp{-L}
@@ -9772,6 +9847,9 @@ is the perfect model.)
 The current Mercury implementation supports
 three different pragmas for tabling, to cover these three cases:
 @samp{loop_check}, @samp{memo}, and @samp{minimal_model}.
+
+@itemize @bullet
+@item
 The @samp{loop_check} pragma asks only for loop checking.
 With this pragma, the memo table will map each distinct set of input arguments
 only to a single boolean saying whether
@@ -9779,6 +9857,19 @@ a call with those arguments is currently active or not;
 the pragma's only effect is to cause the predicate to throw an exception
 if this boolean says that the current call has the same arguments
 as one of its ancestors, which indicates an infinite recursive loop.
+
+Note that loop checking for nondet and multi predicates assumes that
+calls to these predicates generate all their solutions and then fail.
+If a caller asks them only for some solutions
+and then cuts away all later solutions
+(e.g. via a quantification
+that only asks whether a solution satisfying a particular test exists),
+then the cut-away call never gets a chance
+to record the fact that it is not longer active.
+The next call to that predicate with the same arguments
+will therefore think that the previous call is still active,
+and will consider this call to be an infinite loop.
+@item
 The @samp{memo} pragma asks for both loop checking and memoization.
 With this pragma, the memo table will map each distinct set of input arguments
 either to the set of results computed previously for those arguments,
@@ -9789,6 +9880,7 @@ This predicate will thus look for infinite recursive loops
 but it will also record all its solutions in the memo table,
 and will avoid recomputing solutions
 that are already available in the memo table.
+@item
 The @samp{minimal_model} pragma asks for the computation
 of a ``minimal model'' semantics.
 These differ from the @samp{memo} pragma in that
@@ -9798,6 +9890,11 @@ to fail if the call concerned has no way of computing any solutions
 it hasn't already computed and recorded,
 and it does have such a way, then it switches the execution to explore
 those ways before coming back to the apparently infinitely recursive call.
+
+Minimal model evaluation is applicable
+only to procedures that can succeed more than once,
+and only in grades that explicitly support it.
+@end itemize
 
 The syntax for each of these declarations is
 

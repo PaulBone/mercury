@@ -84,6 +84,7 @@
 :- import_module ll_backend.llds_out.llds_out_util.
 :- import_module ll_backend.rtti_out.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.file_names.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_foreign.
@@ -130,7 +131,7 @@ output_single_c_file(Globals, CFile, !DeclSet, !IO) :-
         InternalLabelToLayoutMap, EntryLabelToLayoutMap,
         CallSiteStatics, CoveragePoints, ProcStatics,
         ProcHeadVarNums, ProcVarNames, ProcBodyBytecodes, TSStringTable,
-        TableIoDecls, TableIoDeclMap, ProcEventLayouts, ExecTraces,
+        TableIoEntries, TableIoEntryMap, ProcEventLayouts, ExecTraces,
         ProcLayoutDatas, ModuleLayoutDatas, ClosureLayoutDatas,
         AllocSites, AllocSiteMap,
         Modules, UserInitPredCNames, UserFinalPredCNames, ComplexityProcs),
@@ -140,7 +141,7 @@ output_single_c_file(Globals, CFile, !DeclSet, !IO) :-
         !IO),
 
     Info = init_llds_out_info(ModuleName, SourceFileName, Globals,
-        InternalLabelToLayoutMap, EntryLabelToLayoutMap, TableIoDeclMap,
+        InternalLabelToLayoutMap, EntryLabelToLayoutMap, TableIoEntryMap,
         AllocSiteMap),
     annotate_c_modules(Info, Modules, AnnotatedModules,
         cord.init, EntryLabelsCord, cord.init, InternalLabelsCord,
@@ -176,7 +177,7 @@ output_single_c_file(Globals, CFile, !DeclSet, !IO) :-
         ShortLocns, LongLocns, UserEventVarNums, UserEvents,
         NoVarLabelLayouts, SVarLabelLayouts, LVarLabelLayouts,
         CallSiteStatics, CoveragePoints, ProcStatics,
-        ProcHeadVarNums, ProcVarNames, ProcBodyBytecodes, TableIoDecls,
+        ProcHeadVarNums, ProcVarNames, ProcBodyBytecodes, TableIoEntries,
         ProcEventLayouts, ExecTraces, AllocSites, !IO),
 
     list.foldl2(output_proc_layout_data_defn(Info), ProcLayoutDatas,
@@ -192,7 +193,7 @@ output_single_c_file(Globals, CFile, !DeclSet, !IO) :-
         ShortLocns, LongLocns, UserEventVarNums, UserEvents,
         NoVarLabelLayouts, SVarLabelLayouts, LVarLabelLayouts,
         CallSiteStatics, CoveragePoints, ProcStatics,
-        ProcHeadVarNums, ProcVarNames, ProcBodyBytecodes, TableIoDecls,
+        ProcHeadVarNums, ProcVarNames, ProcBodyBytecodes, TableIoEntries,
         ProcEventLayouts, ExecTraces, TSStringTable, AllocSites,
         !DeclSet, !IO),
 
@@ -1706,8 +1707,6 @@ output_label_defn(internal_label(Num, ProcLabel), !IO) :-
     io.write_string(",", !IO),
     io.write_int(Num, !IO),
     io.write_string(")\n", !IO).
-
-%----------------------------------------------------------------------------%
 
 %---------------------------------------------------------------------------%
 :- end_module ll_backend.llds_out.llds_out_file.

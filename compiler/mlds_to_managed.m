@@ -43,7 +43,7 @@
 :- import_module backend_libs.c_util.
 :- import_module libs.file_util.
 :- import_module libs.options.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module ml_backend.ilds.
 :- import_module ml_backend.ml_global_data.
 :- import_module ml_backend.ml_util.
@@ -258,7 +258,7 @@ generate_method_code(Globals, DataRep, Defn, !IO) :-
             has_foreign_languages(Statement, Langs),
             list.member(lang_csharp, Langs)
         ->
-            expect(set.empty(EnvVarNames), $module, $pred, "EnvVarNames"),
+            expect(set.is_empty(EnvVarNames), $module, $pred, "EnvVarNames"),
             Params = mlds_func_params(Inputs, Outputs),
             (
                 Outputs = [],

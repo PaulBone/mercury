@@ -34,10 +34,11 @@
 :- import_module hlds.hlds_out.
 :- import_module hlds.hlds_out.hlds_out_util.
 :- import_module hlds.hlds_pred.
+:- import_module hlds.make_goal.
 :- import_module libs.
 :- import_module libs.handle_options.
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.
 :- import_module parse_tree.prog_data.
 
@@ -114,7 +115,7 @@ subst_literals_in_goal(Info, Goal0, Goal) :-
                 ; ConsId = ground_term_const(_, _)
                 ; ConsId = tabling_info_const(_)
                 ; ConsId = deep_profiling_proc_layout(_)
-                ; ConsId = table_io_decl(_)
+                ; ConsId = table_io_entry_desc(_)
                 ),
                 Goal = Goal0
             )

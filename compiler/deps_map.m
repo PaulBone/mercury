@@ -8,8 +8,10 @@
 %
 % File: deps_map.m.
 %
-% This module contains the data structure for recording module dependencies
-% and its access predicates.
+% This module contains a data structure for recording module dependencies
+% and its access predicates. The module_deps_graph module contains another
+% data structure, used for similar purposes, that is built on top of this one.
+% XXX Document the exact relationship between the two.
 %
 %-----------------------------------------------------------------------------%
 
@@ -17,7 +19,7 @@
 :- interface.
 
 :- import_module libs.globals.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.file_names.
 :- import_module parse_tree.module_imports.
 
@@ -82,11 +84,12 @@
 :- implementation.
 
 :- import_module libs.globals.
+:- import_module libs.timestamp.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.modules.        % for split_into_submodules;
                                             % undesirable dependencies
 :- import_module parse_tree.prog_data.
-:- import_module parse_tree.prog_io.
+:- import_module parse_tree.prog_io_error.
 :- import_module parse_tree.read_modules.
 
 :- import_module assoc_list.
@@ -202,14 +205,15 @@ insert_into_deps_map(ModuleImports, !DepsMap) :-
 read_dependencies(Globals, ModuleName, Search, ModuleImportsList, !IO) :-
     read_module_ignore_errors(Globals, ModuleName, ".m",
         "Getting dependencies for module", Search, do_not_return_timestamp,
-        Items0, Error, FileName0, _, !IO),
+        Items0, Errors, FileName0, _, !IO),
     (
         Items0 = [],
-        Error = fatal_module_errors
+        set.intersect(Errors, fatal_read_module_errors, FatalErrors),
+        set.is_non_empty(FatalErrors)
     ->
         read_module_ignore_errors(Globals, ModuleName, ".int",
             "Getting dependencies for module interface", Search,
-            do_not_return_timestamp, Items, _Error, FileName, _, !IO),
+            do_not_return_timestamp, Items, _Errors, FileName, _, !IO),
         SubModuleList = [ModuleName - Items]
     ;
         FileName = FileName0,
@@ -219,6 +223,8 @@ read_dependencies(Globals, ModuleName, Search, ModuleImportsList, !IO) :-
     ),
     assoc_list.keys(SubModuleList, SubModuleNames),
     list.map(init_dependencies(FileName, ModuleName, SubModuleNames,
-        [], Error, Globals), SubModuleList, ModuleImportsList).
+        [], Errors, Globals), SubModuleList, ModuleImportsList).
 
+%-----------------------------------------------------------------------------%
+:- end_module parse_tree.deps_map.
 %-----------------------------------------------------------------------------%

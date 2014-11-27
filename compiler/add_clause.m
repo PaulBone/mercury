@@ -14,7 +14,7 @@
 :- import_module hlds.hlds_pred.
 :- import_module hlds.make_hlds.qual_info.
 :- import_module hlds.quantification.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
 
@@ -53,6 +53,7 @@
 :- import_module hlds.hlds_out.hlds_out_util.
 :- import_module hlds.hlds_pred.
 :- import_module hlds.hlds_rtti.
+:- import_module hlds.make_goal.
 :- import_module hlds.make_hlds.add_pred.
 :- import_module hlds.make_hlds.field_access.
 :- import_module hlds.make_hlds.goal_expr_to_goal.
@@ -118,7 +119,8 @@ module_add_clause(ClauseVarSet, PredOrFunc, PredName, Args0, Body, Status,
             )
         else if unqualify_name(PredName) = ",", Arity = 2 then
             MaybePredId = no,
-            Pieces = [words("Attempt to define a clause for `,'/2."),
+            Pieces = [words("Attempt to define a clause for"),
+                sym_name_and_arity(unqualified(",") / 2), suffix("."),
                 words("This is usually caused by"),
                 words("inadvertently writing a period instead of a comma"),
                 words("at the end of the preceding line."), nl],
@@ -311,7 +313,7 @@ module_add_clause_2(ClauseVarSet, PredOrFunc, PredName, PredId, Args,
                     warn_singletons(!.ModuleInfo, SimpleCallId, VarSet, Goal,
                         !Specs),
                     % Warn about variables with overlapping scopes.
-                    warn_overlap(Warnings, VarSet, SimpleCallId, !Specs)
+                    add_quant_warnings(SimpleCallId, VarSet, Warnings, !Specs)
                 )
             )
         )

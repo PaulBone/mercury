@@ -52,7 +52,8 @@
 :- import_module hlds.hlds_goal.
 :- import_module hlds.hlds_pred.
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.builtin_modules.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.file_names.
 :- import_module parse_tree.prog_data.
 
@@ -496,7 +497,7 @@ cons_id_used_modules(Visibility, ConsId, !UsedModules) :-
         ; ConsId = typeclass_info_const(_)
         ; ConsId = ground_term_const(_, _)
         ; ConsId = tabling_info_const(_)
-        ; ConsId = table_io_decl(_)
+        ; ConsId = table_io_entry_desc(_)
         ; ConsId = deep_profiling_proc_layout(_)
         )
     ).
@@ -655,4 +656,5 @@ item_visibility(ImportStatus) = Visibility :-
     ).
 
 %-----------------------------------------------------------------------------%
+:- end_module check_hlds.unused_imports.
 %-----------------------------------------------------------------------------%

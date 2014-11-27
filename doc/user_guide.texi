@@ -740,7 +740,7 @@ A list of @samp{-l} options specifying libraries used by the program
 @item MLOBJS and EXTRA_MLOBJS
 @vindex MLOBJS
 @vindex EXTRA_MLOBJS
-A list of extra object files to link into the program (or library)
+A list of extra object files or archives to link into the program or library
 that you are building.
 
 @item C2INITFLAGS and EXTRA_C2INITFLAGS
@@ -6432,8 +6432,11 @@ Don't warn about argument order rearrangement caused by
 @samp{--introduce-accumulators}.
 
 @sp 1
-@item --no-warn-singleton-variables
+@item --no-warn-singleton-vars
+@itemx --no-warn-singleton-variables
+@findex --no-warn-singleton-vars
 @findex --no-warn-singleton-variables
+@findex --warn-singleton-vars
 @findex --warn-singleton-variables
 Don't warn about variables which only occur once.
 
@@ -6558,7 +6561,9 @@ does not match the module's file name.
 Disable warnings from the smart recompilation system.
 
 @sp 1
-@item --no-warn-undefined-options-variables
+@item --no-warn-undefined-options-vars
+@itemx --no-warn-undefined-options-variables
+@findex --no-warn-undefined-options-vars
 @findex --no-warn-undefined-options-variables
 @findex --make
 Do not warn about references to undefined variables in
@@ -6616,6 +6621,13 @@ This option is only enabled when termination analysis is enabled.
 Do not warn about calls to string.format or io.format that
 the compiler knows for sure contain mismatches between the format
 string and the supplied values.
+
+@sp 1
+@item --no-warn-only-one-format-string-error
+@findex --no-warn-only-one-format-string-error
+If a format string has more than one mismatch with the supplied values,
+generate a warning for all mismatches, not just the first.
+The later mismatches may be avalanche errors caused by earlier mismatches.
 
 @sp 1
 @item --warn-unknown-format-calls
@@ -7093,6 +7105,19 @@ Print the flags that are passed to the C compiler to specify which directories
 to search for C header files.
 This includes the C header files from the standard library.
 The flags are printed to the standard output.
+
+@sp 1
+@item --output-target-arch
+@findex --output-target-arch
+Print the target architecture to the standard output.
+
+@sp 1
+@item --output-class-dir
+@item --output-class-directory
+@findex --output-class-dir
+@findex --output-class-directory
+Print to standard output the name of the directory in which generated Java
+class files will be placed.
 
 @end table
 
@@ -7620,7 +7645,6 @@ The set of aspects and their alternatives are:
 @cindex .tr (grade modifier)
 @cindex .trseg (grade modifier)
 @cindex .gc (grade modifier)
-@cindex .mps (grade modifier)
 @cindex .agc (grade modifier)
 @cindex .spf (grade modifier)
 @cindex .stseg (grade modifier)
@@ -7629,20 +7653,21 @@ The set of aspects and their alternatives are:
 @c @cindex .ssdebug (grade modifier)
 @cindex .par (grade modifier)
 @cindex .threadscope (grade modifier)
-@cindex prof (grade modifier)
-@cindex memprof (grade modifier)
-@cindex profdeep (grade modifier)
-@cindex tr (grade modifier)
-@cindex trseg (grade modifier)
-@cindex gc (grade modifier)
-@cindex agc (grade modifier)
-@cindex spf (grade modifier)
-@cindex stseg (grade modifier)
-@cindex debug (grade modifier)
-@cindex decldebug (grade modifier)
-@c @cindex ssdebug (grade modifier)
-@cindex par (grade modifier)
-@cindex threadscope (grade modifier)
+@cindex .prof (grade modifier)
+@cindex .memprof (grade modifier)
+@cindex .profdeep (grade modifier)
+@cindex .tr (grade modifier)
+@cindex .trseg (grade modifier)
+@cindex .gc (grade modifier)
+@cindex .agc (grade modifier)
+@cindex .spf (grade modifier)
+@cindex .stseg (grade modifier)
+@cindex .debug (grade modifier)
+@cindex .decldebug (grade modifier)
+@c @cindex .ssdebug (grade modifier)
+@cindex .par (grade modifier)
+@cindex .threadscope (grade modifier)
+@cindex .mm (grade modifier)
 @table @asis
 @item What target language to use, what data representation to use, and (for C) what combination of GNU C extensions to use:
 @samp{none}, @samp{reg}, @samp{jump}, @samp{asm_jump},
@@ -7679,6 +7704,9 @@ small segments: @samp{stseg} (the default is to used fixed size stacks)
 @item Whether to include support for profiling of parallel programs:
 @samp{threadscope} (the default is no support for profiling parallel programs).
 @c See also the @samp{--profile-parallel-execution} runtime option.
+
+@item Whether to include support for minimal model evaluation of procedures:
+@samp{mm} (the default is no support for minimal model evaluation).
 
 @end table
 
@@ -7762,9 +7790,6 @@ and grade modifier; they are followed by descriptions of those options.
 
 @item @samp{.gc}
 @code{--gc boehm}.
-
-@item @samp{.mps}
-@code{--gc mps}
 
 @item @samp{.agc}
 @code{--gc accurate}.
@@ -8151,12 +8176,11 @@ This option is supported for the C back-end, with @samp{--no-high-level-code}.
 For now, this option itself is for developers only.
 
 @sp 1
-@item @code{--gc @{none, boehm, mps, accurate, automatic@}}
-@itemx @code{--garbage-collection @{none, boehm, mps, accurate, automatic@}}
+@item @code{--gc @{none, boehm, accurate, automatic@}}
+@itemx @code{--garbage-collection @{none, boehm, accurate, automatic@}}
 @cindex Garbage collection
 @cindex Conservative garbage collection
 @cindex Boehm (et al) conservative garbage collector
-@cindex MPS conservative garbage collector
 @cindex Memory Pool System conservative garbage collector
 @cindex Accurate garbage collection
 @cindex Automatic garbage collection
@@ -8166,14 +8190,11 @@ Specify which method of garbage collection to use.
 Grades containing @samp{csharp}, @samp{java}, @samp{il} or @samp{erlang} use
 @samp{--gc automatic},
 grades containing @samp{.gc} use @samp{--gc boehm},
-grades containing @samp{.mps} use @samp{--gc mps},
 other grades use @samp{--gc none}.
 @samp{conservative} or @samp{boehm} is Hans Boehm et al's conservative
 garbage collector.
 @samp{accurate} is our own type-accurate copying collector.
 It requires @samp{--high-level-code}.
-@samp{mps} is another conservative collector based on Ravenbrook Limited's
-MPS (Memory Pool System) kit.
 @samp{automatic} means the target language provides it.
 This is the case for the IL, C#, Java and Erlang back-ends, which always use
 the underlying implementation's garbage collector.
@@ -8692,16 +8713,6 @@ once.  (This is a separate optimization to @samp{--optimize-rl-invariants}.)
 @findex --no-common-struct
 @findex --common-struct
 Disable optimization of common term structures.
-
-@c @sp 1
-@c @item --no-common-goal
-@c @findex --no-common-goal
-@c @findex --common-goal
-@c Disable optimization of common goals.
-@c At the moment this optimization
-@c detects only common deconstruction unifications.
-@c Disabling this optimization reduces the class of predicates
-@c that the compiler considers to be deterministic.
 
 @item --constraint-propagation
 @findex --constraint-propagation
@@ -9561,10 +9572,10 @@ path is obtained from the shared library and not via the
 Link with the specified library.
 
 @sp 1
-@item --link-object @var{object}
+@item --link-object @var{file}
 @findex --link-object
 @cindex Object files, linking with
-Link with the specified object file.
+Link with the specified object file or archive of object files.
 
 @sp 1
 @item --search-lib-files-dir @var{directory}
@@ -10186,14 +10197,6 @@ The directory containing the installed Mercury standard library.
 the MERCURY_STDLIB_DIR environment variable.
 
 @sp 1
-@item MERCURY_NONSHARED_LIB_DIR
-@vindex MERCURY_NONSHARED_LIB_DIR
-For IRIX 5, this environment variable can be used to specify a
-directory containing a version of libgcc.a which has been compiled with
-@samp{-mno-abicalls}.  See the file @samp{README.IRIX-5} in the Mercury
-source distribution.
-
-@sp 1
 @item MERCURY_OPTIONS
 @vindex MERCURY_OPTIONS
 A list of options for the Mercury runtime system,
@@ -10258,17 +10261,24 @@ This only has an effect if the executable was built in a profiling grade.
 @sp 1
 @item -P @var{num}
 @findex -P (runtime option)
-Tells the runtime system to use @var{num} threads
+Tells the runtime system to create @var{num} threads for executing Mercury code
 if the program was built in a parallel low-level C grade.
 The Mercury runtime attempts to automatically determine this value if support
 is available from the operating system.
 If it cannot or support is unavailable it defaults to @samp{1}.
 
 @sp 1
+@item --max-engines @var{num}
+@findex --max-engines (runtime option)
+Tells the runtime system to allow a maximum of @var{num}
+POSIX threads, each with its own Mercury engine.
+This only affects programs in low-level C parallel grades.
+
+@sp 1
 @item --max-contexts-per-thread @var{num}
 @findex --max-contexts-per-thread (runtime option)
 Tells the runtime system to create at most @var{num} contexts per
-POSIX thread.
+POSIX thread for parallel execution.
 Each context created requires a set of stacks, setting this value too high
 can consume excess memory.
 This only has an effect if the executable was built in a low-level C parallel

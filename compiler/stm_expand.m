@@ -174,9 +174,13 @@
 :- import_module hlds.hlds_pred.
 :- import_module hlds.hlds_pred.
 :- import_module hlds.instmap.
+:- import_module hlds.make_goal.
 :- import_module hlds.pred_table.
 :- import_module hlds.quantification.
+:- import_module mdbcomp.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_mode.
@@ -358,6 +362,7 @@ stm_process_goal(Instmap, Goal0, Goal, !Info) :-
         ;
             ( Reason = require_detism(_)
             ; Reason = require_complete_switch(_)
+            ; Reason = require_switch_arms_detism(_, _)
             ),
             % These scopes should have been deleted by now.
             unexpected($module, $pred, "unexpected scope")
@@ -2046,7 +2051,7 @@ construct_output(AtomicGoalVars, ResultType, ResultVar, StmInfo, Goals,
         OutputTypes = [_, _ | _],
         % Wrapper returns a tuple. Creates a tuple from the output values.
         make_type_info(ResultType, _, MakeType, !NewPredInfo),
-        hlds_goal.construct_tuple(ResultVar, OutputVars, Goal),
+        construct_tuple(ResultVar, OutputVars, Goal),
         Goals = [Goal | MakeType]
     ).
 
@@ -2404,11 +2409,12 @@ create_cloned_pred(ProcHeadVars, PredArgTypes, ProcHeadModes,
     ),
     proc_info_get_goal(ProcInfo, ProcGoal),
     proc_info_get_rtti_varmaps(ProcInfo, ProcRttiVarMaps),
+    proc_info_get_has_parallel_conj(ProcInfo, HasParallelConj),
     proc_info_get_var_name_remap(ProcInfo, VarNameRemap),
     proc_info_create(ProcContext, ProcVarSet, ProcVarTypes, ProcHeadVars,
         ProcInstVarSet, ProcHeadModes, detism_decl_none, ProcDetism,
-        ProcGoal, ProcRttiVarMaps, address_is_not_taken, VarNameRemap,
-        NewProcInfo),
+        ProcGoal, ProcRttiVarMaps, address_is_not_taken, HasParallelConj,
+        VarNameRemap, NewProcInfo),
     ModuleName = pred_info_module(PredInfo),
     OrigPredName = pred_info_name(PredInfo),
     PredOrFunc = pred_info_is_pred_or_func(PredInfo),

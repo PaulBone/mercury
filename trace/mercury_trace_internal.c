@@ -22,6 +22,7 @@
 #include "mercury_signal.h"
 #include "mercury_builtin_types.h"
 #include "mercury_deep_profiling.h"
+#include "mercury_runtime_util.h"
 
 #include "mercury_event_spec.h"
 
@@ -277,12 +278,13 @@ MR_try_fopen(const char *filename, const char *mode, FILE *default_file)
         return default_file;
     } else {
         FILE    *f;
+        char    errbuf[MR_STRERROR_BUF_SIZE];
 
         f = fopen(filename, mode);
         if (f == NULL) {
             fflush(MR_mdb_out);
             fprintf(MR_mdb_err, "mdb: error opening `%s': %s\n",
-                filename, strerror(errno));
+                filename, MR_strerror(errno, errbuf, sizeof(errbuf)));
             return default_file;
         } else {
             return f;
@@ -683,6 +685,7 @@ MR_trace_source(const char *filename, MR_bool ignore_errors,
     char** args, int num_args)
 {
     FILE    *fp;
+    char    errbuf[MR_STRERROR_BUF_SIZE];
 
     if ((fp = fopen(filename, "r")) != NULL) {
         MR_trace_source_from_open_file(fp, args, num_args);
@@ -692,7 +695,8 @@ MR_trace_source(const char *filename, MR_bool ignore_errors,
 
     if (! ignore_errors) {
         fflush(MR_mdb_out);
-        fprintf(MR_mdb_err, "%s: %s.\n", filename, strerror(errno));
+        fprintf(MR_mdb_err, "%s: %s.\n",
+            filename, MR_strerror(errno, errbuf, sizeof(errbuf)));
     }
 
     return MR_FALSE;
@@ -914,7 +918,7 @@ static  const char  *MR_current_cmd_name;
 
 /*
 ** IMPORTANT: if you add any new commands, you will need to
-**  (a) include them in MR_trace_command_infos, defined below.
+**  (a) include them in MR_trace_command_table, defined below.
 **  (b) document them in doc/user_guide.texi
 */
 
@@ -922,7 +926,7 @@ static MR_Next
 MR_trace_handle_cmd(char **words, int word_count, MR_TraceCmdInfo *cmd,
     MR_EventInfo *event_info, MR_Code **jumpaddr)
 {
-    const MR_Trace_Command_Info *cmd_info;
+    const MR_TraceCmdTableEntry *cmd_table_entry;
 
     /*
     ** The code for many commands calls getopt, and getopt may print to stderr.
@@ -933,12 +937,12 @@ MR_trace_handle_cmd(char **words, int word_count, MR_TraceCmdInfo *cmd,
 
     fflush(MR_mdb_out);
 
-    cmd_info = MR_trace_valid_command(words[0]);
-    if (cmd_info != NULL) {
-        MR_current_cmd_category = cmd_info->MR_cmd_category;
-        MR_current_cmd_name = cmd_info->MR_cmd_name;
+    cmd_table_entry = MR_trace_valid_command(words[0]);
+    if (cmd_table_entry != NULL) {
+        MR_current_cmd_category = cmd_table_entry->MR_cmd_category;
+        MR_current_cmd_name = cmd_table_entry->MR_cmd_name;
 
-        return (*cmd_info->MR_cmd_function)(words, word_count, cmd,
+        return (*cmd_table_entry->MR_cmd_function)(words, word_count, cmd,
             event_info, jumpaddr);
     } else {
         fflush(MR_mdb_out);
@@ -1342,14 +1346,17 @@ MR_trace_event_internal_report(MR_TraceCmdInfo *cmd,
             if (buf[i] != '\0' && !MR_isspace(buf[i])) {
                 switch (buf[i]) {
                     case 'a':
+                        cmd->MR_trace_print_level_specified = MR_TRUE;
                         cmd->MR_trace_print_level = MR_PRINT_LEVEL_ALL;
                         break;
 
                     case 'n':
+                        cmd->MR_trace_print_level_specified = MR_TRUE;
                         cmd->MR_trace_print_level = MR_PRINT_LEVEL_NONE;
                         break;
 
                     case 's':
+                        cmd->MR_trace_print_level_specified = MR_TRUE;
                         cmd->MR_trace_print_level = MR_PRINT_LEVEL_SOME;
                         break;
 
@@ -1483,7 +1490,7 @@ MR_trace_event_print_internal_report(MR_EventInfo *event_info)
         parent_filename, parent_lineno, indent);
 }
 
-static const MR_Trace_Command_Info  MR_trace_command_infos[] =
+static const MR_TraceCmdTableEntry  MR_trace_command_table[] =
 {
     /*
     ** The first two fields of this block should be the same
@@ -1723,7 +1730,7 @@ MR_bool
 MR_trace_command_completion_info(const char *word,
     MR_MakeCompleter *completer, const char *const **fixed_args)
 {
-    const MR_Trace_Command_Info *command_info;
+    const MR_TraceCmdTableEntry *command_info;
 
     command_info = MR_trace_valid_command(word);
     if (command_info == NULL) {
@@ -1735,14 +1742,14 @@ MR_trace_command_completion_info(const char *word,
     }
 }
 
-const MR_Trace_Command_Info *
+const MR_TraceCmdTableEntry *
 MR_trace_valid_command(const char *word)
 {
     int i;
 
-    for (i = 0; MR_trace_command_infos[i].MR_cmd_name != NULL; i++) {
-        if (MR_streq(MR_trace_command_infos[i].MR_cmd_name, word)) {
-            return &MR_trace_command_infos[i];
+    for (i = 0; MR_trace_command_table[i].MR_cmd_name != NULL; i++) {
+        if (MR_streq(MR_trace_command_table[i].MR_cmd_name, word)) {
+            return &MR_trace_command_table[i];
         }
     }
 
@@ -1767,8 +1774,8 @@ MR_trace_command_completer_next(const char *word, size_t word_len,
         const char *command;
         const char *category;
 
-        category = MR_trace_command_infos[command_index].MR_cmd_category;
-        command = MR_trace_command_infos[command_index].MR_cmd_name;
+        category = MR_trace_command_table[command_index].MR_cmd_category;
+        command = MR_trace_command_table[command_index].MR_cmd_name;
         command_index++;
         *data = (void *) command_index;
 

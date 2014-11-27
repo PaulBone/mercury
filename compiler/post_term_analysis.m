@@ -10,12 +10,12 @@
 % Main author: juliensf.
 %
 % This module contains various checks that rely on the information produced by
-% termination analysis. 
+% termination analysis.
 %
 % Currently, the only thing implemented in this module is a check to see if
 % user-defined special predicates terminate.  A warning is emitted for all
-% those that do not. 
-% 
+% those that do not.
+%
 %----------------------------------------------------------------------------%
 
 :- module transform_hlds.post_term_analysis.
@@ -34,6 +34,7 @@
 
 :- import_module backend_libs.
 :- import_module backend_libs.foreign.
+:- import_module check_hlds.type_util.
 :- import_module hlds.goal_form.
 :- import_module hlds.goal_util.
 :- import_module hlds.hlds_data.
@@ -45,6 +46,7 @@
 :- import_module libs.globals.
 :- import_module libs.options.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_type.
@@ -76,7 +78,7 @@ run_post_term_analysis(ModuleInfo, !IO) :-
     % Since all of the special predicates of interest here have to be defined
     % in the same module as the type that uses them, we only check locally
     % defined types. The ones for imported types will be checked when
-    % the relevant module is compiled and analysed. 
+    % the relevant module is compiled and analysed.
     %
 :- pred warn_non_term_user_special_preds(module_info::in, io::di, io::uo)
     is det.
@@ -90,7 +92,7 @@ warn_non_term_user_special_preds(ModuleInfo, !IO) :-
         MakeOptInt),
     globals.lookup_bool_option(Globals, transitive_optimization,
         TransIntermodOpt),
-    ( 
+    (
         Termination = yes, WarnSpecialPreds = yes,
         %
         % Don't run this pass if we are only building the optimization
@@ -132,7 +134,7 @@ warn_non_term_user_special_pred(ModuleInfo, TypeTable,
                 SpecialPredId, TypeCtor, PredId, TypeDefn, !IO)
         ;
             DefinedThisModule = no
-        )       
+        )
     ;
         true
     ).
@@ -167,7 +169,7 @@ process_special_pred_for_type(ModuleInfo, SpecialPredId, TypeCtor,
             get_type_defn_context(TypeDefn, Context),
             module_info_get_globals(ModuleInfo, Globals),
             emit_non_term_user_special_warning(Globals, Context, SpecialPredId,
-                TypeCtor, !IO)   
+                TypeCtor, !IO)
         ;
             true
         )
@@ -187,23 +189,23 @@ special_pred_needs_term_check(ModuleInfo, SpecialPredId, TypeDefn) :-
         % Always check solver type initialisation
         % predicates since they are always user-defined.
         SpecialPredId = spec_pred_init
-    ;   
+    ;
         get_user_unify_compare(ModuleInfo, TypeBody, UnifyCompare),
         (
             UnifyCompare = unify_compare(MaybeUnify, MaybeCompare),
-            ( 
+            (
                 MaybeUnify = yes(_),
-                SpecialPredId = spec_pred_unify 
+                SpecialPredId = spec_pred_unify
             ;
                 MaybeCompare = yes(_),
-                SpecialPredId = spec_pred_compare 
+                SpecialPredId = spec_pred_compare
             )
         ;
             UnifyCompare = abstract_noncanonical_type(_),
             unexpected($module, $pred,
                 "type is local and abstract_noncanonical")
         )
-    ). 
+    ).
 
     % Succeeds if the given type has user-defined equality and/or comparison
     % and returns the relevant information about which predicates implement it.
@@ -225,8 +227,8 @@ get_user_unify_compare(_ModuleInfo, TypeBody, UnifyCompare) :-
 
 emit_non_term_user_special_warning(Globals, Context, SpecialPred, TypeCtor,
         !IO) :-
-    TypeCtorString = type_ctor_to_string(TypeCtor),
-    ( 
+    type_ctor_module_name_arity(TypeCtor, TypeModule, TypeName, TypeArity),
+    (
         SpecialPred = spec_pred_unify,
         SpecialPredStr = "equality"
     ;
@@ -241,9 +243,10 @@ emit_non_term_user_special_warning(Globals, Context, SpecialPred, TypeCtor,
     ),
     Pieces = [words("Warning: the user-defined "),
         fixed(SpecialPredStr ++ " predicate"),
-        words("for the type "), fixed(TypeCtorString),
+        words("for the type "),
+        sym_name_and_arity(qualified(TypeModule, TypeName) / TypeArity),
         words("cannot be proven to terminate.")],
-    report_warning(Globals, Context, 0, Pieces, !IO).    
+    report_warning(Globals, Context, 0, Pieces, !IO).
 
 %----------------------------------------------------------------------------%
 :- end_module transform_hlds.post_term_analysis.

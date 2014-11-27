@@ -203,14 +203,51 @@
     do {                                                                    \
         char buf[MR_SPRINTF_FLOAT_BUF_SIZE];                                \
         MR_sprintf_float(buf, Float);                                       \
-        MR_make_aligned_string_copy_msg(Str, buf, (alloc_id));              \
+        MR_make_aligned_string_copy_msg(String, buf, (alloc_id));           \
     } while (0)
 
 void MR_sprintf_float(char *buf, MR_Float f);
 
 MR_Integer MR_hash_float(MR_Float);
 
-MR_bool MR_is_nan(MR_Float);
-MR_bool MR_is_inf(MR_Float);
+/*
+** We define MR_is_{nan,infinite,finite} as macros if we support C99 
+** since the resulting code is faster.
+*/
+#if __STDC_VERSION__ >= 199901
+    #if defined(MR_USE_SINGLE_PREC_FLOAT)
+        #define MR_is_nan(f) isnanf((f))
+    #else
+        #define MR_is_nan(f) isnan((f))
+    #endif
+#else
+    #define MR_is_nan(f) MR_is_nan_func((f))
+#endif
+
+/*
+** See comments for function MR_is_infinite_func in mercury_float.c for the
+** handling of Solaris here.
+*/
+#if __STDC_VERSION__ >= 199901 && !defined(MR_SOLARIS)
+    #if defined(MR_USE_SINGLE_PREC_FLOAT)
+        #define MR_is_infinite(f) isinff((f))
+    #else
+        #define MR_is_infinite(f) isinf((f))
+    #endif
+#else
+    #define MR_is_infinite(f) MR_is_infinite_func((f))
+#endif
+
+/*
+** XXX I don't know whether isfinite works on Solaris or not.
+*/
+#if __STDC_VERSION__ >= 199901 && !defined(MR_SOLARIS)
+    #define MR_is_finite(f) isfinite((f))
+#else   
+    #define MR_is_finite(f) (!MR_is_infinite((f)) && !MR_is_nan((f)))
+#endif
+
+MR_bool MR_is_nan_func(MR_Float);
+MR_bool MR_is_infinite_func(MR_Float);
 
 #endif /* not MERCURY_FLOAT_H */

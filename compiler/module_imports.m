@@ -11,6 +11,7 @@
 %
 % This module contains the data structure for recording module imports
 % and its access predicates.
+%
 %-----------------------------------------------------------------------------%
 
 :- module parse_tree.module_imports.
@@ -19,12 +20,11 @@
 :- import_module libs.file_util.
 :- import_module libs.globals.
 :- import_module libs.timestamp.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_item.
-:- import_module parse_tree.prog_io.    % for module_error;
-                                        % undesirable dependency
+:- import_module parse_tree.prog_io_error.
 
 :- import_module cord.
 :- import_module list.
@@ -122,7 +122,7 @@
                 % Whether an error has been encountered when reading in
                 % this module.
                 mai_specs                       :: list(error_spec),
-                mai_error                       :: module_error,
+                mai_errors                      :: read_module_errors,
 
                 % If we are doing smart recompilation, we need to keep
                 % the timestamps of the modules read in.
@@ -157,13 +157,13 @@
 :- pred module_and_imports_set_indirect_deps(list(module_name)::in,
     module_and_imports::in, module_and_imports::out) is det.
 
-:- pred module_and_imports_set_error(module_error::in,
+:- pred module_and_imports_set_errors(read_module_errors::in,
     module_and_imports::in, module_and_imports::out) is det.
 
 :- pred module_and_imports_add_specs(list(error_spec)::in,
     module_and_imports::in, module_and_imports::out) is det.
 
-:- pred module_and_imports_add_interface_error(module_error::in,
+:- pred module_and_imports_add_interface_error(read_module_errors::in,
     module_and_imports::in, module_and_imports::out) is det.
 
     % Add items to the end of the list.
@@ -178,16 +178,17 @@
     % specifications.
     %
 :- pred module_and_imports_get_results(module_and_imports::in,
-    list(item)::out, list(error_spec)::out, module_error::out) is det.
+    list(item)::out, list(error_spec)::out, read_module_errors::out) is det.
 
 %-----------------------------------------------------------------------------%
 
     % init_dependencies(FileName, SourceFileModuleName, NestedModuleNames,
-    %   Specs, Error, Globals, ModuleName - Items, ModuleImports).
+    %   Specs, Errors, Globals, ModuleName - Items, ModuleImports).
     %
 :- pred init_dependencies(file_name::in, module_name::in,
-    list(module_name)::in, list(error_spec)::in, module_error::in, globals::in,
-    pair(module_name, list(item))::in, module_and_imports::out) is det.
+    list(module_name)::in, list(error_spec)::in, read_module_errors::in,
+    globals::in, pair(module_name, list(item))::in,
+    module_and_imports::out) is det.
 
 %-----------------------------------------------------------------------------%
 
@@ -242,10 +243,6 @@
 :- pred get_implicit_dependencies(list(item)::in, globals::in,
     list(module_name)::out, list(module_name)::out) is det.
 
-:- pred add_implicit_imports(list(item)::in, globals::in,
-    list(module_name)::in, list(module_name)::out,
-    list(module_name)::in, list(module_name)::out) is det.
-
     % Get the fact table dependencies for a module.
     %
 :- pred get_fact_table_dependencies(list(item)::in, list(string)::out) is det.
@@ -262,6 +259,8 @@
 :- implementation.
 
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
+:- import_module mdbcomp.prim_data.
 :- import_module parse_tree.modules.    % undesirable dependency
 
 :- import_module bool.
@@ -282,8 +281,8 @@ module_and_imports_set_impl_deps(ImplDeps, !Module) :-
     !Module ^ mai_impl_deps := ImplDeps.
 module_and_imports_set_indirect_deps(IndirectDeps, !Module) :-
     !Module ^ mai_indirect_deps := IndirectDeps.
-module_and_imports_set_error(Error, !Module) :-
-    !Module ^ mai_error := Error.
+module_and_imports_set_errors(Errors, !Module) :-
+    !Module ^ mai_errors := Errors.
 
 module_and_imports_add_specs(NewSpecs, !Module) :-
     Specs0 = !.Module ^ mai_specs,
@@ -295,41 +294,37 @@ module_and_imports_add_items(NewItems, !Module) :-
     Items = Items0 ++ NewItems,
     !Module ^ mai_items_cord := Items.
 
-module_and_imports_add_interface_error(InterfaceError, !Module) :-
-    (
-        InterfaceError = no_module_errors
-    ;
-        ( InterfaceError = some_module_errors
-        ; InterfaceError = fatal_module_errors
-        ),
-        % XXX What if Error0 = fatal_module_errors?
-        !Module ^ mai_error := some_module_errors
-    ).
+module_and_imports_add_interface_error(InterfaceErrors, !Module) :-
+    Errors0 = !.Module ^ mai_errors,
+    set.union(Errors0, InterfaceErrors, Errors),
+    !Module ^ mai_errors := Errors.
 
-module_and_imports_get_results(Module, Items, Specs, Error) :-
+module_and_imports_get_results(Module, Items, Specs, Errors) :-
     Items = cord.list(Module ^ mai_items_cord),
     Specs = Module ^ mai_specs,
-    Error = Module ^ mai_error.
+    Errors = Module ^ mai_errors.
 
 %-----------------------------------------------------------------------------%
 
 init_dependencies(FileName, SourceFileModuleName, NestedModuleNames,
-        Specs, Error, Globals, ModuleName - Items, ModuleImports) :-
+        Specs, Errors, Globals, ModuleName - Items, ModuleImports) :-
     ParentDeps = get_ancestors(ModuleName),
 
     get_dependencies(Items, ImplImportDeps0, ImplUseDeps0),
-    add_implicit_imports(Items, Globals,
-        ImplImportDeps0, ImplImportDeps,
-        ImplUseDeps0, ImplUseDeps),
-    list.append(ImplImportDeps, ImplUseDeps, ImplementationDeps),
+    get_implicit_dependencies(Items, Globals,
+        ImplicitImplImportDeps, ImplicitImplUseDeps),
+    ImplImportDeps = ImplicitImplImportDeps ++ ImplImportDeps0,
+    ImplUseDeps = ImplicitImplUseDeps ++ ImplUseDeps0,
+    ImplementationDeps = ImplImportDeps ++ ImplUseDeps,
 
     get_interface(ModuleName, no, Items, InterfaceItems),
     get_dependencies(InterfaceItems,
         InterfaceImportDeps0, InterfaceUseDeps0),
-    add_implicit_imports(InterfaceItems, Globals,
-        InterfaceImportDeps0, InterfaceImportDeps,
-        InterfaceUseDeps0, InterfaceUseDeps),
-    list.append(InterfaceImportDeps, InterfaceUseDeps, InterfaceDeps),
+    get_implicit_dependencies(InterfaceItems, Globals,
+        ImplicitInterfaceImportDeps, ImplicitInterfaceUseDeps),
+    InterfaceImportDeps = ImplicitInterfaceImportDeps ++ InterfaceImportDeps0,
+    InterfaceUseDeps = ImplicitInterfaceUseDeps ++ InterfaceUseDeps0,
+    InterfaceDeps = InterfaceImportDeps ++ InterfaceUseDeps,
 
     % We don't fill in the indirect dependencies yet.
     IndirectDeps = [],
@@ -348,7 +343,7 @@ init_dependencies(FileName, SourceFileModuleName, NestedModuleNames,
     % Figure out whether the items contain foreign code.
     get_item_list_foreign_code(Globals, Items, LangSet,
         ForeignImports0, ForeignIncludeFiles, ContainsForeignExport),
-    ( set.empty(LangSet) ->
+    ( set.is_empty(LangSet) ->
         ContainsForeignCode = contains_no_foreign_code
     ;
         ContainsForeignCode = contains_foreign_code(LangSet)
@@ -398,7 +393,7 @@ init_dependencies(FileName, SourceFileModuleName, NestedModuleNames,
         InterfaceIncludeDeps, NestedDeps, FactTableDeps,
         ContainsForeignCode, ForeignImports, ForeignIncludeFiles,
         ContainsForeignExport,
-        cord.empty, Specs, Error, no, HasMain, dir.this_directory).
+        cord.empty, Specs, Errors, no, HasMain, dir.this_directory).
 
 %-----------------------------------------------------------------------------%
 
@@ -482,32 +477,34 @@ get_dependencies_interface([Item | Items],
 
 %-----------------------------------------------------------------------------%
 
-get_implicit_dependencies(Items, Globals, ImportDeps, UseDeps) :-
-    add_implicit_imports(Items, Globals, [], ImportDeps, [], UseDeps).
-
-add_implicit_imports(Items, Globals, !ImportDeps, !UseDeps) :-
-    !:ImportDeps = [mercury_public_builtin_module | !.ImportDeps],
-    !:UseDeps = [mercury_private_builtin_module | !.UseDeps],
-    items_need_imports(Items, no, ItemsNeedTabling,
-        no, ItemsNeedTablingStatistics, no, ItemsNeedSTM,
-        no, ItemsNeedException),
+get_implicit_dependencies(Items, Globals, !:ImportDeps, !:UseDeps) :-
+    !:ImportDeps = [mercury_public_builtin_module],
+    !:UseDeps = [mercury_private_builtin_module],
+    ImplicitImportNeeds0 = implicit_import_needs(
+        dont_need_tabling, dont_need_tabling_statistics,
+        dont_need_stm, dont_need_exception, dont_need_format),
+    gather_implicit_import_needs_in_items(Items,
+        ImplicitImportNeeds0, ImplicitImportNeeds),
+    ImplicitImportNeeds = implicit_import_needs(
+        ItemsNeedTabling, ItemsNeedTablingStatistics,
+        ItemsNeedSTM, ItemsNeedException, ItemsNeedFormat),
     % We should include mercury_table_builtin_module if the Items contain
     % a tabling pragma, or if one of --use-minimal-model (either kind) and
     % --trace-table-io is specified. In the former case, we may also need
     % to import mercury_table_statistics_module.
     (
-        ItemsNeedTabling = yes,
+        ItemsNeedTabling = do_need_tabling,
         !:UseDeps = [mercury_table_builtin_module | !.UseDeps],
         (
-            ItemsNeedTablingStatistics = yes,
+            ItemsNeedTablingStatistics = do_need_tabling_statistics,
             !:UseDeps = [mercury_table_statistics_module | !.UseDeps]
         ;
-            ItemsNeedTablingStatistics = no
+            ItemsNeedTablingStatistics = dont_need_tabling_statistics
         )
     ;
-        ItemsNeedTabling = no,
-        expect(unify(ItemsNeedTablingStatistics, no), $module, $pred,
-            "tabling statistics without tabling"),
+        ItemsNeedTabling = dont_need_tabling,
+        expect(unify(ItemsNeedTablingStatistics, dont_need_tabling_statistics),
+            $module, $pred, "tabling statistics without tabling"),
         (
             % These forms of tabling cannot ask for statistics.
             (
@@ -526,17 +523,24 @@ add_implicit_imports(Items, Globals, !ImportDeps, !UseDeps) :-
         )
     ),
     (
-        ItemsNeedSTM = yes,
+        ItemsNeedSTM = do_need_stm,
         !:UseDeps = [mercury_stm_builtin_module, mercury_exception_module,
             mercury_univ_module | !.UseDeps]
     ;
-        ItemsNeedSTM = no
+        ItemsNeedSTM = dont_need_stm
     ),
     (
-        ItemsNeedException = yes,
+        ItemsNeedException = do_need_exception,
         !:UseDeps = [mercury_exception_module | !.UseDeps]
     ;
-        ItemsNeedException = no
+        ItemsNeedException = dont_need_exception
+    ),
+    (
+        ItemsNeedFormat = do_need_format,
+        !:UseDeps = [mercury_string_format_module,
+            mercury_string_parse_util_module | !.UseDeps]
+    ;
+        ItemsNeedFormat = dont_need_format
     ),
     globals.lookup_bool_option(Globals, profile_deep, Deep),
     (
@@ -588,37 +592,71 @@ add_implicit_imports(Items, Globals, !ImportDeps, !UseDeps) :-
         !:UseDeps = [mercury_ssdb_builtin_module | !.UseDeps]
     ;
         true
-    ).
+    ),
+    list.sort_and_remove_dups(!ImportDeps),
+    list.sort_and_remove_dups(!UseDeps).
 
-:- pred items_need_imports(list(item)::in,
-    bool::in, bool::out, bool::in, bool::out, bool::in, bool::out,
-    bool::in, bool::out) is det.
+:- type maybe_need_tabling
+    --->    dont_need_tabling
+    ;       do_need_tabling.
 
-items_need_imports([], !ItemsNeedTabling,
-        !ItemsNeedTablingStatistics, !ItemsNeedSTM, !ItemsNeedException).
-items_need_imports([Item | Items], !ItemsNeedTabling,
-        !ItemsNeedTablingStatistics, !ItemsNeedSTM, !ItemsNeedException) :-
+:- type maybe_need_tabling_statistics
+    --->    dont_need_tabling_statistics
+    ;       do_need_tabling_statistics.
+
+:- type maybe_need_stm
+    --->    dont_need_stm
+    ;       do_need_stm.
+
+:- type maybe_need_exception
+    --->    dont_need_exception
+    ;       do_need_exception.
+
+:- type maybe_need_format
+    --->    dont_need_format
+    ;       do_need_format.
+
+    % XXX We currently discover the need to import the modules needed
+    % to compile away format strings by traversing all parts of all clauses,
+    % and checking every predicate name and functor name to see whether
+    % it could refer to any of the predicates recognized by the is_format_call
+    % predicate. This is inefficient. It is also a bit unpredictable, since
+    % it will lead us to implicitly import those modules even if a call
+    % to unqualified("format") eventually turns out to call some other
+    % predicate of that name.
+    %
+    % We should therefore consider ALWAYS implicitly importing the predicates
+    % needed by format_call.m.
+:- type implicit_import_needs
+    --->    implicit_import_needs(
+                iin_tabling             :: maybe_need_tabling,
+                iin_tabling_statistics  :: maybe_need_tabling_statistics,
+                iin_stm                 :: maybe_need_stm,
+                iin_exception           :: maybe_need_exception,
+                iin_format              :: maybe_need_format
+            ).
+
+:- pred gather_implicit_import_needs_in_items(list(item)::in,
+    implicit_import_needs::in, implicit_import_needs::out) is det.
+
+gather_implicit_import_needs_in_items([], !ImplicitImportNeeds).
+gather_implicit_import_needs_in_items([Item | Items], !ImplicitImportNeeds) :-
     (
         Item = item_pragma(ItemPragma),
         ItemPragma = item_pragma_info(_, Pragma, _, _),
         Pragma = pragma_tabled(TableInfo),
         TableInfo = pragma_info_tabled(_, _, _, MaybeAttributes)
     ->
-        !:ItemsNeedTabling = yes,
+        !ImplicitImportNeeds ^ iin_tabling := do_need_tabling,
         (
-            MaybeAttributes = no,
-            maybe_items_need_imports(Items, !ItemsNeedTabling,
-                !ItemsNeedTablingStatistics, !ItemsNeedSTM,
-                !ItemsNeedException)
+            MaybeAttributes = no
         ;
             MaybeAttributes = yes(Attributes),
             StatsAttr = Attributes ^ table_attr_statistics,
             (
                 StatsAttr = table_gather_statistics,
-                !:ItemsNeedTablingStatistics = yes,
-                maybe_items_need_imports(Items, !ItemsNeedTabling,
-                    !ItemsNeedTablingStatistics, !ItemsNeedSTM,
-                    !ItemsNeedException)
+                !ImplicitImportNeeds ^ iin_tabling_statistics
+                    := do_need_tabling_statistics
             ;
                 StatsAttr = table_dont_gather_statistics
             )
@@ -626,166 +664,188 @@ items_need_imports([Item | Items], !ItemsNeedTabling,
     ;
         Item = item_clause(ItemClause)
     ->
+        HeadArgs = ItemClause ^ cl_head_args,
+        gather_implicit_import_needs_in_terms(HeadArgs, !ImplicitImportNeeds),
         Body = ItemClause ^ cl_body,
-        goal_contains_stm_atomic_or_try(Body, ContainsAtomic, ContainsTry),
-        ( ContainsAtomic = yes ->
-            !:ItemsNeedSTM = yes,
-            !:ItemsNeedException = yes
-        ; ContainsTry = yes ->
-            !:ItemsNeedException = yes
-        ;
-            true
-        ),
-        maybe_items_need_imports(Items, !ItemsNeedTabling,
-            !ItemsNeedTablingStatistics, !ItemsNeedSTM, !ItemsNeedException)
+        gather_implicit_import_needs_in_goal(Body, !ImplicitImportNeeds)
     ;
-        items_need_imports(Items, !ItemsNeedTabling,
-            !ItemsNeedTablingStatistics, !ItemsNeedSTM, !ItemsNeedException)
-    ).
-
-:- pred maybe_items_need_imports(list(item)::in,
-    bool::in, bool::out, bool::in, bool::out, bool::in, bool::out,
-    bool::in, bool::out) is det.
-
-maybe_items_need_imports(Items, !ItemsNeedTabling, !ItemsNeedTablingStatistics,
-        !ItemsNeedSTM, !ItemsNeedException) :-
-    (
-        !.ItemsNeedTabling = yes,
-        !.ItemsNeedTablingStatistics = yes,
-        !.ItemsNeedSTM = yes,
-        !.ItemsNeedException = yes
-    ->
-        % There is nothing left to search for; stop recursing.
         true
-    ;
-        items_need_imports(Items, !ItemsNeedTabling,
-            !ItemsNeedTablingStatistics, !ItemsNeedSTM, !ItemsNeedException)
-    ).
+    ),
+    gather_implicit_import_needs_in_items(Items, !ImplicitImportNeeds).
 
-:- pred goal_contains_stm_atomic_or_try(goal::in, bool::out, bool::out) is det.
+:- pred gather_implicit_import_needs_in_goal(goal::in,
+    implicit_import_needs::in, implicit_import_needs::out) is det.
 
-goal_contains_stm_atomic_or_try(GoalExpr - _Context,
-        ContainsAtomic, ContainsTry) :-
+gather_implicit_import_needs_in_goal(GoalExpr - _Context,
+        !ImplicitImportNeeds) :-
     (
         ( GoalExpr = true_expr
         ; GoalExpr = fail_expr
-        ),
-        ContainsAtomic = no,
-        ContainsTry = no
+        )
+        % Cannot contain anything that requires implicit imports.
     ;
         ( GoalExpr = conj_expr(SubGoalA, SubGoalB)
         ; GoalExpr = par_conj_expr(SubGoalA, SubGoalB)
         ; GoalExpr = disj_expr(SubGoalA, SubGoalB)
-        ),
-        two_goals_contain_stm_atomic_or_try(SubGoalA, SubGoalB,
-            ContainsAtomic, ContainsTry)
-    ;
-        ( GoalExpr = some_expr(_, SubGoal)
-        ; GoalExpr = all_expr(_, SubGoal)
-        ; GoalExpr = some_state_vars_expr(_, SubGoal)
-        ; GoalExpr = all_state_vars_expr(_, SubGoal)
-        ; GoalExpr = promise_purity_expr(_, SubGoal)
-        ; GoalExpr = promise_equivalent_solutions_expr(_, _, _, _, SubGoal)
-        ; GoalExpr = promise_equivalent_solution_sets_expr(_, _, _, _, SubGoal)
-        ; GoalExpr = promise_equivalent_solution_arbitrary_expr(_, _, _, _,
-            SubGoal)
-        ; GoalExpr = require_detism_expr(_, SubGoal)
-        ; GoalExpr = require_complete_switch_expr(_, SubGoal)
-        ; GoalExpr = trace_expr(_, _, _, _, SubGoal)
-        ),
-        goal_contains_stm_atomic_or_try(SubGoal, ContainsAtomic, ContainsTry)
-    ;
-        GoalExpr = try_expr(_, SubGoal, Then, MaybeElse, Catches, CatchAny),
-        ContainsAtomic = maybe_goals_contain_stm_atomic([
-            yes(SubGoal), yes(Then), MaybeElse,
-            maybe_catch_any_expr_goal(CatchAny) |
-            list.map(yes_catch_expr_goal, Catches)
-        ]),
-        ContainsTry = yes
-    ;
-        ( GoalExpr = implies_expr(SubGoalA, SubGoalB)
+        ; GoalExpr = implies_expr(SubGoalA, SubGoalB)
         ; GoalExpr = equivalent_expr(SubGoalA, SubGoalB)
         ),
-        two_goals_contain_stm_atomic_or_try(SubGoalA, SubGoalB,
-            ContainsAtomic, ContainsTry)
+        gather_implicit_import_needs_in_goal(SubGoalA, !ImplicitImportNeeds),
+        gather_implicit_import_needs_in_goal(SubGoalB, !ImplicitImportNeeds)
     ;
-        GoalExpr = not_expr(SubGoal),
-        goal_contains_stm_atomic_or_try(SubGoal, ContainsAtomic, ContainsTry)
-    ;
-        GoalExpr = if_then_else_expr(_, _, Cond, Then, Else),
-        three_goals_contain_stm_atomic_or_try(Cond, Then, Else,
-            ContainsAtomic, ContainsTry)
-    ;
-        GoalExpr = atomic_expr(_, _, _, _, _),
-        ContainsAtomic = yes,
-        ContainsTry = no
-    ;
-        ( GoalExpr = event_expr(_, _)
-        ; GoalExpr = call_expr(_, _, _)
-        ; GoalExpr = unify_expr(_, _, _)
+        ( GoalExpr = not_expr(SubGoal)
+        ; GoalExpr = some_expr(_Vars, SubGoal)
+        ; GoalExpr = all_expr(_Vars, SubGoal)
+        ; GoalExpr = some_state_vars_expr(_Vars, SubGoal)
+        ; GoalExpr = all_state_vars_expr(_Vars, SubGoal)
+        ; GoalExpr = promise_purity_expr(_Purity, SubGoal)
+        ; GoalExpr = promise_equivalent_solutions_expr(_OrdVars,
+            _StateVars, _DotVars, _ColonVars, SubGoal)
+        ; GoalExpr = promise_equivalent_solution_sets_expr(_OrdVars,
+            _StateVars, _DotVars, _ColonVars, SubGoal)
+        ; GoalExpr = promise_equivalent_solution_arbitrary_expr(_OrdVars,
+            _StateVars, _DotVars, _ColonVars, SubGoal)
+        ; GoalExpr = require_detism_expr(_Detism, SubGoal)
+        ; GoalExpr = require_complete_switch_expr(_SwitchVar, SubGoal)
+        ; GoalExpr = require_switch_arms_detism_expr(_SwitchVar, _Detism,
+            SubGoal)
+        ; GoalExpr = trace_expr(_CompCond, _RunCond, _MaybeIO, _Mutables,
+            SubGoal)
         ),
-        ContainsAtomic = no,
-        ContainsTry = no
-    ).
-
-:- pred two_goals_contain_stm_atomic_or_try(goal::in, goal::in,
-    bool::out, bool::out) is det.
-
-two_goals_contain_stm_atomic_or_try(GoalA, GoalB,
-        ContainsAtomic, ContainsTry) :-
-    goal_contains_stm_atomic_or_try(GoalA, ContainsAtomicA, ContainsTryA),
-    (
-        ContainsAtomicA = yes,
-        ContainsTryA = yes
-    ->
-        ContainsAtomic = yes,
-        ContainsTry = yes
+        gather_implicit_import_needs_in_goal(SubGoal, !ImplicitImportNeeds)
     ;
-        goal_contains_stm_atomic_or_try(GoalB, ContainsAtomicB, ContainsTryB),
-        bool.or(ContainsAtomicA, ContainsAtomicB, ContainsAtomic),
-        bool.or(ContainsTryA, ContainsTryB, ContainsTry)
-    ).
-
-:- pred three_goals_contain_stm_atomic_or_try(goal::in, goal::in, goal::in,
-    bool::out, bool::out) is det.
-
-three_goals_contain_stm_atomic_or_try(GoalA, GoalB, GoalC,
-        ContainsAtomic, ContainsTry) :-
-    two_goals_contain_stm_atomic_or_try(GoalA, GoalB,
-        ContainsAtomicAB, ContainsTryAB),
-    (
-        ContainsAtomicAB = yes,
-        ContainsTryAB = yes
-    ->
-        ContainsAtomic = yes,
-        ContainsTry = yes
+        GoalExpr = try_expr(_MaybeIO, SubGoal, Then, MaybeElse,
+            Catches, MaybeCatchAny),
+        !ImplicitImportNeeds ^ iin_exception := do_need_exception,
+        gather_implicit_import_needs_in_goal(SubGoal, !ImplicitImportNeeds),
+        gather_implicit_import_needs_in_goal(Then, !ImplicitImportNeeds),
+        gather_implicit_import_needs_in_maybe_goal(MaybeElse,
+            !ImplicitImportNeeds),
+        gather_implicit_import_needs_in_catch_exprs(Catches,
+            !ImplicitImportNeeds),
+        gather_implicit_import_needs_in_maybe_catch_any_expr(MaybeCatchAny,
+            !ImplicitImportNeeds)
     ;
-        goal_contains_stm_atomic_or_try(GoalC, ContainsAtomicC, ContainsTryC),
-        bool.or(ContainsAtomicAB, ContainsAtomicC, ContainsAtomic),
-        bool.or(ContainsTryAB, ContainsTryC, ContainsTry)
-    ).
-
-:- func maybe_goals_contain_stm_atomic(list(maybe(goal))) = bool.
-
-maybe_goals_contain_stm_atomic([]) = no.
-maybe_goals_contain_stm_atomic([MaybeGoal | MaybeGoals]) = ContainsAtomic :-
-    (
-        MaybeGoal = yes(Goal),
-        goal_contains_stm_atomic_or_try(Goal, yes, _)
-    ->
-        ContainsAtomic = yes
+        GoalExpr = if_then_else_expr(_Vars, _StateVars, Cond, Then, Else),
+        gather_implicit_import_needs_in_goal(Cond, !ImplicitImportNeeds),
+        gather_implicit_import_needs_in_goal(Then, !ImplicitImportNeeds),
+        gather_implicit_import_needs_in_goal(Else, !ImplicitImportNeeds)
     ;
-        ContainsAtomic = maybe_goals_contain_stm_atomic(MaybeGoals)
+        GoalExpr = atomic_expr(_Outer, _Inner, _OutputVars,
+            MainGoal, OrElseGoals),
+        !ImplicitImportNeeds ^ iin_stm := do_need_stm,
+        !ImplicitImportNeeds ^ iin_exception := do_need_exception,
+        gather_implicit_import_needs_in_goal(MainGoal, !ImplicitImportNeeds),
+        gather_implicit_import_needs_in_goals(OrElseGoals,
+            !ImplicitImportNeeds)
+    ;
+        GoalExpr = call_expr(CalleeSymName, Args, _Purity),
+        ( if
+            ( CalleeSymName = unqualified("format")
+            ; CalleeSymName = qualified(unqualified("string"), "format")
+            ; CalleeSymName = qualified(unqualified("io"), "format")
+            ; CalleeSymName = qualified(unqualified("stream"), "format")
+            ; CalleeSymName = qualified(unqualified("string_writer"), "format")
+            ; CalleeSymName = qualified(qualified(unqualified("string_writer"),
+                "string_writer"), "format")
+            )
+        then
+            !ImplicitImportNeeds ^ iin_format := do_need_format
+        else
+            gather_implicit_import_needs_in_terms(Args, !ImplicitImportNeeds)
+        )
+    ;
+        GoalExpr = event_expr(_EventName, EventArgs),
+        gather_implicit_import_needs_in_terms(EventArgs, !ImplicitImportNeeds)
+    ;
+        GoalExpr = unify_expr(TermA, TermB, _Purity),
+        gather_implicit_import_needs_in_term(TermA, !ImplicitImportNeeds),
+        gather_implicit_import_needs_in_term(TermB, !ImplicitImportNeeds)
     ).
 
-:- func yes_catch_expr_goal(catch_expr) = maybe(goal).
+:- pred gather_implicit_import_needs_in_goals(list(goal)::in,
+    implicit_import_needs::in, implicit_import_needs::out) is det.
 
-yes_catch_expr_goal(Catch) = yes(Catch ^ catch_goal).
+gather_implicit_import_needs_in_goals([], !ImplicitImportNeeds).
+gather_implicit_import_needs_in_goals([Goal | Goals], !ImplicitImportNeeds) :-
+    gather_implicit_import_needs_in_goal(Goal, !ImplicitImportNeeds),
+    gather_implicit_import_needs_in_goals(Goals, !ImplicitImportNeeds).
 
-:- func maybe_catch_any_expr_goal(maybe(catch_any_expr)) = maybe(goal).
+:- pred gather_implicit_import_needs_in_maybe_goal(maybe(goal)::in,
+    implicit_import_needs::in, implicit_import_needs::out) is det.
 
-maybe_catch_any_expr_goal(yes(catch_any_expr(_, Goal))) = yes(Goal).
-maybe_catch_any_expr_goal(no) = no.
+gather_implicit_import_needs_in_maybe_goal(no, !ImplicitImportNeeds).
+gather_implicit_import_needs_in_maybe_goal(yes(Goal), !ImplicitImportNeeds) :-
+    gather_implicit_import_needs_in_goal(Goal, !ImplicitImportNeeds).
+
+:- pred gather_implicit_import_needs_in_catch_exprs(list(catch_expr)::in,
+    implicit_import_needs::in, implicit_import_needs::out) is det.
+
+gather_implicit_import_needs_in_catch_exprs([], !ImplicitImportNeeds).
+gather_implicit_import_needs_in_catch_exprs([CatchExpr | CatchExprs],
+        !ImplicitImportNeeds) :-
+    CatchExpr = catch_expr(_Pattern, Goal),
+    gather_implicit_import_needs_in_goal(Goal, !ImplicitImportNeeds),
+    gather_implicit_import_needs_in_catch_exprs(CatchExprs,
+        !ImplicitImportNeeds).
+
+:- pred gather_implicit_import_needs_in_maybe_catch_any_expr(
+    maybe(catch_any_expr)::in,
+    implicit_import_needs::in, implicit_import_needs::out) is det.
+
+gather_implicit_import_needs_in_maybe_catch_any_expr(no, !ImplicitImportNeeds).
+gather_implicit_import_needs_in_maybe_catch_any_expr(yes(CatchAnyExpr),
+        !ImplicitImportNeeds) :-
+    CatchAnyExpr = catch_any_expr(_Var, Goal),
+    gather_implicit_import_needs_in_goal(Goal, !ImplicitImportNeeds).
+
+:- pred gather_implicit_import_needs_in_term(prog_term::in,
+    implicit_import_needs::in, implicit_import_needs::out) is det.
+
+gather_implicit_import_needs_in_term(Term, !ImplicitImportNeeds) :-
+    (
+        Term = variable(_Var, _Context)
+    ;
+        Term = functor(Const, ArgTerms, _Context),
+        (
+            Const = atom(Atom),
+            ( if
+                ( Atom = "format"
+                ; Atom = "string.format"
+                ; Atom = "string__format"
+                ; Atom = "io.format"
+                ; Atom = "io__format"
+                ; Atom = "stream.format"
+                ; Atom = "stream__format"
+                ; Atom = "string_writer.format"
+                ; Atom = "string_writer__format"
+                ; Atom = "stream.string_writer.format"
+                ; Atom = "stream.string_writer__format"
+                ; Atom = "stream__string_writer.format"
+                ; Atom = "stream__string_writer__format"
+                )
+            then
+                !ImplicitImportNeeds ^ iin_format := do_need_format
+            else
+                true
+            )
+        ;
+            ( Const = integer(_)
+            ; Const = string(_)
+            ; Const = float(_)
+            ; Const = implementation_defined(_)
+            )
+        ),
+        gather_implicit_import_needs_in_terms(ArgTerms, !ImplicitImportNeeds)
+    ).
+
+:- pred gather_implicit_import_needs_in_terms(list(prog_term)::in,
+    implicit_import_needs::in, implicit_import_needs::out) is det.
+
+gather_implicit_import_needs_in_terms([], !ImplicitImportNeeds).
+gather_implicit_import_needs_in_terms([Term | Terms], !ImplicitImportNeeds) :-
+    gather_implicit_import_needs_in_term(Term, !ImplicitImportNeeds),
+    gather_implicit_import_needs_in_terms(Terms, !ImplicitImportNeeds).
 
 %-----------------------------------------------------------------------------%
 

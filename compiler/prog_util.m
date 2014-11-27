@@ -18,6 +18,7 @@
 :- interface.
 
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_item.
 
@@ -358,6 +359,11 @@ rename_in_goal_expr(OldVar, NewVar, Expr0, Expr) :-
         rename_in_goal(OldVar, NewVar, Goal0, Goal),
         Expr = require_complete_switch_expr(Var, Goal)
     ;
+        Expr0 = require_switch_arms_detism_expr(Var0, Detism, Goal0),
+        rename_in_var(OldVar, NewVar, Var0, Var),
+        rename_in_goal(OldVar, NewVar, Goal0, Goal),
+        Expr = require_switch_arms_detism_expr(Var, Detism, Goal)
+    ;
         Expr0 = trace_expr(CompileTime, RunTime, MaybeIO0, Mutables0, Goal0),
         (
             MaybeIO0 = no,
@@ -632,7 +638,7 @@ cons_id_arity(ConsId) = Arity :-
         ; ConsId = typeclass_info_const(_)
         ; ConsId = tabling_info_const(_)
         ; ConsId = deep_profiling_proc_layout(_)
-        ; ConsId = table_io_decl(_)
+        ; ConsId = table_io_entry_desc(_)
         ),
         unexpected($module, $pred, "unexpected cons_id")
     ).
@@ -655,7 +661,7 @@ cons_id_maybe_arity(ground_term_const(_, ConsId)) =
     cons_id_maybe_arity(ConsId).
 cons_id_maybe_arity(tabling_info_const(_)) = no.
 cons_id_maybe_arity(deep_profiling_proc_layout(_)) = no.
-cons_id_maybe_arity(table_io_decl(_)) = no.
+cons_id_maybe_arity(table_io_entry_desc(_)) = no.
 
 make_functor_cons_id(term.atom(Name), Arity) =
     cons(unqualified(Name), Arity, cons_id_dummy_type_ctor).
@@ -784,5 +790,5 @@ goal_list_to_conj_2(Context, Goal0, [Goal1 | Goals]) =
     conj_expr(Goal0, goal_list_to_conj_2(Context, Goal1, Goals)) - Context.
 
 %-----------------------------------------------------------------------------%
-:- end_module prog_util.
+:- end_module parse_tree.prog_util.
 %-----------------------------------------------------------------------------%

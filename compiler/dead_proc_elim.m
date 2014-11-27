@@ -24,7 +24,7 @@
 
 :- import_module hlds.hlds_module.
 :- import_module hlds.hlds_pred.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 
 :- import_module list.
@@ -79,16 +79,19 @@
 :- implementation.
 
 :- import_module check_hlds.simplify.
+:- import_module check_hlds.simplify.simplify_proc.
 :- import_module check_hlds.try_expand.
 :- import_module hlds.const_struct.
 :- import_module hlds.hlds_clauses.
 :- import_module hlds.hlds_data.
 :- import_module hlds.hlds_error_util.
 :- import_module hlds.hlds_goal.
+:- import_module hlds.make_goal.
 :- import_module hlds.passes_aux.
 :- import_module hlds.pred_table.
 :- import_module libs.globals.
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
 
@@ -681,7 +684,7 @@ dead_proc_examine_goal(Goal, CurrProc, !Queue, !Needed) :-
                 ; ConsId = type_info_cell_constructor(_)
                 ; ConsId = typeclass_info_cell_constructor
                 ; ConsId = deep_profiling_proc_layout(_)
-                ; ConsId = table_io_decl(_)
+                ; ConsId = table_io_entry_desc(_)
                 )
                 % Do nothing.
             )
@@ -1265,5 +1268,5 @@ dead_pred_info_add_pred_name(Name, !DeadInfo) :-
     ).
 
 %-----------------------------------------------------------------------------%
-:- end_module dead_proc_elim.
+:- end_module transform_hlds.dead_proc_elim.
 %-----------------------------------------------------------------------------%

@@ -82,6 +82,7 @@
 :- import_module libs.file_util.
 :- import_module libs.options.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module ml_backend.ml_code_util.
                                          % for ml_gen_public_field_decl_flags,
                                          % which is used by the code that
@@ -322,7 +323,6 @@ mlds_output_src_imports(Opts, Indent, Imports, !IO) :-
         ( Target = target_java
         ; Target = target_csharp
         ; Target = target_il
-        ; Target = target_x86_64
         ; Target = target_erlang
         ),
         unexpected($module, $pred, "expected target c")
@@ -519,7 +519,6 @@ mlds_output_hdr_start(Opts, Indent, ModuleName, !IO) :-
         ( Target = target_il
         ; Target = target_java
         ; Target = target_csharp
-        ; Target = target_x86_64
         ; Target = target_erlang
         )
     ),
@@ -631,7 +630,6 @@ mlds_output_hdr_end(Opts, Indent, ModuleName, !IO) :-
         ( Target = target_il
         ; Target = target_csharp
         ; Target = target_java
-        ; Target = target_x86_64
         ; Target = target_erlang
         )
     ),
@@ -1780,7 +1778,7 @@ mlds_output_alloc_site_defns(Opts, Indent, MLDS_ModuleName, AllocSites, !IO) :-
         AllocSites = [_ | _],
         mlds_indent(Indent, !IO),
         list.length(AllocSites, NumAllocSites),
-        io.format("static MR_AllocSiteInfo MR_alloc_sites[%d] = {\n", 
+        io.format("static MR_AllocSiteInfo MR_alloc_sites[%d] = {\n",
             [i(NumAllocSites)], !IO),
         list.foldl(
             mlds_output_alloc_site_defn(Opts, Indent + 1, MLDS_ModuleName),
@@ -2790,6 +2788,7 @@ mlds_output_type_prefix(Opts, MLDS_Type, !IO) :-
         % For binary compatibility with the --target asm back-end,
         % we need to output these as a generic type, rather than making
         % use of the C type name
+        % XXX target asm no longer exists, so no longer need to do this.
         io.write_string("MR_Box", !IO)
     ;
         MLDS_Type = mlds_class_type(Name, Arity, ClassKind),
@@ -3809,7 +3808,6 @@ mlds_output_atomic_stmt(Opts, Indent, _FuncInfo, Statement, Context, !IO) :-
             ( GC_Method = gc_none
             ; GC_Method = gc_boehm
             ; GC_Method = gc_boehm_debug
-            ; GC_Method = gc_mps
             ; GC_Method = gc_hgc
             ; GC_Method = gc_automatic
             )

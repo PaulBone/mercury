@@ -51,12 +51,11 @@
 :- import_module libs.handle_options.
 :- import_module libs.options.
 :- import_module libs.timestamp.
-:- import_module ll_backend.llds_to_x86_64.
-:- import_module ll_backend.llds_to_x86_64_out.
 :- import_module make.
 :- import_module make.options_file.
 :- import_module make.util.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.builtin_modules.
+:- import_module mdbcomp.sym_name.
 :- import_module mdbcomp.shared_utilities.
 :- import_module parse_tree.equiv_type.
 :- import_module parse_tree.error_util.
@@ -70,9 +69,11 @@
 :- import_module parse_tree.prog_event.
 :- import_module parse_tree.prog_foreign.
 :- import_module parse_tree.prog_io.
+:- import_module parse_tree.prog_io_error.
 :- import_module parse_tree.prog_item.
 :- import_module parse_tree.read_modules.
 :- import_module parse_tree.source_file_map.
+:- import_module parse_tree.write_module_interface_files.
 :- import_module parse_tree.write_deps_file.
 :- import_module recompilation.
 :- import_module recompilation.check.
@@ -88,6 +89,7 @@
 
 :- import_module assoc_list.
 :- import_module bool.
+:- import_module char.
 :- import_module cord.
 :- import_module dir.
 :- import_module gc.
@@ -275,10 +277,10 @@ real_main_after_expansion(CmdLineArgs, !IO) :-
                             MaybeVariables = yes(Variables),
                             lookup_mmc_options(FlagsArgsGlobals, Variables,
                                 MaybeMCFlags, !IO),
-                            lookup_mercury_stdlib_dir(FlagsArgsGlobals, Variables,
-                                MaybeMerStdLibDir, !IO),
-                            detect_libgrades(FlagsArgsGlobals, MaybeMerStdLibDir,
-                                DetectedGradeFlags, !IO)
+                            lookup_mercury_stdlib_dir(FlagsArgsGlobals,
+                                Variables, MaybeMerStdLibDir, !IO),
+                            detect_libgrades(FlagsArgsGlobals,
+                                MaybeMerStdLibDir, DetectedGradeFlags, !IO)
                         ;
                             MaybeVariables = no,
                             MaybeMCFlags = no,
@@ -308,9 +310,9 @@ real_main_after_expansion(CmdLineArgs, !IO) :-
     ),
     (
         MaybeMCFlags = yes(MCFlags),
-        % 
+        %
         % NOTE: the order of the flags here is important.  It must be:
-        % 
+        %
         %   (1) flags for detected library grades
         %   (2) flags from Mercury.config and any Mercury.options files
         %   (3) flags from any command line options
@@ -378,6 +380,10 @@ main_after_setup(DetectedGradeFlags, OptionVariables, OptionArgs, Args,
         OutputGradeDefines),
     globals.lookup_bool_option(Globals, output_c_include_directory_flags,
         OutputCInclDirFlags),
+    globals.lookup_bool_option(Globals, output_target_arch,
+        OutputTargetArch),
+    globals.lookup_bool_option(Globals, output_class_dir,
+        OutputClassDir),
     globals.lookup_bool_option(Globals, make, Make),
     globals.lookup_maybe_string_option(Globals,
         generate_standalone_interface, GenerateStandaloneInt),
@@ -449,6 +455,14 @@ main_after_setup(DetectedGradeFlags, OptionVariables, OptionArgs, Args,
     ; OutputCInclDirFlags = yes ->
         io.stdout_stream(StdOut, !IO),
         output_c_include_directory_flags(Globals, StdOut, !IO)
+    ; OutputTargetArch = yes ->
+        io.stdout_stream(StdOut, !IO),
+        globals.lookup_string_option(Globals, target_arch, TargetArch),
+        io.write_string(StdOut, TargetArch ++ "\n", !IO)
+    ; OutputClassDir = yes ->
+        io.stdout_stream(StdOut, !IO),
+        get_class_dir_name(Globals, ClassName),
+        io.write_string(StdOut, ClassName ++ "\n", !IO)
     ; GenerateMapping = yes ->
         source_file_map.write_source_file_map(Globals, Args, !IO)
     ; GenerateStandaloneInt = yes(StandaloneIntBasename) ->
@@ -459,6 +473,9 @@ main_after_setup(DetectedGradeFlags, OptionVariables, OptionArgs, Args,
             ; Target = target_java
             ; Target = target_erlang
             ),
+            % XXX this message is nonsense.  These targets do
+            % not require standalone interfaces since they natively
+            % provide an equivalent mechanism.
             NYIMsg = [
                 words("Sorry,"),
                 quote("--generate-standalone-interface"),
@@ -469,9 +486,7 @@ main_after_setup(DetectedGradeFlags, OptionVariables, OptionArgs, Args,
             write_error_pieces_plain(Globals, NYIMsg, !IO),
             io.set_exit_status(1, !IO)
         ;
-            ( Target = target_c
-            ; Target = target_x86_64
-            ),
+            Target = target_c,
             make_standalone_interface(Globals, StandaloneIntBasename, !IO)
         )
     ; Make = yes ->
@@ -502,7 +517,6 @@ main_after_setup(DetectedGradeFlags, OptionVariables, OptionArgs, Args,
                     ( Target = target_c
                     ; Target = target_csharp
                     ; Target = target_il
-                    ; Target = target_x86_64
                     ; Target = target_erlang
                     ),
                     compile_with_module_options(Globals, MainModuleName,
@@ -836,12 +850,12 @@ file_or_module_to_module_name(fm_module(ModuleName)) = ModuleName.
 :- pred read_module_or_file(globals::in, globals::out, file_or_module::in,
     maybe_return_timestamp::in, module_name::out, file_name::out,
     maybe(timestamp)::out, list(item)::out,
-    list(error_spec)::out, module_error::out,
+    list(error_spec)::out, read_module_errors::out,
     have_read_module_map::in, have_read_module_map::out,
     io::di, io::uo) is det.
 
 read_module_or_file(Globals0, Globals, FileOrModuleName, ReturnTimestamp,
-        ModuleName, SourceFileName, MaybeTimestamp, Items, Specs, Error,
+        ModuleName, SourceFileName, MaybeTimestamp, Items, Specs, Errors,
         !HaveReadModuleMap, !IO) :-
     (
         FileOrModuleName = fm_module(ModuleName),
@@ -854,7 +868,7 @@ read_module_or_file(Globals0, Globals, FileOrModuleName, ReturnTimestamp,
             % Avoid rereading the module if it was already read
             % by recompilation_version.m.
             find_read_module(!.HaveReadModuleMap, ModuleName, ".m",
-                ReturnTimestamp, ItemsPrime, SpecsPrime, ErrorPrime,
+                ReturnTimestamp, ItemsPrime, SpecsPrime, ErrorsPrime,
                 SourceFileNamePrime, MaybeTimestampPrime)
         ->
             % XXX When we have read the module before, it *could* have had
@@ -863,7 +877,7 @@ read_module_or_file(Globals0, Globals, FileOrModuleName, ReturnTimestamp,
             map.delete(ModuleName - ".m", !HaveReadModuleMap),
             Items = ItemsPrime,
             Specs = SpecsPrime,
-            Error = ErrorPrime,
+            Errors = ErrorsPrime,
             SourceFileName = SourceFileNamePrime,
             MaybeTimestamp = MaybeTimestampPrime
         ;
@@ -871,7 +885,7 @@ read_module_or_file(Globals0, Globals, FileOrModuleName, ReturnTimestamp,
             % because that can result in the generated interface files
             % being created in the wrong directory.
             read_module(Globals0, ModuleName, ".m", "Reading module",
-                do_not_search, ReturnTimestamp, Items, Specs, Error,
+                do_not_search, ReturnTimestamp, Items, Specs, Errors,
                 SourceFileName, MaybeTimestamp, !IO),
             io_get_disable_smart_recompilation(DisableSmart, !IO),
             (
@@ -897,7 +911,7 @@ read_module_or_file(Globals0, Globals, FileOrModuleName, ReturnTimestamp,
             % Avoid rereading the module if it was already read
             % by recompilation_version.m.
             find_read_module(!.HaveReadModuleMap, DefaultModuleName, ".m",
-                ReturnTimestamp, ItemsPrime, SpecsPrime, ErrorPrime,
+                ReturnTimestamp, ItemsPrime, SpecsPrime, ErrorsPrime,
                 _, MaybeTimestampPrime)
         ->
             % XXX When we have read the module before, it *could* have had
@@ -907,14 +921,14 @@ read_module_or_file(Globals0, Globals, FileOrModuleName, ReturnTimestamp,
             ModuleName = DefaultModuleName,
             Items = ItemsPrime,
             Specs = SpecsPrime,
-            Error = ErrorPrime,
+            Errors = ErrorsPrime,
             MaybeTimestamp = MaybeTimestampPrime
         ;
             % We don't search `--search-directories' for source files
             % because that can result in the generated interface files
             % being created in the wrong directory.
             read_module_from_file(Globals0, FileName, ".m", "Reading file",
-                do_not_search, ReturnTimestamp, Items, Specs, Error,
+                do_not_search, ReturnTimestamp, Items, Specs, Errors,
                 ModuleName, MaybeTimestamp, !IO),
             io_get_disable_smart_recompilation(DisableSmart, !IO),
             (
@@ -950,7 +964,7 @@ read_module_or_file(Globals0, Globals, FileOrModuleName, ReturnTimestamp,
                         sym_name(ModuleName), suffix("."), nl,
                         words("Smart recompilation will not work unless"),
                         words("a module name to file name mapping is created"),
-                        words("using `mmc -f *.m'."), nl],
+                        words("using"), quote("mmc -f *.m"), suffix("."), nl],
                     write_error_pieces_plain(Globals, Pieces, !IO),
                     record_warning(Globals, !IO)
                 ;
@@ -1003,9 +1017,9 @@ process_module(Globals0, OptionArgs, FileOrModule, ModulesToLink,
         )
     ->
         read_module_or_file(Globals0, Globals, FileOrModule, ReturnTimestamp,
-            ModuleName, FileName, MaybeTimestamp, Items, Specs0, Error,
+            ModuleName, FileName, MaybeTimestamp, Items, Specs0, Errors,
             map.init, _, !IO),
-        ( halt_at_module_error(HaltSyntax, Error) ->
+        ( halt_at_module_error(HaltSyntax, Errors) ->
             true
         ;
             split_into_submodules(ModuleName, Items, SubModuleList,
@@ -1024,11 +1038,11 @@ process_module(Globals0, OptionArgs, FileOrModule, ModulesToLink,
         ConvertToMercury = yes
     ->
         read_module_or_file(Globals0, Globals, FileOrModule,
-            do_not_return_timestamp, ModuleName, _, _, Items, Specs, Error,
+            do_not_return_timestamp, ModuleName, _, _, Items, Specs, Errors,
             map.init, _, !IO),
         % XXX _NumErrors
         write_error_specs(Specs, Globals, 0, _NumWarnings, 0, _NumErrors, !IO),
-        ( halt_at_module_error(HaltSyntax, Error) ->
+        ( halt_at_module_error(HaltSyntax, Errors) ->
             true
         ;
             module_name_to_file_name(Globals, ModuleName, ".ugly",
@@ -1139,10 +1153,10 @@ process_module_2(Globals0, OptionArgs, FileOrModule, MaybeModulesToRecompile,
     ),
 
     read_module_or_file(Globals0, Globals, FileOrModule, do_return_timestamp,
-        ModuleName, FileName, MaybeTimestamp, Items, Specs0, Error,
+        ModuleName, FileName, MaybeTimestamp, Items, Specs0, Errors,
         HaveReadModuleMap0, HaveReadModuleMap, !IO),
     globals.lookup_bool_option(Globals, halt_at_syntax_errors, HaltSyntax),
-    ( halt_at_module_error(HaltSyntax, Error) ->
+    ( halt_at_module_error(HaltSyntax, Errors) ->
         % XXX _NumErrors
         write_error_specs(Specs0, Globals, 0, _NumWarnings, 0, _NumErrors,
             !IO),
@@ -1230,7 +1244,7 @@ compile_all_submodules(Globals, FileName, SourceFileModuleName,
 
 call_make_interface(Globals, SourceFileName, SourceFileModuleName,
         MaybeTimestamp, ModuleName - Items, !IO) :-
-    make_interface(Globals, SourceFileName, SourceFileModuleName,
+    write_interface_file(Globals, SourceFileName, SourceFileModuleName,
         ModuleName, MaybeTimestamp, Items, !IO).
 
 :- pred call_make_short_interface(globals::in, file_name::in, module_name::in,
@@ -1239,7 +1253,8 @@ call_make_interface(Globals, SourceFileName, SourceFileModuleName,
 
 call_make_short_interface(Globals, SourceFileName, _, _, ModuleName - Items,
         !IO) :-
-    make_short_interface(Globals, SourceFileName, ModuleName, Items, !IO).
+    write_short_interface_file(Globals, SourceFileName, ModuleName,
+        Items, !IO).
 
 :- pred call_make_private_interface(globals::in, file_name::in,
     module_name::in, maybe(timestamp)::in, pair(module_name, list(item))::in,
@@ -1247,13 +1262,19 @@ call_make_short_interface(Globals, SourceFileName, _, _, ModuleName - Items,
 
 call_make_private_interface(Globals, SourceFileName, SourceFileModuleName,
         MaybeTimestamp, ModuleName - Items, !IO) :-
-    make_private_interface(Globals, SourceFileName, SourceFileModuleName,
+    write_private_interface_file(Globals, SourceFileName, SourceFileModuleName,
         ModuleName, MaybeTimestamp, Items, !IO).
 
-:- pred halt_at_module_error(bool::in, module_error::in) is semidet.
+:- pred halt_at_module_error(bool::in, read_module_errors::in) is semidet.
 
-halt_at_module_error(_, fatal_module_errors).
-halt_at_module_error(HaltSyntax, some_module_errors) :- HaltSyntax = yes.
+halt_at_module_error(HaltSyntax, Errors) :-
+    set.is_non_empty(Errors),
+    set.intersect(Errors, fatal_read_module_errors, FatalErrors),
+    (
+        set.is_non_empty(FatalErrors)
+    ;
+        HaltSyntax = yes
+    ).
 
 :- pred module_to_link(pair(module_name, list(item))::in, string::out) is det.
 
@@ -1305,7 +1326,6 @@ find_smart_recompilation_target_files(Globals, FindTargetFiles) :-
     ; CompilationTarget = target_il, TargetSuffix = ".il"
     ; CompilationTarget = target_csharp, TargetSuffix = ".cs"
     ; CompilationTarget = target_java, TargetSuffix = ".java"
-    ; CompilationTarget = target_x86_64, TargetSuffix = ".s"
     ; CompilationTarget = target_erlang, TargetSuffix = ".erl"
     ),
     FindTargetFiles = usual_find_target_files(Globals, TargetSuffix).
@@ -1338,9 +1358,6 @@ find_timestamp_files(Globals, FindTimestampFiles) :-
     ;
         CompilationTarget = target_java,
         TimestampSuffix = ".java_date"
-    ;
-        CompilationTarget = target_x86_64,
-        TimestampSuffix = ".s_date"
     ;
         CompilationTarget = target_erlang,
         TimestampSuffix = ".erl_date"
@@ -1391,16 +1408,13 @@ compile(Globals, SourceFileName, SourceFileModuleName, NestedSubModules0,
     grab_imported_modules(Globals, SourceFileName, SourceFileModuleName,
         ModuleName, NestedSubModules, HaveReadModuleMap, MaybeTimestamp,
         Items, Module, !IO),
-    module_and_imports_get_results(Module, _, ImportedSpecs, Error),
+    module_and_imports_get_results(Module, _, ImportedSpecs, Errors),
     !:Specs = ImportedSpecs ++ !.Specs,
-    (
-        ( Error = no_module_errors
-        ; Error = some_module_errors
-        ),
+    set.intersect(Errors, fatal_read_module_errors, FatalErrors),
+    ( if set.is_empty(FatalErrors) then
         mercury_compile(Globals, Module, NestedSubModules, FindTimestampFiles,
             ExtraObjFiles, no_prev_dump, _, !Specs, !IO)
-    ;
-        Error = fatal_module_errors,
+    else
         ExtraObjFiles = []
     ).
 
@@ -1562,9 +1576,7 @@ mercury_compile_after_front_end(NestedSubModules, FindTimestampFiles,
         NumErrors = 0
     ->
         (
-            ( Target = target_c
-            ; Target = target_x86_64
-            ),
+            Target = target_c,
             % Produce the grade independent header file <module>.mh
             % containing function prototypes for the procedures
             % referred to by foreign_export pragmas.
@@ -1648,19 +1660,6 @@ mercury_compile_after_front_end(NestedSubModules, FindTimestampFiles,
                 llds_output_pass(!.HLDS, GlobalData, LLDS, ModuleName,
                     Succeeded, ExtraObjFiles, !IO)
             )
-        ;
-            Target = target_x86_64,
-            llds_backend_pass(!HLDS, _GlobalData, LLDS, !DumpInfo, !IO),
-            % XXX Eventually we will call the LLDS->x86_64 asm code generator
-            % here and then output the assembler. At the moment, we just output
-            % the LLDS as C code.
-            llds_to_x86_64_asm(!.HLDS, LLDS, X86_64_Asm),
-            % XXX This should eventually be written to a file rather
-            % than stdout.
-            io.stdout_stream(Stdout, !IO),
-            output_x86_64_asm(Stdout, X86_64_Asm, !IO),
-            Succeeded = yes,
-            ExtraObjFiles = []
         ;
             Target = target_erlang,
             erlang_backend(!.HLDS, ELDS, !DumpInfo, !IO),
@@ -1845,6 +1844,117 @@ invoke_module_qualify_items(Globals, Items0, Items,
     maybe_write_out_errors_no_module(Verbose, Globals, !Specs, !IO),
     maybe_write_string(Verbose, "% done.\n", !IO),
     maybe_report_stats(Stats, !IO).
+
+%-----------------------------------------------------------------------------%
+
+    % maybe_read_dependency_file(Globals, ModuleName, MaybeTransOptDeps, !IO):
+    %
+    % If transitive intermodule optimization has been enabled, then read
+    % <ModuleName>.d to find the modules which <ModuleName>.trans_opt may
+    % depend on. Otherwise return `no'.
+    %
+:- pred maybe_read_dependency_file(globals::in, module_name::in,
+    maybe(list(module_name))::out, io::di, io::uo) is det.
+
+maybe_read_dependency_file(Globals, ModuleName, MaybeTransOptDeps, !IO) :-
+    globals.lookup_bool_option(Globals, transitive_optimization, TransOpt),
+    (
+        TransOpt = yes,
+        globals.lookup_bool_option(Globals, verbose, Verbose),
+        module_name_to_file_name(Globals, ModuleName, ".d", do_not_create_dirs,
+            DependencyFileName, !IO),
+        maybe_write_string(Verbose, "% Reading auto-dependency file `", !IO),
+        maybe_write_string(Verbose, DependencyFileName, !IO),
+        maybe_write_string(Verbose, "'...", !IO),
+        maybe_flush_output(Verbose, !IO),
+        io.open_input(DependencyFileName, OpenResult, !IO),
+        (
+            OpenResult = ok(Stream),
+            io.set_input_stream(Stream, OldStream, !IO),
+            module_name_to_file_name(Globals, ModuleName, ".trans_opt_date",
+                do_not_create_dirs, TransOptDateFileName0, !IO),
+            string.to_char_list(TransOptDateFileName0, TransOptDateFileName),
+            SearchPattern = TransOptDateFileName ++ [' ', ':'],
+            read_dependency_file_find_start(SearchPattern, FindResult, !IO),
+            (
+                FindResult = yes,
+                read_dependency_file_get_modules(TransOptDeps, !IO),
+                MaybeTransOptDeps = yes(TransOptDeps)
+            ;
+                FindResult = no,
+                % error reading .d file
+                MaybeTransOptDeps = no
+            ),
+            io.set_input_stream(OldStream, _, !IO),
+            io.close_input(Stream, !IO),
+            maybe_write_string(Verbose, " done.\n", !IO)
+        ;
+            OpenResult = error(IOError),
+            maybe_write_string(Verbose, " failed.\n", !IO),
+            maybe_flush_output(Verbose, !IO),
+            io.error_message(IOError, IOErrorMessage),
+            string.append_list(["error opening file `", DependencyFileName,
+                "' for input: ", IOErrorMessage], Message),
+            report_error(Message, !IO),
+            MaybeTransOptDeps = no
+        )
+    ;
+        TransOpt = no,
+        MaybeTransOptDeps = no
+    ).
+
+    % Read lines from the dependency file (module.d) until one is found
+    % which begins with SearchPattern.
+    %
+:- pred read_dependency_file_find_start(list(char)::in, bool::out,
+    io::di, io::uo) is det.
+
+read_dependency_file_find_start(SearchPattern, Success, !IO) :-
+    io.read_line(Result, !IO),
+    ( Result = ok(CharList) ->
+        ( list.append(SearchPattern, _, CharList) ->
+            % Have found the start.
+            Success = yes
+        ;
+            read_dependency_file_find_start(SearchPattern, Success, !IO)
+        )
+    ;
+        Success = no
+    ).
+
+    % Read lines until one is found which does not contain whitespace
+    % followed by a word which ends in .trans_opt. Remove the .trans_opt
+    % ending from all the words which are read in and return the resulting
+    % list of modules.
+    %
+:- pred read_dependency_file_get_modules(list(module_name)::out,
+    io::di, io::uo) is det.
+
+read_dependency_file_get_modules(TransOptDeps, !IO) :-
+    io.read_line(Result, !IO),
+    (
+        Result = ok(CharList0),
+        % Remove any whitespace from the beginning of the line,
+        % then take all characters until another whitespace occurs.
+        list.takewhile(char.is_whitespace, CharList0, _, CharList1),
+        NotIsWhitespace = (pred(Char::in) is semidet :-
+            \+ char.is_whitespace(Char)
+        ),
+        list.takewhile(NotIsWhitespace, CharList1, CharList, _),
+        string.from_char_list(CharList, FileName0),
+        string.remove_suffix(FileName0, ".trans_opt", FileName)
+    ->
+        ( string.append("Mercury/trans_opts/", BaseFileName, FileName) ->
+            ModuleFileName = BaseFileName
+        ;
+            ModuleFileName = FileName
+        ),
+        file_name_to_module_name(ModuleFileName, Module),
+        read_dependency_file_get_modules(TransOptDeps0, !IO),
+        TransOptDeps = [Module | TransOptDeps0]
+    ;
+        TransOptDeps = []
+    ).
 
 %-----------------------------------------------------------------------------%
 
@@ -2095,7 +2205,7 @@ detect_libgrades(Globals, MaybeConfigMerStdLibDir, GradeOpts, !IO) :-
         % overrides one set using the MERCURY_STDLIB_DIR variable.
         ( if
             % Was the standard library directory set on the command line?
-            % 
+            %
             globals.lookup_maybe_string_option(Globals,
                 mercury_standard_library_directory, MaybeStdLibDir),
             MaybeStdLibDir = yes(MerStdLibDir)
@@ -2108,7 +2218,7 @@ detect_libgrades(Globals, MaybeConfigMerStdLibDir, GradeOpts, !IO) :-
         then
             do_detect_libgrades(VeryVerbose, MerStdLibDir, GradeOpts, !IO)
         else
-            GradeOpts = [] 
+            GradeOpts = []
         ),
         trace [io(!TIO), compile_time(flag("debug-detect-libgrades"))] (
             maybe_write_string(Verbose, "% done.\n", !TIO)
@@ -2180,7 +2290,7 @@ do_detect_libgrade(VeryVerbose, DirName, FileName, FileType, Continue,
         ),
         Continue = yes
     ).
-            
+
 :- pred maybe_report_detected_libgrade(bool::in, string::in,
     io::di, io::uo) is det.
 

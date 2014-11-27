@@ -34,8 +34,8 @@
 :- import_module mdb.declarative_debugger.
 :- import_module mdb.declarative_user.
 :- import_module mdb.help.
-:- import_module mdbcomp.prim_data.
 :- import_module mdbcomp.rtti_access.
+:- import_module mdbcomp.sym_name.
 
 :- import_module bool. 
 :- import_module io. 
@@ -562,7 +562,7 @@ trusted(ProcLayout, Oracle) :-
     ).
 
 :- pred query_oracle_kb(oracle_kb::in, decl_question(T)::in,
-    decl_answer(T)::out) is semidet.
+    decl_answer(T)::out(known_answer)) is semidet.
 
 query_oracle_kb(KB, Question, Answer) :-
     Question = wrong_answer(Node, _, Atom),

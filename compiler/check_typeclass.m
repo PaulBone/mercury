@@ -122,6 +122,7 @@
 :- import_module libs.options.
 :- import_module mdbcomp.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.mercury_to_mercury.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_type.
@@ -1031,9 +1032,11 @@ produce_auxiliary_procs(ClassId, ClassVars, MethodName, Markers0,
     AddProc = (pred(ModeAndDet::in, NewProcId::out,
             OldPredInfo::in, NewPredInfo::out) is det :-
         ModeAndDet = modes_and_detism(Modes, InstVarSet, MaybeDet),
+        % Before the simplification pass, HasParallelConj is not meaningful.
+        HasParallelConj = has_no_parallel_conj,
         add_new_proc(InstVarSet, PredArity, Modes, yes(Modes), no,
             detism_decl_implicit, MaybeDet, Context, address_is_taken,
-            OldPredInfo, NewPredInfo, NewProcId)
+            HasParallelConj, OldPredInfo, NewPredInfo, NewProcId)
     ),
     list.map_foldl(AddProc, ArgModes, InstanceProcIds, PredInfo2, PredInfo),
 
@@ -1634,7 +1637,7 @@ report_coverage_error(ClassId, InstanceDefn, Vars) = Spec :-
         sym_name_and_arity(SymName / Arity), suffix(":"), nl,
         words("functional dependency not satisfied:"),
         words(choose_number(Vars, "type variable", "type variables"))]
-        ++ list_to_pieces(VarsStrs) ++
+        ++ list_to_quoted_pieces(VarsStrs) ++
         [words(choose_number(Vars, "occurs", "occur")),
         words("in the range of the functional dependency, but"),
         words(choose_number(Vars, "is", "are")),
@@ -1823,7 +1826,7 @@ report_unbound_tvars_in_pred_context(Vars, PredInfo) = Spec :-
         suffix(":"), nl,
         words("error in type class constraints:"),
         words(choose_number(Vars, "type variable", "type variables"))]
-        ++ list_to_pieces(VarsStrs) ++
+        ++ list_to_quoted_pieces(VarsStrs) ++
         [words(choose_number(Vars, "occurs", "occur")),
         words("in the constraints, but"),
         words(choose_number(Vars, "is", "are")),
@@ -1853,7 +1856,7 @@ report_unbound_tvars_in_ctor_context(Vars, TypeCtor, TypeDefn) = Spec :-
         sym_name_and_arity(SymName / Arity), suffix(":"), nl,
         words("error in type class constraints:"),
         words(choose_number(Vars, "type variable", "type variables"))]
-        ++ list_to_pieces(VarsStrs) ++
+        ++ list_to_quoted_pieces(VarsStrs) ++
         [words(choose_number(Vars, "occurs", "occur")),
         words("in the constraints, but"),
         words(choose_number(Vars, "is", "are")),
@@ -1950,7 +1953,7 @@ report_badly_quantified_vars(PredInfo, QuantErrorType, TVars) = Spec :-
     TypeVariables = [words("type variable"),
         suffix(choose_number(TVars, "", "s"))],
     TVarsStrs = list.map(mercury_var_to_string(TVarSet, no), TVars),
-    TVarsPart = list_to_pieces(TVarsStrs),
+    TVarsPart = list_to_quoted_pieces(TVarsStrs),
     Are = words(choose_number(TVars, "is", "are")),
     (
         QuantErrorType = universal_constraint,
@@ -2063,7 +2066,7 @@ fundeps_closure(FunDeps, TVars) = fundeps_closure_2(FunDeps, TVars, set.init).
 :- func fundeps_closure_2(induced_fundeps, set(tvar), set(tvar)) = set(tvar).
 
 fundeps_closure_2(FunDeps0, NewVars0, Result0) = Result :-
-    ( set.empty(NewVars0) ->
+    ( set.is_empty(NewVars0) ->
         Result = Result0
     ;
         Result1 = set.union(Result0, NewVars0),
@@ -2083,7 +2086,7 @@ remove_vars(Vars, fundep(Domain0, Range0)) = fundep(Domain, Range) :-
     induced_fundeps::out, set(tvar)::in, set(tvar)::out) is det.
 
 collect_determined_vars(FunDep @ fundep(Domain, Range), !FunDeps, !Vars) :-
-    ( set.empty(Domain) ->
+    ( set.is_empty(Domain) ->
         !:Vars = set.union(Range, !.Vars)
     ;
         !:FunDeps = [FunDep | !.FunDeps]

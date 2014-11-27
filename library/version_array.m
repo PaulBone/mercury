@@ -1,11 +1,12 @@
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % vim: ts=4 sw=4 et tw=0 wm=0 ft=mercury
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % Copyright (C) 2004-2012 The University of Melbourne.
+% Copyright (C) 2014 The Mercury Team.
 % This file may only be copied under the terms of the GNU Library General
 % Public License - see the file COPYING.LIB in the Mercury distribution.
 % vim: ft=mercury ts=4 sw=4 et wm=0 tw=0
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % File: version_array.m.
 % Author: Ralph Becket <rafe@cs.mu.oz.au>.
@@ -49,8 +50,8 @@
 % garbage collection) grades. Specifically, MR_deep_copy and MR_agc_deep_copy
 % currently do not recognise version arrays.
 %
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module version_array.
 :- interface.
@@ -58,7 +59,7 @@
 :- import_module list.
 :- import_module pretty_printer.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- type version_array(T).
 
@@ -69,7 +70,7 @@
 :- type version_array.index_out_of_bounds
     --->    version_array.index_out_of_bounds(string).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % empty_array returns the empty array.
     %
@@ -248,14 +249,14 @@
     %
 :- func version_array_to_doc(version_array(T)) = pretty_printer.doc.
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 % The first implementation of version arrays used nb_references.
 % This incurred three memory allocations for every update. This version
 % works at a lower level, but only performs one allocation per update.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
@@ -263,7 +264,7 @@
 :- import_module exception.
 :- import_module string.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 version_array([]) = version_array.empty.
 version_array([X | Xs]) = VA :-
@@ -280,7 +281,7 @@ version_array_2(I, [X | Xs], !VA) :-
 
 from_list(Xs) = version_array(Xs).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma inline(version_array.elem/2).
 
@@ -294,7 +295,7 @@ lookup(VA, I) = X :-
 VA ^ elem(I) =
     lookup(VA, I).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma inline(version_array.'elem :='/3).
 
@@ -308,11 +309,11 @@ set(I, X, !VA) :-
 (VA0 ^ elem(I) := X) = VA :-
     set(I, X, VA0, VA).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 max(VA) = size(VA) - 1.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 copy(VA) =
     ( if size(VA) = 0 then
@@ -321,13 +322,13 @@ copy(VA) =
         resize(VA, size(VA), lookup(VA, 0))
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 list(VA) = foldr(list.cons, VA, []).
 
 to_list(VA) = list(VA).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 foldl(F, VA, Acc) = do_foldl_func(F, VA, Acc, 0, size(VA)).
 
@@ -340,7 +341,7 @@ do_foldl_func(F, VA, Acc, Lo, Hi) =
         Acc
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 foldl(P, VA, !Acc) :-
     do_foldl_pred(P, VA, 0, size(VA), !Acc).
@@ -364,7 +365,7 @@ do_foldl_pred(P, VA, Lo, Hi, !Acc) :-
         true
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 foldl2(P, VA, !Acc1, !Acc2) :-
     do_foldl2(P, VA, 0, size(VA), !Acc1, !Acc2).
@@ -392,7 +393,7 @@ do_foldl2(P, VA, Lo, Hi, !Acc1, !Acc2) :-
         true
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 foldr(F, VA, Acc) = do_foldr_func(F, VA, Acc, version_array.max(VA)).
 
@@ -405,7 +406,7 @@ do_foldr_func(F, VA, Acc, Hi) =
         Acc
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 foldr(P, VA, !Acc) :-
     do_foldr_pred(P, VA, version_array.max(VA), !Acc).
@@ -429,7 +430,7 @@ do_foldr_pred(P, VA, I, !Acc) :-
         true
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 foldr2(P, VA, !Acc1, !Acc2) :-
     do_foldr2(P, VA, version_array.max(VA), !Acc1, !Acc2).
@@ -457,7 +458,7 @@ do_foldr2(P, VA, I, !Acc1, !Acc2) :-
         true
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 all_true(Pred, VA) :-
     do_all_true(Pred, 0, size(VA), VA).
@@ -489,12 +490,12 @@ do_all_false(Pred, I, N, VA) :-
         true
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 unsafe_rewind(VA, unsafe_rewind(VA)).
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % Sordid stuff below this point...
 %
 % The `thread_safe' attributes are justified:
@@ -912,7 +913,8 @@ is_empty(VA) :-
 ** a pointer to the next version in the chain.
 */
 
-typedef struct ML_va    *ML_va_ptr;
+typedef struct ML_va        *ML_va_ptr;
+typedef const struct ML_va  *ML_const_va_ptr;
 
 struct ML_va {
     MR_Integer          index;  /* -1 for latest, >= 0 for older */
@@ -930,13 +932,13 @@ struct ML_va {
 ** Returns a pointer to the latest version of the array.
 */
 extern ML_va_ptr
-ML_va_get_latest(ML_va_ptr VA);
+ML_va_get_latest(ML_const_va_ptr VA);
 
 /*
 ** Returns the number of items in a version array.
 */
 extern MR_Integer
-ML_va_size_dolock(ML_va_ptr);
+ML_va_size_dolock(ML_const_va_ptr);
 
 /*
 ** If I is in range then ML_va_get(VA, I, &X) sets X to the Ith item
@@ -944,7 +946,7 @@ ML_va_size_dolock(ML_va_ptr);
 ** returns MR_FALSE.
 */
 extern MR_bool
-ML_va_get_dolock(ML_va_ptr, MR_Integer, MR_Word *);
+ML_va_get_dolock(ML_const_va_ptr, MR_Integer, MR_Word *);
 
 /*
 ** If I is in range then ML_va_set(VA0, I, X, VA) sets VA to be VA0
@@ -972,11 +974,14 @@ ML_va_resize_dolock(ML_va_ptr, MR_Integer, MR_Word, MR_AllocSiteInfoPtr);
 
 :- pragma foreign_decl("C", local, "
 
+#include ""mercury_types.h""
+#include ""mercury_bitmap.h""
+
 /*
 ** Returns the number of items in a version array.
 */
 static MR_Integer
-ML_va_size(ML_va_ptr);
+ML_va_size(ML_const_va_ptr);
 
 /*
 ** If I is in range then ML_va_get(VA, I, &X) sets X to the Ith item
@@ -984,7 +989,7 @@ ML_va_size(ML_va_ptr);
 ** returns MR_FALSE.
 */
 static MR_bool
-ML_va_get(ML_va_ptr VA, MR_Integer I, MR_Word *Xptr);
+ML_va_get(ML_const_va_ptr VA, MR_Integer I, MR_Word *Xptr);
 
 /*
 ** If I is in range then ML_va_set(VA0, I, X, VA) sets VA to be VA0
@@ -999,14 +1004,14 @@ ML_va_set(ML_va_ptr, MR_Integer, MR_Word, ML_va_ptr *,
 ** Create a copy of VA0 as a new array.
 */
 static ML_va_ptr
-ML_va_flat_copy(const ML_va_ptr VA0, MR_AllocSiteInfoPtr alloc_id);
+ML_va_flat_copy(ML_const_va_ptr VA0, MR_AllocSiteInfoPtr alloc_id);
 
 /*
 ** Update the array VA using the override values in VA0
 ** i.e. recreate the state of the version array as captured in VA0.
 */
 static void
-ML_va_rewind_into(ML_va_ptr VA, const ML_va_ptr VA0);
+ML_va_rewind_into(ML_va_ptr VA, ML_const_va_ptr VA0);
 
 /*
 ** `Rewinds' a version array, invalidating all extant successors
@@ -1028,18 +1033,18 @@ ML_va_resize(ML_va_ptr, MR_Integer, MR_Word, MR_AllocSiteInfoPtr);
 #define ML_va_latest_version(VA)   ((VA)->index == -1)
 
 #ifdef MR_THREAD_SAFE
-    #define ML_maybe_lock(lock)                         \
-        do {                                            \
-            if (lock) {                                 \
-                MR_LOCK(lock, ""ML_maybe_lock"");       \
-            }                                           \
+    #define ML_maybe_lock(lock)                         \\
+        do {                                            \\
+            if (lock) {                                 \\
+                MR_LOCK(lock, ""ML_maybe_lock"");       \\
+            }                                           \\
         } while (0)
 
-    #define ML_maybe_unlock(lock)                       \
-        do {                                            \
-            if (lock) {                                 \
-                MR_UNLOCK(lock, ""ML_maybe_unlock"");   \
-            }                                           \
+    #define ML_maybe_unlock(lock)                       \\
+        do {                                            \\
+            if (lock) {                                 \\
+                MR_UNLOCK(lock, ""ML_maybe_unlock"");   \\
+            }                                           \\
         } while (0)
 #else
     #define ML_maybe_lock(lock)     ((void) 0)
@@ -1047,17 +1052,18 @@ ML_va_resize(ML_va_ptr, MR_Integer, MR_Word, MR_AllocSiteInfoPtr);
 #endif
 
 ML_va_ptr
-ML_va_get_latest(ML_va_ptr VA)
+ML_va_get_latest(ML_const_va_ptr VA)
 {
     while (!ML_va_latest_version(VA)) {
         VA = VA->rest.next;
     }
 
-    return VA;
+    /* Cast away the 'const' */
+    return (ML_va_ptr)VA;
 }
 
 MR_Integer
-ML_va_size_dolock(ML_va_ptr VA)
+ML_va_size_dolock(ML_const_va_ptr VA)
 {
 #ifdef MR_THREAD_SAFE
     MercuryLock *lock = VA->lock;
@@ -1074,7 +1080,7 @@ ML_va_size_dolock(ML_va_ptr VA)
 }
 
 static MR_Integer
-ML_va_size(ML_va_ptr VA)
+ML_va_size(ML_const_va_ptr VA)
 {
     VA = ML_va_get_latest(VA);
 
@@ -1082,7 +1088,7 @@ ML_va_size(ML_va_ptr VA)
 }
 
 int
-ML_va_get_dolock(ML_va_ptr VA, MR_Integer I, MR_Word *Xptr)
+ML_va_get_dolock(ML_const_va_ptr VA, MR_Integer I, MR_Word *Xptr)
 {
 #ifdef MR_THREAD_SAFE
     MercuryLock *lock = VA->lock;
@@ -1099,7 +1105,7 @@ ML_va_get_dolock(ML_va_ptr VA, MR_Integer I, MR_Word *Xptr)
 }
 
 static int
-ML_va_get(ML_va_ptr VA, MR_Integer I, MR_Word *Xptr)
+ML_va_get(ML_const_va_ptr VA, MR_Integer I, MR_Word *Xptr)
 {
     while (!ML_va_latest_version(VA)) {
         if (I == VA->index) {
@@ -1176,7 +1182,7 @@ ML_va_set(ML_va_ptr VA0, MR_Integer I, MR_Word X, ML_va_ptr *VAptr,
 }
 
 static ML_va_ptr
-ML_va_flat_copy(const ML_va_ptr VA0, MR_AllocSiteInfoPtr alloc_id)
+ML_va_flat_copy(ML_const_va_ptr VA0, MR_AllocSiteInfoPtr alloc_id)
 {
     ML_va_ptr   latest;
     ML_va_ptr   VA;
@@ -1192,10 +1198,10 @@ ML_va_flat_copy(const ML_va_ptr VA0, MR_AllocSiteInfoPtr alloc_id)
     MR_incr_hp_msg(array, N + 1,
         alloc_id, ""version_array.version_array/1"");
 
-    VA->index            = -1;
-    VA->value            = (MR_Word) NULL;
-    VA->rest.array       = (MR_ArrayPtr) array;
-    VA->rest.array->size = N;
+    VA->index               = -1;
+    VA->value               = (MR_Word) NULL;
+    VA->rest.array          = (MR_ArrayPtr) array;
+    VA->rest.array->size    = N;
 
     for (i = 0; i < N; i++) {
         VA->rest.array->elements[i] = latest->rest.array->elements[i];
@@ -1216,21 +1222,35 @@ ML_va_flat_copy(const ML_va_ptr VA0, MR_AllocSiteInfoPtr alloc_id)
 }
 
 static void
-ML_va_rewind_into(ML_va_ptr VA, const ML_va_ptr VA0)
+ML_va_rewind_into(ML_va_ptr VA_dest, ML_const_va_ptr VA_src)
 {
-    MR_Integer I;
-    MR_Word    X;
+    MR_Integer      I;
+    MR_Word         X;
+    ML_const_va_ptr cur;
+    MR_BitmapPtr    bitmap;
 
-    if (ML_va_latest_version(VA0)) {
+    if (ML_va_latest_version(VA_src)) {
+        /* Shortcut */
         return;
     }
 
-    ML_va_rewind_into(VA, VA0->rest.next);
+    /*
+    ** Rewind elements from the oldest to the newest, undoing their changes.
+    ** So that we undo elements in the correct order we use a bitmap to
+    ** ensure that we never update an array slot twice.
+    */
+    cur = VA_src;
+    MR_allocate_bitmap_msg(bitmap, VA_dest->rest.array->size, MR_ALLOC_ID);
+    MR_bitmap_zero(bitmap);
+    while (!ML_va_latest_version(cur)) {
+        I = cur->index;
+        X = cur->value;
+        if (I < VA_dest->rest.array->size && !MR_bitmap_get_bit(bitmap, I)) {
+            VA_dest->rest.array->elements[I] = X;
+            MR_bitmap_set_bit(bitmap, I);
+        }
 
-    I  = VA0->index;
-    X  = VA0->value;
-    if (I < VA->rest.array->size) {
-        VA->rest.array->elements[I] = X;
+        cur = cur->rest.next;
     }
 }
 
@@ -1252,18 +1272,43 @@ ML_va_rewind_dolock(ML_va_ptr VA)
 static ML_va_ptr
 ML_va_rewind(ML_va_ptr VA)
 {
-    MR_Integer I;
-    MR_Word    X;
+    MR_Integer      I;
+    MR_Word         X;
+    ML_va_ptr       cur;
+    MR_ArrayPtr     array;
+    MR_BitmapPtr    bitmap;
 
     if (ML_va_latest_version(VA)) {
+        /* Shortcut */
         return VA;
     }
 
-    I  = VA->index;
-    X  = VA->value;
-    VA = ML_va_rewind(VA->rest.next);
-    VA->rest.array->elements[I] = X;
+    /*
+    ** Rewind elements from the oldest to the newest, undoing their changes.
+    ** So that we undo elements in the correct order we use a bitmap to
+    ** ensure that we never update an array slot twice.
+    */
+    cur = VA;
+    array = ML_va_get_latest(VA)->rest.array;
+    MR_allocate_bitmap_msg(bitmap, array->size, MR_ALLOC_ID);
+    while (!ML_va_latest_version(cur)) {
+        I = cur->index;
+        X = cur->value;
 
+        if (!MR_bitmap_get_bit(bitmap, I)) {
+            array->elements[I] = X;
+            MR_bitmap_set_bit(bitmap, I);
+        }
+
+        cur = cur->rest.next;
+    }
+    VA->rest.array = array;
+
+    /*
+     * This element is no-longer an update element.
+     */
+    VA->index = -1;
+    VA->value = 0;
     return VA;
 }
 
@@ -1305,10 +1350,10 @@ ML_va_resize(ML_va_ptr VA0, MR_Integer N, MR_Word X,
     MR_incr_hp_msg(array, N + 1,
         alloc_id, ""version_array.version_array/1"");
 
-    VA->index            = -1;
-    VA->value            = (MR_Word) NULL;
-    VA->rest.array       = (MR_ArrayPtr) array;
-    VA->rest.array->size = N;
+    VA->index               = -1;
+    VA->value               = (MR_Word) NULL;
+    VA->rest.array          = (MR_ArrayPtr) array;
+    VA->rest.array->size    = N;
 
     for (i = 0; i < min; i++) {
         VA->rest.array->elements[i] = latest->rest.array->elements[i];
@@ -1332,6 +1377,10 @@ ML_va_resize(ML_va_ptr VA0, MR_Integer N, MR_Word X,
     return VA;
 }
 
+").
+
+:- pragma foreign_decl("C#", local, "
+using System;
 ").
 
 :- pragma foreign_code("C#", "
@@ -1420,6 +1469,7 @@ public class ML_uva : ML_va {
     private object              rest;   /* array if index == -1          */
                                         /* next if index >= 0            */
 
+    /* True if this is a fresh clone of another ML_uva */
     private bool                clone = false;
 
     public ML_uva() {}
@@ -1576,19 +1626,32 @@ public class ML_uva : ML_va {
 
     private void rewind_into(ML_uva VA)
     {
-        int     I;
-        object  X;
+        int                             I;
+        object                          X;
+        ML_uva                          cur;
+        mercury.runtime.MercuryBitmap   bitmap;
 
         if (this.is_latest()) {
+            /* Shortcut */
             return;
         }
 
-        this.next().rewind_into(VA);
+        /*
+        ** Rewind elements from the oldest to the newest, undoing their changes.
+        ** So that we undo elements in the correct order we use a bitmap to
+        ** ensure that we never update an array slot twice.
+        */
+        cur = this;
+        bitmap = new mercury.runtime.MercuryBitmap(cur.size());
+        while (!cur.is_latest()) {
+            I = cur.index;
+            X = cur.value;
+            if (I < VA.size() && !bitmap.GetBit(I)) {
+                VA.array()[I] = X;
+                bitmap.SetBit(I);
+            }
 
-        I = this.index;
-        X = this.value;
-        if (I < VA.size()) {
-            VA.array()[I] = X;
+            cur = cur.next();
         }
     }
 
@@ -1599,23 +1662,50 @@ public class ML_uva : ML_va {
 
     public ML_uva rewind_uva()
     {
-        ML_uva VA = this;
-        int     I;
-        object  X;
+        int                             I;
+        object                          X;
+        ML_uva                          cur;
+        mercury.runtime.MercuryBitmap   bitmap;
+        object[]                        array;
 
-        if (VA.is_latest()) {
-            return VA;
+        if (is_latest()) {
+            return this;
         }
 
-        I  = VA.index;
-        X  = VA.value;
-        VA = VA.next().rewind_uva();
-        VA.array()[I] = X;
+        /*
+        ** Rewind elements from the oldest to the newest, undoing their changes.
+        ** So that we undo elements in the correct order we use a bitmap to
+        ** ensure that we never update an array slot twice.
+        */
+        cur = this;
+        array = latest().array();
+        bitmap = new mercury.runtime.MercuryBitmap(array.Length);
+        while (!cur.is_latest()) {
+            I = cur.index;
+            X = cur.value;
 
-        return VA;
+            if (!bitmap.GetBit(I)) {
+                array[I] = X;
+                bitmap.SetBit(I);
+            }
+
+            cur = cur.next();
+        }
+        rest = array;
+
+        /*
+         * This element is no-longer an update element.
+         */
+        index = -1;
+        value = 0;
+        return this;
     }
 }
 
+").
+
+:- pragma foreign_decl("Java", local, "
+import jmercury.runtime.MercuryBitmap;
 ").
 
 :- pragma foreign_code("Java", "
@@ -1850,44 +1940,79 @@ public static class ML_uva implements ML_va, java.io.Serializable {
 
     private void rewind_into(ML_uva VA)
     {
-        int     I;
-        Object  X;
+        int             I;
+        Object          X;
+        ML_uva          cur;
+        MercuryBitmap   bitmap;
 
         if (this.is_latest()) {
             return;
         }
 
-        this.next().rewind_into(VA);
+        /*
+        ** Rewind elements from the oldest to the newest, undoing their changes.
+        ** So that we undo elements in the correct order we use a bitmap to
+        ** ensure that we never update an array slot twice.
+        */
+        cur = this;
+        bitmap = new MercuryBitmap(cur.size());
+        while (!cur.is_latest()) {
+            I = cur.index;
+            X = cur.value;
+            if (I < VA.size() && !bitmap.getBit(I)) {
+                VA.array()[I] = X;
+                bitmap.setBit(I);
+            }
 
-        I = this.index;
-        X = this.value;
-        if (I < VA.size()) {
-            VA.array()[I] = X;
+            cur = cur.next();
         }
     }
 
     public ML_uva rewind()
     {
-        ML_uva VA = this;
-        int     I;
-        Object  X;
+        int             I;
+        Object          X;
+        ML_uva          cur;
+        MercuryBitmap   bitmap;
+        Object[]        array;
 
-        if (VA.is_latest()) {
-            return VA;
+        if (is_latest()) {
+            return this;
         }
 
-        I  = VA.index;
-        X  = VA.value;
-        VA = VA.next().rewind();
-        VA.array()[I] = X;
+        /*
+        ** Rewind elements from the oldest to the newest, undoing their changes.
+        ** So that we undo elements in the correct order we use a bitmap to
+        ** ensure that we never update an array slot twice.
+        */
+        cur = this;
+        array = latest().array();
+        bitmap = new MercuryBitmap(array.length);
+        while (!cur.is_latest()) {
+            I = cur.index;
+            X = cur.value;
 
-        return VA;
+            if (!bitmap.getBit(I)) {
+                array[I] = X;
+                bitmap.setBit(I);
+            }
+
+            cur = cur.next();
+        }
+        rest = array;
+
+        /*
+         * This element is no-longer an update element.
+         */
+        index = -1;
+        value = 0;
+        return this;
     }
 }
 
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % Throw an exception indicating an array bounds error.
     %
@@ -1904,7 +2029,7 @@ out_of_bounds_error(Index, Max, PredName) :-
         [s(PredName), i(Index), i(Max)], Msg),
     throw(version_array.index_out_of_bounds(Msg)).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 version_array_to_doc(A) =
     indent([str("version_array(["), version_array_to_doc_2(0, A), str("])")]).
@@ -1926,6 +2051,6 @@ version_array_to_doc_2(I, VA) =
         ])
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 :- end_module version_array.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

@@ -19,7 +19,7 @@
 :- import_module hlds.hlds_goal.
 :- import_module hlds.hlds_data.
 :- import_module libs.globals.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.mercury_to_mercury.
 :- import_module parse_tree.prog_data.
@@ -213,6 +213,8 @@
 :- import_module hlds.hlds_rtti.
 :- import_module hlds.special_pred.
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
+:- import_module mdbcomp.prim_data.
 :- import_module parse_tree.prog_out.
 
 :- import_module assoc_list.
@@ -432,6 +434,8 @@ in_argument_to_pieces(First, SubContext, !Pieces) :-
     start_in_message_to_pieces(First, !Pieces),
     SubContext = unify_sub_context(ConsId, ArgNum),
     ArgNumStr = int_to_string(ArgNum),
+    % XXX Using cons_id_and_arity_to_string here results in the
+    % quotes being in the wrong place.
     ConsIdStr = cons_id_and_arity_to_string(ConsId),
     !:Pieces = !.Pieces ++ [words("argument"), fixed(ArgNumStr),
         words("of functor"), quote(ConsIdStr), suffix(":"), nl].
@@ -718,10 +722,10 @@ functor_cons_id_to_string(ConsId, ArgVars, VarSet, ModuleInfo, AppendVarNums)
             ++ pred_id_to_string(ModuleInfo, PredId)
             ++ ", " ++ int_to_string(ProcIdInt) ++ ")"
     ;
-        ConsId = table_io_decl(ShroudedPredProcId),
+        ConsId = table_io_entry_desc(ShroudedPredProcId),
         proc(PredId, ProcId) = unshroud_pred_proc_id(ShroudedPredProcId),
         proc_id_to_int(ProcId, ProcIdInt),
-        Str = "table_io_decl("
+        Str = "table_io_entry_desc("
             ++ pred_id_to_string(ModuleInfo, PredId)
             ++ " (mode " ++ int_to_string(ProcIdInt) ++ "))"
     ;
@@ -811,10 +815,10 @@ cons_id_and_arity_to_string(ConsId) = String :-
             "<tabling_info " ++ int_to_string(PredId) ++
             ", " ++ int_to_string(ProcId) ++ ">"
     ;
-        ConsId = table_io_decl(PredProcId),
+        ConsId = table_io_entry_desc(PredProcId),
         PredProcId = shrouded_pred_proc_id(PredId, ProcId),
         String =
-            "<table_io_decl " ++ int_to_string(PredId) ++ ", " ++
+            "<table_io_entry_desc " ++ int_to_string(PredId) ++ ", " ++
             int_to_string(ProcId) ++ ">"
     ;
         ConsId = deep_profiling_proc_layout(PredProcId),
@@ -938,10 +942,10 @@ cons_id_and_vars_or_arity_to_string(Qual, VarSet, ConsId, MaybeArgVars)
             "<tabling_info " ++ int_to_string(PredId) ++
             ", " ++ int_to_string(ProcId) ++ ">"
     ;
-        ConsId = table_io_decl(PredProcId),
+        ConsId = table_io_entry_desc(PredProcId),
         PredProcId = shrouded_pred_proc_id(PredId, ProcId),
         String =
-            "<table_io_decl " ++ int_to_string(PredId) ++ ", " ++
+            "<table_io_entry_desc " ++ int_to_string(PredId) ++ ", " ++
             int_to_string(ProcId) ++ ">"
     ;
         ConsId = deep_profiling_proc_layout(PredProcId),

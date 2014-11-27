@@ -98,7 +98,7 @@
     ;       not_reg_wrapper_proc.
 
 :- pred init_lambda_info(prog_varset::in, vartypes::in, tvarset::in,
-    inst_varset::in, rtti_varmaps::in, bool::in, pred_info::in,
+    inst_varset::in, rtti_varmaps::in, has_parallel_conj::in, pred_info::in,
     module_info::in, lambda_info::out) is det.
 
 :- pred lambda_info_get_varset(lambda_info::in, prog_varset::out) is det.
@@ -165,7 +165,7 @@
                 li_tvarset              :: tvarset,
                 li_inst_varset          :: inst_varset,
                 li_rtti_varmaps         :: rtti_varmaps,
-                li_has_parallel_conj    :: bool,
+                li_has_parallel_conj    :: has_parallel_conj,
                 li_pred_info            :: pred_info,
                 li_module_info          :: module_info,
                 % True iff we need to recompute the nonlocals.
@@ -518,7 +518,6 @@ expand_lambda(Purity, _Groundness, PredOrFunc, EvalMethod, RegWrapperProc,
             ; Target = target_il
             ; Target = target_csharp
             ; Target = target_java
-            ; Target = target_x86_64
             ),
             (
                 HighLevelCode = no,
@@ -614,37 +613,36 @@ expand_lambda(Purity, _Groundness, PredOrFunc, EvalMethod, RegWrapperProc,
         map.init(VarNameRemap),
         restrict_var_maps(AllArgVars, LambdaGoal, VarSet, LambdaVarSet,
             VarTypes, LambdaVarTypes, RttiVarMaps, LambdaRttiVarMaps),
-        proc_info_create(LambdaContext, LambdaVarSet, LambdaVarTypes,
-            AllArgVars, InstVarSet, AllArgModes, detism_decl_explicit, Detism,
-            LambdaGoal, LambdaRttiVarMaps, address_is_taken, VarNameRemap,
-            ProcInfo0),
+        some [!ProcInfo] (
+            % If the original procedure contained parallel conjunctions,
+            % then the one we are creating here may have them as well.
+            % If it does not, then the value in the proc_info of the lambda
+            % predicate will be an overconservative estimate.
+            proc_info_create(LambdaContext, LambdaVarSet, LambdaVarTypes,
+                AllArgVars, InstVarSet, AllArgModes, detism_decl_explicit,
+                Detism, LambdaGoal, LambdaRttiVarMaps, address_is_taken,
+                HasParallelConj, VarNameRemap, !:ProcInfo),
 
-        % The debugger ignores unnamed variables.
-        ensure_all_headvars_are_named(ProcInfo0, ProcInfo1),
+            % The debugger ignores unnamed variables.
+            ensure_all_headvars_are_named(!ProcInfo),
 
-        % If the original procedure contained parallel conjunctions, then the
-        % one we are creating here may have them as well. If it does not, then
-        % the value in the proc_info of the lambda predicate will be an
-        % overconservative estimate.
-        proc_info_set_has_parallel_conj(HasParallelConj, ProcInfo1, ProcInfo2),
-
-        % If we previously already needed to recompute the nonlocals,
-        % then we had better apply that recomputation for the procedure
-        % that we just created.
-        (
-            MustRecomputeNonLocals0 = yes,
-            requantify_proc_general(ordinary_nonlocals_maybe_lambda,
-                ProcInfo2, ProcInfo3)
-        ;
-            MustRecomputeNonLocals0 = no,
-            ProcInfo3 = ProcInfo2
-        ),
-        (
-            RegWrapperProc = reg_wrapper_proc(RegR_HeadVars),
-            proc_info_set_reg_r_headvars(RegR_HeadVars, ProcInfo3, ProcInfo)
-        ;
-            RegWrapperProc = not_reg_wrapper_proc,
-            ProcInfo = ProcInfo3
+            % If we previously already needed to recompute the nonlocals,
+            % then we had better apply that recomputation for the procedure
+            % that we just created.
+            (
+                MustRecomputeNonLocals0 = yes,
+                requantify_proc_general(ordinary_nonlocals_maybe_lambda,
+                    !ProcInfo)
+            ;
+                MustRecomputeNonLocals0 = no
+            ),
+            (
+                RegWrapperProc = reg_wrapper_proc(RegR_HeadVars),
+                proc_info_set_reg_r_headvars(RegR_HeadVars, !ProcInfo)
+            ;
+                RegWrapperProc = not_reg_wrapper_proc
+            ),
+            ProcInfo = !.ProcInfo
         ),
         set.init(Assertions),
         pred_info_create(ModuleName, PredName, PredOrFunc, LambdaContext,
@@ -661,7 +659,7 @@ expand_lambda(Purity, _Groundness, PredOrFunc, EvalMethod, RegWrapperProc,
     ),
     ShroudedPredProcId = shroud_pred_proc_id(proc(PredId, ProcId)),
     ConsId = closure_cons(ShroudedPredProcId, EvalMethod),
-    Functor = rhs_functor(ConsId, no, ArgVars),
+    Functor = rhs_functor(ConsId, is_not_exist_constr, ArgVars),
 
     Unification = construct(Var, ConsId, ArgVars, UniModes,
         construct_dynamically, cell_is_unique, no_construct_sub_info),
@@ -859,6 +857,7 @@ find_used_vars_in_goal(Goal, !VarUses) :-
         ;
             ( Reason = require_detism(_)
             ; Reason = require_complete_switch(_)
+            ; Reason = require_switch_arms_detism(_, _)
             ),
             % These scopes should have been deleted by now.
             unexpected($module, $pred, "unexpected scope")

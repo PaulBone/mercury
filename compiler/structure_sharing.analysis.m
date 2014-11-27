@@ -66,6 +66,8 @@
 :- implementation.
 
 :- import_module check_hlds.simplify.
+:- import_module check_hlds.simplify.simplify_proc.
+:- import_module check_hlds.simplify.simplify_tasks.
 :- import_module hlds.hlds_goal.
 :- import_module hlds.hlds_out.
 :- import_module hlds.hlds_out.hlds_out_util.
@@ -74,7 +76,9 @@
 :- import_module libs.globals.
 :- import_module libs.options.
 :- import_module ll_backend.liveness.
+:- import_module mdbcomp.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.file_names.
 :- import_module parse_tree.mercury_to_mercury.
@@ -353,9 +357,9 @@ simplify_and_detect_liveness_proc(PredProcId, !ProcInfo, !ModuleInfo) :-
     % Liveness annotation expects the procedure to have been simplified.
     % For example, an if-then-else with an `erroneous' condition will cause
     % an assertion failure if it is not simplified away.
-    Simplifications = list_to_simplifications([]),
+    SimplifyTasks = list_to_simplify_tasks([]),
     PredProcId = proc(PredId, ProcId),
-    simplify_proc(Simplifications, PredId, ProcId, !ModuleInfo, !ProcInfo),
+    simplify_proc(SimplifyTasks, PredId, ProcId, !ModuleInfo, !ProcInfo),
     detect_liveness_proc(!.ModuleInfo, PredProcId, !ProcInfo).
 
 %-----------------------------------------------------------------------------%

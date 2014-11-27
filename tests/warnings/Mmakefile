@@ -15,6 +15,7 @@ COMPILE_PROGS=	\
 ERRORCHECK_PROGS= \
 	ambiguous_overloading \
 	bug257 \
+    bug311 \
 	det_infer_warning \
 	double_underscore \
 	duplicate_call \
@@ -33,6 +34,7 @@ ERRORCHECK_PROGS= \
 	state_vars_test \
 	table_with_inline \
 	unify_f_g \
+	unify_x_f_x \
 	unused_args_test \
 	unused_import \
 	unused_interface_import \

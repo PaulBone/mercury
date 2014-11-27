@@ -1,10 +1,10 @@
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % vim: ft=mercury ts=4 sw=4 et wm=0 tw=0
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % Copyright (C) 1994-1997, 2000-2008, 2010-2011 The University of Melbourne.
 % This file may only be copied under the terms of the GNU Library General
 % Public License - see the file COPYING.LIB in the Mercury distribution.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % 
 % File: store.m.
 % Main author: fjh.
@@ -25,33 +25,33 @@
 % reference one at a time (presuming the reference refers to a structured
 % term).
 % 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module store.
 :- interface.
 
 :- import_module io.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % Stores and keys are indexed by a type S of typeclass store(S) that
     % is used to distinguish between different stores.  By using an
-    % existential type declaration for store.new (see below), we use the
+    % existential type declaration for `init'/1 (see below), we use the
     % type system to ensure at compile time that you never attempt to use
     % a key from one store to access a different store.
     %
 :- typeclass store(T) where [].
 :- type store(S).
 
-:- instance store(io.state).
+:- instance store(io).
 :- instance store(store(S)).
 
     % Initialize a new store.
     %
-:- some [S] pred store.init(store(S)::uo) is det.
+:- some [S] pred init(store(S)::uo) is det.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Mutvars
 %
@@ -59,30 +59,35 @@
     % generic_mutvar(T, S):
     % A mutable variable holding a value of type T in store S.
     %
+    % The mutable variable interface is inherently not thread-safe.
+    % It is the programmer's responsibility to synchronise accesses to a
+    % mutable variable from multiple threads where that is possible,
+    % namely variables attached to the I/O state.
+    %
 :- type generic_mutvar(T, S).
-:- type io_mutvar(T) == generic_mutvar(T, io.state).
+:- type io_mutvar(T) == generic_mutvar(T, io).
 :- type store_mutvar(T, S) == generic_mutvar(T, store(S)).
 
     % Create a new mutable variable, initialized with the specified value.
     %
-:- pred store.new_mutvar(T::in, generic_mutvar(T, S)::out, S::di, S::uo)
+:- pred new_mutvar(T::in, generic_mutvar(T, S)::out, S::di, S::uo)
     is det <= store(S).
 
     % copy_mutvar(OldMutvar, NewMutvar, S0, S) is equivalent to the sequence
     %   get_mutvar(OldMutvar, Value, S0, S1),
     %   new_mutvar(NewMutvar, Value, S1, S )
     %
-:- pred store.copy_mutvar(generic_mutvar(T, S)::in, generic_mutvar(T, S)::out,
+:- pred copy_mutvar(generic_mutvar(T, S)::in, generic_mutvar(T, S)::out,
     S::di, S::uo) is det <= store(S).
 
     % Lookup the value stored in a given mutable variable.
     %
-:- pred store.get_mutvar(generic_mutvar(T, S)::in, T::out,
+:- pred get_mutvar(generic_mutvar(T, S)::in, T::out,
     S::di, S::uo) is det <= store(S).
 
     % Replace the value stored in a given mutable variable.
     %
-:- pred store.set_mutvar(generic_mutvar(T, S)::in, T::in,
+:- pred set_mutvar(generic_mutvar(T, S)::in, T::in,
     S::di, S::uo) is det <= store(S).
 
     % new_cyclic_mutvar(Func, Mutvar):
@@ -104,13 +109,13 @@
     %       store(S)::di, store(S)::uo) is det.
     %
     %   init_cl(X, CList, !Store) :-
-    %       store.new_cyclic_mutvar(func(CL) = node(X, CL), CList,
+    %       new_cyclic_mutvar(func(CL) = node(X, CL), CList,
     %       !Store).
     %
-:- pred store.new_cyclic_mutvar((func(generic_mutvar(T, S)) = T)::in,
+:- pred new_cyclic_mutvar((func(generic_mutvar(T, S)) = T)::in,
     generic_mutvar(T, S)::out, S::di, S::uo) is det <= store(S).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % References
 %
@@ -119,8 +124,13 @@
     %
     % A reference to value of type T in store S.
     %
+    % The reference interface is inherently not thread-safe.
+    % It is the programmer's responsibility to synchronise accesses to a
+    % reference from multiple threads where that is possible,
+    % namely references attached to the I/O state.
+    %
 :- type generic_ref(T, S).
-:- type io_ref(T, S) == generic_ref(T, io.state).
+:- type io_ref(T, S) == generic_ref(T, io).
 :- type store_ref(T, S) == generic_ref(T, store(S)).
 
     % new_ref(Val, Ref):
@@ -133,7 +143,7 @@
     % It does however allocate one cell to hold the reference;
     % you can use new_arg_ref to avoid that.)
     %
-:- pred store.new_ref(T::di, generic_ref(T, S)::out,
+:- pred new_ref(T::di, generic_ref(T, S)::out,
     S::di, S::uo) is det <= store(S).
 
     % ref_functor(Ref, Functor, Arity):
@@ -141,7 +151,7 @@
     % Given a reference to a term, return the functor and arity
     % of that term.
     %
-:- pred store.ref_functor(generic_ref(T, S)::in, string::out, int::out,
+:- pred ref_functor(generic_ref(T, S)::in, string::out, int::out,
     S::di, S::uo) is det <= store(S).
 
     % arg_ref(Ref, ArgNum, ArgRef):
@@ -153,7 +163,7 @@
     % It is an error if the argument number is out of range,
     % or if the argument reference has the wrong type.
     %
-:- pred store.arg_ref(generic_ref(T, S)::in, int::in,
+:- pred arg_ref(generic_ref(T, S)::in, int::in,
     generic_ref(ArgT, S)::out, S::di, S::uo) is det <= store(S).
 
     % new_arg_ref(Val, ArgNum, ArgRef):
@@ -164,7 +174,7 @@
     % It is an error if the argument number is out of range,
     % or if the argument reference has the wrong type.
     %
-:- pred store.new_arg_ref(T::di, int::in, generic_ref(ArgT, S)::out,
+:- pred new_arg_ref(T::di, int::in, generic_ref(ArgT, S)::out,
     S::di, S::uo) is det <= store(S).
 
     % set_ref(Ref, ValueRef):
@@ -175,7 +185,7 @@
     % update the store so that the term referred to by Ref
     % is replaced with the term referenced by ValueRef.
     %
-:- pred store.set_ref(generic_ref(T, S)::in, generic_ref(T, S)::in,
+:- pred set_ref(generic_ref(T, S)::in, generic_ref(T, S)::in,
     S::di, S::uo) is det <= store(S).
 
     % set_ref_value(Ref, Value):
@@ -185,7 +195,7 @@
     % update the store so that the term referred to by Ref
     % is replaced with Value.
     %
-:- pred store.set_ref_value(generic_ref(T, S)::in, T::di,
+:- pred set_ref_value(generic_ref(T, S)::in, T::di,
     S::di, S::uo) is det <= store(S).
 
     % Given a reference to a term, return that term.
@@ -194,15 +204,15 @@
     % is most efficient with atomic terms.
     % XXX current implementation buggy (does shallow copy)
     %
-:- pred store.copy_ref_value(generic_ref(T, S)::in, T::uo,
+:- pred copy_ref_value(generic_ref(T, S)::in, T::uo,
     S::di, S::uo) is det <= store(S).
 
     % Same as above, but without making a copy. Destroys the store.
     %
-:- pred store.extract_ref_value(S::di, generic_ref(T, S)::in, T::out)
+:- pred extract_ref_value(S::di, generic_ref(T, S)::in, T::out)
     is det <= store(S).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Nasty performance hacks
 %
@@ -226,14 +236,14 @@
     % or if the argument uses a packed representation,
     % then the behaviour is undefined, and probably harmful.
 
-:- pred store.unsafe_arg_ref(generic_ref(T, S)::in, int::in,
+:- pred unsafe_arg_ref(generic_ref(T, S)::in, int::in,
     generic_ref(ArgT, S)::out, S::di, S::uo) is det <= store(S).
 
-:- pred store.unsafe_new_arg_ref(T::di, int::in, generic_ref(ArgT, S)::out,
+:- pred unsafe_new_arg_ref(T::di, int::in, generic_ref(ArgT, S)::out,
     S::di, S::uo) is det <= store(S).
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
@@ -241,7 +251,7 @@
 :- import_module require.
 
 :- instance store(store(S)) where [].
-:- instance store(io.state) where [].
+:- instance store(io) where [].
 
 % The store type itself is just a dummy type,
 % with no real representation.
@@ -281,25 +291,25 @@ store.init(S) :-
 
 :- pragma foreign_proc("C",
     store.do_init(_S0::uo),
-    [will_not_call_mercury, promise_pure, will_not_modify_trail],
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail],
 "
     TypeInfo_for_S = 0;
 ").
 :- pragma foreign_proc("C#",
     store.do_init(_S0::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     TypeInfo_for_S = null;
 ").
 :- pragma foreign_proc("Java",
     store.do_init(_S0::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     TypeInfo_for_S = null;
 ").
 :- pragma foreign_proc("Erlang",
     store.do_init(_S0::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     TypeInfo_for_S = 'XXX'
 ").
@@ -321,7 +331,7 @@ store.init(S) :-
 
 :- pragma foreign_proc("C",
     new_mutvar(Val::in, Mutvar::out, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure, will_not_modify_trail],
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail],
 "
     MR_offset_incr_hp_msg(Mutvar, MR_SIZE_SLOT_SIZE, MR_SIZE_SLOT_SIZE + 1,
         MR_ALLOC_ID, ""store.mutvar/2"");
@@ -332,7 +342,7 @@ store.init(S) :-
 
 :- pragma foreign_proc("C",
     get_mutvar(Mutvar::in, Val::out, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure, will_not_modify_trail],
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail],
 "
     Val = * (MR_Word *) Mutvar;
     S = S0;
@@ -340,7 +350,7 @@ store.init(S) :-
 
 :- pragma foreign_proc("C",
     set_mutvar(Mutvar::in, Val::in, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure, will_not_modify_trail],
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail],
 "
     * (MR_Word *) Mutvar = Val;
     S = S0;
@@ -350,21 +360,21 @@ store.init(S) :-
 
 :- pragma foreign_proc("C#",
     new_mutvar(Val::in, Mutvar::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Mutvar = new object[] { Val };
 ").
 
 :- pragma foreign_proc("C#",
     get_mutvar(Mutvar::in, Val::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Val = Mutvar[0];
 ").
 
 :- pragma foreign_proc("C#",
     set_mutvar(Mutvar::in, Val::in, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Mutvar[0] = Val;
 ").
@@ -373,21 +383,21 @@ store.init(S) :-
 
 :- pragma foreign_proc("Java",
     new_mutvar(Val::in, Mutvar::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Mutvar = new mutvar.Mutvar(Val);
 ").
 
 :- pragma foreign_proc("Java",
     get_mutvar(Mutvar::in, Val::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Val = Mutvar.object;
 ").
 
 :- pragma foreign_proc("Java",
     set_mutvar(Mutvar::in, Val::in, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Mutvar.object = Val;
 ").
@@ -399,7 +409,7 @@ store.init(S) :-
 
 :- pragma foreign_proc("Erlang",
     new_mutvar(Val::in, Mutvar::out, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Mutvar = ets:new(mutvar, [set, public]),
     ets:insert(Mutvar, {value, Val}),
@@ -408,7 +418,7 @@ store.init(S) :-
 
 :- pragma foreign_proc("Erlang",
     get_mutvar(Mutvar::in, Val::out, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     [{value, Val}] = ets:lookup(Mutvar, value),
     S = S0
@@ -416,7 +426,7 @@ store.init(S) :-
 
 :- pragma foreign_proc("Erlang",
     set_mutvar(Mutvar::in, Val::in, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     ets:insert(Mutvar, {value, Val}),
     S = S0
@@ -431,7 +441,7 @@ copy_mutvar(Mutvar, Copy, !S) :-
 
 :- pragma foreign_proc("C",
     unsafe_new_uninitialized_mutvar(Mutvar::out, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure, will_not_modify_trail],
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail],
 "
     MR_offset_incr_hp_msg(Mutvar, MR_SIZE_SLOT_SIZE, MR_SIZE_SLOT_SIZE + 1,
         MR_ALLOC_ID, ""store.mutvar/2"");
@@ -441,14 +451,14 @@ copy_mutvar(Mutvar, Copy, !S) :-
 
 :- pragma foreign_proc("C#",
     unsafe_new_uninitialized_mutvar(Mutvar::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Mutvar = new object[1];
 ").
 
 :- pragma foreign_proc("Java",
     unsafe_new_uninitialized_mutvar(Mutvar::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Mutvar = new mutvar.Mutvar();
 ").
@@ -458,7 +468,7 @@ store.new_cyclic_mutvar(Func, MutVar, !Store) :-
     Value = apply(Func, MutVar),
     store.set_mutvar(MutVar, Value, !Store).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma foreign_type("C#", generic_ref(T, S), "store.Ref").
 :- pragma foreign_code("C#",
@@ -588,7 +598,7 @@ store.new_cyclic_mutvar(Func, MutVar, !Store) :-
 
 :- pragma foreign_proc("C",
     new_ref(Val::di, Ref::out, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure, will_not_modify_trail],
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail],
 "
     MR_offset_incr_hp_msg(Ref, MR_SIZE_SLOT_SIZE, MR_SIZE_SLOT_SIZE + 1,
         MR_ALLOC_ID, ""store.ref/2"");
@@ -599,21 +609,21 @@ store.new_cyclic_mutvar(Func, MutVar, !Store) :-
 
 :- pragma foreign_proc("C#",
     new_ref(Val::di, Ref::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Ref = new store.Ref(Val);
 ").
 
 :- pragma foreign_proc("Java",
     new_ref(Val::di, Ref::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Ref = new store.Ref(Val);
 ").
 
 :- pragma foreign_proc("Erlang",
     new_ref(Val::di, Ref::out, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Ref = ets:new(mutvar, [set, public]),
     ets:insert(Ref, {value, Val}),
@@ -633,7 +643,7 @@ copy_ref_value(Ref, Val) -->
 
 :- pragma foreign_proc("C",
     unsafe_ref_value(Ref::in, Val::uo, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure, will_not_modify_trail],
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail],
 "
     Val = * (MR_Word *) Ref;
     S = S0;
@@ -641,21 +651,21 @@ copy_ref_value(Ref, Val) -->
 
 :- pragma foreign_proc("C#",
     unsafe_ref_value(Ref::in, Val::uo, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Val = Ref.getValue();
 ").
 
 :- pragma foreign_proc("Java",
     unsafe_ref_value(Ref::in, Val::uo, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Val = Ref.getValue();
 ").
 
 :- pragma foreign_proc("Erlang",
     unsafe_ref_value(Ref::in, Val::uo, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     [{value, Val}] = ets:lookup(Ref, value),
     S = S0
@@ -675,7 +685,7 @@ ref_functor(Ref, Functor, Arity, !Store) :-
 
 :- pragma foreign_proc("C",
     arg_ref(Ref::in, ArgNum::in, ArgRef::out, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure, may_not_duplicate],
+    [will_not_call_mercury, promise_pure, thread_safe, may_not_duplicate],
 "{
     MR_TypeInfo         type_info;
     MR_TypeInfo         arg_type_info;
@@ -715,7 +725,7 @@ ref_functor(Ref, Functor, Arity, !Store) :-
 
 :- pragma foreign_proc("C#",
     arg_ref(Ref::in, ArgNum::in, ArgRef::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     /*
     ** XXX Some dynamic type-checking should be done here to check that
@@ -728,7 +738,7 @@ ref_functor(Ref, Functor, Arity, !Store) :-
 
 :- pragma foreign_proc("Java",
     arg_ref(Ref::in, ArgNum::in, ArgRef::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     /*
     ** XXX Some dynamic type-checking should be done here to check that
@@ -741,7 +751,7 @@ ref_functor(Ref, Functor, Arity, !Store) :-
 
 :- pragma foreign_proc("C",
     new_arg_ref(Val::di, ArgNum::in, ArgRef::out, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure, may_not_duplicate],
+    [will_not_call_mercury, promise_pure, thread_safe, may_not_duplicate],
 "{
     MR_TypeInfo         type_info;
     MR_TypeInfo         arg_type_info;
@@ -793,7 +803,7 @@ ref_functor(Ref, Functor, Arity, !Store) :-
 
 :- pragma foreign_proc("C#",
     new_arg_ref(Val::di, ArgNum::in, ArgRef::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     /*
     ** XXX Some dynamic type-checking should be done here to check that
@@ -806,7 +816,7 @@ ref_functor(Ref, Functor, Arity, !Store) :-
 
 :- pragma foreign_proc("Java",
     new_arg_ref(Val::di, ArgNum::in, ArgRef::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     /*
     ** XXX Some dynamic type-checking should be done here to check that
@@ -819,7 +829,7 @@ ref_functor(Ref, Functor, Arity, !Store) :-
 
 :- pragma foreign_proc("C",
     set_ref(Ref::in, ValRef::in, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     * (MR_Word *) Ref = * (MR_Word *) ValRef;
     S = S0;
@@ -827,21 +837,21 @@ ref_functor(Ref, Functor, Arity, !Store) :-
 
 :- pragma foreign_proc("C#",
     set_ref(Ref::in, ValRef::in, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Ref.setValue(ValRef.getValue());
 ").
 
 :- pragma foreign_proc("Java",
     set_ref(Ref::in, ValRef::in, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Ref.setValue(ValRef.getValue());
 ").
 
 :- pragma foreign_proc("C",
     set_ref_value(Ref::in, Val::di, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     * (MR_Word *) Ref = Val;
     S = S0;
@@ -849,37 +859,37 @@ ref_functor(Ref, Functor, Arity, !Store) :-
 
 :- pragma foreign_proc("Java",
     set_ref_value(Ref::in, Val::di, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Ref.setValue(Val);
 ").
 
 :- pragma foreign_proc("C",
     extract_ref_value(_S::di, Ref::in, Val::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Val = * (MR_Word *) Ref;
 ").
 
 :- pragma foreign_proc("C#",
     extract_ref_value(_S::di, Ref::in, Val::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Val = Ref.getValue();
 ").
 
 :- pragma foreign_proc("Java",
     extract_ref_value(_S::di, Ref::in, Val::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Val = Ref.getValue();
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma foreign_proc("C",
     unsafe_arg_ref(Ref::in, Arg::in, ArgRef::out, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "{
     /* unsafe - does not check type & arity, won't handle no_tag types */
     MR_Word *Ptr;
@@ -891,21 +901,21 @@ ref_functor(Ref, Functor, Arity, !Store) :-
 
 :- pragma foreign_proc("C#",
     unsafe_arg_ref(Ref::in, Arg::in, ArgRef::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     ArgRef = new store.Ref(Ref.getValue(), Arg);
 ").
 
 :- pragma foreign_proc("Java",
     unsafe_arg_ref(Ref::in, Arg::in, ArgRef::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     ArgRef = new store.Ref(Ref.getValue(), Arg);
 ").
 
 :- pragma foreign_proc("C",
     unsafe_new_arg_ref(Val::di, Arg::in, ArgRef::out, S0::di, S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "{
     /* unsafe - does not check type & arity, won't handle no_tag types */
     MR_Word *Ptr;
@@ -917,14 +927,14 @@ ref_functor(Ref, Functor, Arity, !Store) :-
 
 :- pragma foreign_proc("C#",
     unsafe_new_arg_ref(Val::di, Arg::in, ArgRef::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     ArgRef = new store.Ref(Val, Arg);
 ").
 
 :- pragma foreign_proc("Java",
     unsafe_new_arg_ref(Val::di, Arg::in, ArgRef::out, _S0::di, _S::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     ArgRef = new store.Ref(Val, Arg);
 ").

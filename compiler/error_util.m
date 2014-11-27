@@ -39,6 +39,7 @@
 :- import_module libs.globals.
 :- import_module libs.options.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 
 :- import_module bool.
@@ -133,14 +134,15 @@
 % When we print an error message in a list of error messages, we normally
 % treat the first line of the first message differently than the rest:
 % we separate it from the context by one space, whereas following lines
-% are separate by three spaces. You can request that the first line of
+% are separated by three spaces. You can request that the first line of
 % a message be treated as it were the first by setting the error_treat_as_first
 % field to "treat_as_first". You can also request that the pieces in a message
 % be given extra indentation by setting the error_extra_indent field
 % to a nonzero value.
 %
 % The term simple_msg(Context, Components) is a shorthand for (and equivalent
-% in every respect to) the term error_msg(yes(Context), no, 0, Components).
+% in every respect to) the term error_msg(yes(Context), do_not_treat_as_first,
+% 0, Components).
 
 :- type maybe_treat_as_first
     --->    treat_as_first
@@ -326,6 +328,13 @@
     ;       simple_call(simple_call_id)
             % Output the identity of the given call.
 
+    ;       decl(string)
+            % Prefix the string with ":- ", surround with single quotes
+            % and then treat as fixed.
+
+    ;       pragma_decl(string)
+            % As above but prefix the string with ":- pragma ".
+
     ;       nl
             % Insert a line break if there has been text output since
             % the last line break.
@@ -347,6 +356,10 @@
     % separated by commas, with the last two elements separated by `and'.
     %
 :- func list_to_pieces(list(string)) = list(format_component).
+
+    % As above, but surround each string by `' quotes.
+    %
+:- func list_to_quoted_pieces(list(string)) = list(format_component).
 
     % Convert a list of lists of format_components into a list of
     % format_components separated by commas, with the last two elements
@@ -887,6 +900,12 @@ list_to_pieces([Elem1, Elem2]) = [fixed(Elem1), words("and"), fixed(Elem2)].
 list_to_pieces([Elem1, Elem2, Elem3 | Elems]) =
     [fixed(Elem1 ++ ",") | list_to_pieces([Elem2, Elem3 | Elems])].
 
+list_to_quoted_pieces([]) = [].
+list_to_quoted_pieces([Elem]) = [quote(Elem)].
+list_to_quoted_pieces([Elem1, Elem2]) = [quote(Elem1), words("and"), quote(Elem2)].
+list_to_quoted_pieces([Elem1, Elem2, Elem3 | Elems]) =
+    [quote(Elem1), suffix(",") | list_to_quoted_pieces([Elem2, Elem3 | Elems])].
+
 component_lists_to_pieces([]) = [].
 component_lists_to_pieces([Comps]) = Comps.
 component_lists_to_pieces([Comps1, Comps2]) =
@@ -1084,6 +1103,14 @@ error_pieces_to_string_2(FirstInMsg, [Component | Components]) = Str :-
         Word = simple_call_id_to_string(SimpleCallId),
         Str = join_string_and_tail(Word, Components, TailStr)
     ;
+        Component = decl(Decl),
+        Word = add_quotes(":- " ++ Decl),
+        Str = join_string_and_tail(Word, Components, TailStr)
+    ;
+        Component = pragma_decl(PragmaName),
+        Word = add_quotes(":- pragma " ++ PragmaName),
+        Str = join_string_and_tail(Word, Components, TailStr)
+    ;
         Component = top_ctor_of_type(Type),
         ( type_to_ctor(Type, TypeCtor) ->
             TypeCtor = type_ctor(TypeCtorName, TypeCtorArity),
@@ -1091,7 +1118,7 @@ error_pieces_to_string_2(FirstInMsg, [Component | Components]) = Str :-
             Word = sym_name_and_arity_to_word(SymName),
             Str = join_string_and_tail(Word, Components, TailStr)
         ;
-            error("error_pieces_to_string: type is variable")
+            unexpected($file, $pred, "type is variable")
         )
     ;
         Component = nl,
@@ -1212,7 +1239,7 @@ convert_components_to_paragraphs_acc(FirstInMsg, [Component | Components],
             NewWord = plain_word(sym_name_and_arity_to_word(SymName)),
             RevWords1 = [NewWord | RevWords0]
         ;
-            error("convert_components_to_paragraphs_acc: type is variable")
+            unexpected($file, $pred, "type is variable")
         )
     ;
         Component = p_or_f(PredOrFunc),
@@ -1222,6 +1249,14 @@ convert_components_to_paragraphs_acc(FirstInMsg, [Component | Components],
         Component = simple_call(SimpleCallId),
         WordsStr = simple_call_id_to_string(SimpleCallId),
         break_into_words(WordsStr, RevWords0, RevWords1)
+    ;
+        Component = decl(DeclName),
+        Word = add_quotes(":- " ++ DeclName),
+        RevWords1 = [plain_word(Word) | RevWords0]
+    ;
+        Component = pragma_decl(PragmaName),
+        Word = add_quotes(":- pragma " ++ PragmaName),
+        RevWords1 = [plain_word(Word) | RevWords0]
     ;
         Component = nl,
         Strings = rev_words_to_strings(RevWords0),
@@ -1341,12 +1376,12 @@ lower_initial(Str0) = Str :-
 :- func sym_name_to_word(sym_name) = string.
 
 sym_name_to_word(SymName) =
-    "`" ++ sym_name_to_string(SymName) ++ "'".
+    add_quotes(sym_name_to_string(SymName)).
 
 :- func sym_name_and_arity_to_word(sym_name_and_arity) = string.
 
 sym_name_and_arity_to_word(SymName / Arity) =
-    "`" ++ sym_name_to_string(SymName) ++ "'" ++ "/" ++ int_to_string(Arity).
+    add_quotes(sym_name_to_string(SymName)) ++ "/" ++ int_to_string(Arity).
 
 :- pred break_into_words(string::in, list(word)::in, list(word)::out) is det.
 

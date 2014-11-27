@@ -112,6 +112,7 @@
 :- import_module hlds.hlds_pred.
 :- import_module hlds.hlds_rtti.
 :- import_module hlds.instmap.
+:- import_module hlds.make_goal.
 :- import_module hlds.passes_aux.
 :- import_module hlds.pred_table.
 :- import_module hlds.special_pred.
@@ -119,8 +120,10 @@
 :- import_module libs.globals.
 :- import_module libs.options.
 :- import_module mdbcomp.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.goal_path.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.mercury_to_mercury.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.file_names.         % undesirable dependency
@@ -332,8 +335,8 @@ typecheck_report_max_iterations_exceeded(MaxIterations) = Spec :-
         words("You should declare the types explicitly."),
         words("(The current limit is"), int_fixed(MaxIterations),
         words("iterations."),
-        words("You can use the `--type-inference-iteration-limit' option"),
-        words("to increase the limit).")],
+        words("You can use the"), quote("--type-inference-iteration-limit"),
+        words("option to increase the limit).")],
     Msg = error_msg(no, do_not_treat_as_first, 0, [always(Pieces)]),
     Spec = error_spec(severity_error, phase_type_check, [Msg]).
 
@@ -1030,7 +1033,7 @@ maybe_add_field_access_function_clause(ModuleInfo, !PredInfo) :-
         adjust_func_arity(pf_function, FuncArity, PredArity),
         FuncSymName = qualified(FuncModule, FuncName),
         FuncConsId = cons(FuncSymName, FuncArity, cons_id_dummy_type_ctor),
-        FuncRHS = rhs_functor(FuncConsId, no, FuncArgs),
+        FuncRHS = rhs_functor(FuncConsId, is_not_exist_constr, FuncArgs),
         create_pure_atomic_complicated_unification(FuncRetVal,
             FuncRHS, Context, umc_explicit, [], Goal0),
         Goal0 = hlds_goal(GoalExpr, GoalInfo0),
@@ -1303,6 +1306,7 @@ typecheck_goal_2(GoalExpr0, GoalExpr, GoalInfo, !Info) :-
             ( Reason = promise_purity(_)
             ; Reason = require_detism(_)
             ; Reason = require_complete_switch(_)
+            ; Reason = require_switch_arms_detism(_, _)
             ; Reason = commit(_)
             ; Reason = barrier(_)
             ; Reason = from_ground_term(_, _)
@@ -2764,7 +2768,7 @@ builtin_field_access_function_type(Info, GoalId, ConsId, Arity,
 
 :- pred make_field_access_function_cons_type_info(typecheck_info::in,
     goal_id::in, sym_name::in, arity::in, field_access_type::in,
-    ctor_field_name::in, hlds_ctor_field_defn::in,
+    sym_name::in, hlds_ctor_field_defn::in,
     maybe_cons_type_info::out) is semidet.
 
 make_field_access_function_cons_type_info(Info, GoalId, FuncName, Arity,
@@ -2827,7 +2831,7 @@ get_field_access_constructor(Info, GoalId, FuncName, Arity, AccessType,
     ;       error(cons_error).
 
 :- pred convert_field_access_cons_type_info(class_table::in,
-    field_access_type::in, ctor_field_name::in, hlds_ctor_field_defn::in,
+    field_access_type::in, sym_name::in, hlds_ctor_field_defn::in,
     cons_type_info::in, existq_tvars::in, maybe_cons_type_info::out) is det.
 
 convert_field_access_cons_type_info(ClassTable, AccessType, FieldName,
@@ -2912,7 +2916,7 @@ convert_field_access_cons_type_info(ClassTable, AccessType, FieldName,
                     set.list_to_set(OrigExistTVars)
                 ),
                 ExistQVarsInFieldAndOthers),
-            ( set.empty(ExistQVarsInFieldAndOthers) ->
+            ( set.is_empty(ExistQVarsInFieldAndOthers) ->
                 % Rename apart type variables occurring only in the field
                 % to be replaced - the values of those type variables will be
                 % supplied by the replacement field value.
@@ -2984,7 +2988,7 @@ project_constraint(CallTVars, Constraint) :-
     type_vars_list(TypesToCheck, TVarsToCheck0),
     set.list_to_set(TVarsToCheck0, TVarsToCheck),
     set.intersect(TVarsToCheck, CallTVars, RelevantTVars),
-    \+ set.empty(RelevantTVars).
+    set.is_non_empty(RelevantTVars).
 
 :- pred rename_constraint(tvar_renaming::in, hlds_constraint::in,
     hlds_constraint::out) is semidet.

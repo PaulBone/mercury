@@ -218,7 +218,6 @@ mlds_backend(!HLDS, !:MLDS, !DumpInfo, !IO) :-
         ; GC = gc_boehm
         ; GC = gc_boehm_debug
         ; GC = gc_hgc
-        ; GC = gc_mps
         )
     ),
     maybe_report_stats(Stats, !IO),
@@ -304,7 +303,6 @@ maybe_add_trail_ops(Verbose, Stats, !HLDS, !IO) :-
             ( Target = target_il
             ; Target = target_csharp
             ; Target = target_java
-            ; Target = target_x86_64
             ; Target = target_erlang
             ),
             GenerateInline = no

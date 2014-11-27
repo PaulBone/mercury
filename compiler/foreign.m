@@ -5,17 +5,17 @@
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %-----------------------------------------------------------------------------%
-% 
+%
 % File: foreign.m.
 % Main authors: trd, dgj.
-% 
+%
 % This module defines predicates for interfacing with foreign languages.  In
 % particular, this module supports interfacing with languages other than the
 % target of compilation.
-% 
+%
 % Parts of this code were originally written by dgj, and have since been moved
 % here.
-% 
+%
 %-----------------------------------------------------------------------------%
 
 :- module backend_libs.foreign.
@@ -27,6 +27,7 @@
 :- import_module libs.globals.
 :- import_module mdbcomp.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_foreign.
@@ -391,8 +392,6 @@ have_foreign_type_for_backend(target_csharp, ForeignTypeBody,
         ( ForeignTypeBody ^ csharp = yes(_) -> yes ; no )).
 have_foreign_type_for_backend(target_erlang, ForeignTypeBody,
         ( ForeignTypeBody ^ erlang = yes(_) -> yes ; no )).
-have_foreign_type_for_backend(target_x86_64, ForeignTypeBody, Result) :-
-    have_foreign_type_for_backend(target_c, ForeignTypeBody, Result).
 
 :- type exported_type
     --->    exported_type_foreign(sym_name, list(foreign_type_assertion))
@@ -497,17 +496,6 @@ foreign_type_body_to_exported_type(ModuleInfo, ForeignTypeBody, Name,
         ;
             MaybeErlang = no,
             unexpected($module, $pred, "no Erlang type")
-        )
-    ;
-        Target = target_x86_64,
-        (
-            MaybeC = yes(Data),
-            Data = foreign_type_lang_data(c_type(NameStr), MaybeUserEqComp,
-                Assertions),
-            Name = unqualified(NameStr)
-        ;
-            MaybeC = no,
-            unexpected($module, $pred, "no C type")
         )
     ).
 

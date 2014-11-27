@@ -108,7 +108,8 @@
 
 :- implementation.
 
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.builtin_modules.
+:- import_module mdbcomp.sym_name.
 
 :- import_module list.
 :- import_module map.
@@ -277,4 +278,6 @@ stm_dummy_output_functor = cons(Name, 0, TypeCtor) :-
     Name = qualified(mercury_stm_builtin_module, "stm_dummy_output"),
     TypeCtor = stm_dummy_output_type_ctor.
 
+%-----------------------------------------------------------------------------%
+:- end_module parse_tree.builtin_lib_types.
 %-----------------------------------------------------------------------------%

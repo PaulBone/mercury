@@ -5,10 +5,10 @@
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %---------------------------------------------------------------------------%
-% 
+%
 % File: type_ctor_info.m.
 % Authors: zs, trd.
-% 
+%
 % This module is responsible for the generation of the static type_ctor_info
 % structures of the types defined by the current module. This includes the
 % RTTI data structures that describe the representation of each type.
@@ -30,7 +30,7 @@
 % The documentation of the data structures built in this module is in
 % runtime/mercury_type_info.h; that file also contains a list of all
 % the files that depend on these data structures.
-% 
+%
 %---------------------------------------------------------------------------%
 
 :- module backend_libs.type_ctor_info.
@@ -79,7 +79,9 @@
 :- import_module libs.globals.
 :- import_module libs.options.
 :- import_module mdbcomp.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_type.
@@ -645,7 +647,7 @@ make_enum_maps(EnumFunctor, !ValueMap, !NameMap) :-
     map.det_insert(FunctorName, EnumFunctor, !NameMap).
 
 %---------------------------------------------------------------------------%
-    
+
     % Make the functor and layout tables for a foreign enum type.
     %
 :- pred make_foreign_enum_details(type_ctor::in, foreign_language::in,
@@ -669,7 +671,7 @@ make_foreign_enum_details(TypeCtor, Lang, Ctors, ConsTagMap, ReserveTag,
     FunctorNumberMap = make_functor_number_map(Ctors),
     Details = tcd_foreign_enum(Lang, EqualityAxioms, ForeignEnumFunctors,
         OrdinalMap, NameMap, FunctorNumberMap).
-    
+
     % Create a foreign_enum_functor structure for each functor in an enum type.
     % The functors are given to us in ordinal order (since that's how the HLDS
     % stored them), and that is how we return the list of rtti names of the
@@ -697,7 +699,7 @@ make_foreign_enum_functors(TypeCtor, Lang, [Functor | Functors], NextOrdinal,
     map.lookup(ConsTagMap, ConsId, ConsTag),
     (
         ConsTag = foreign_tag(ForeignTagLang, ForeignTagValue0),
-        expect(unify(Lang, ForeignTagLang), $module, $pred, 
+        expect(unify(Lang, ForeignTagLang), $module, $pred,
             "language mismatch between foreign tag and foreign enum"),
         ForeignTagValue = ForeignTagValue0
     ;
@@ -712,7 +714,7 @@ make_foreign_enum_functors(TypeCtor, Lang, [Functor | Functors], NextOrdinal,
         ; ConsTag = ground_term_const_tag(_, _)
         ; ConsTag = tabling_info_tag(_, _)
         ; ConsTag = deep_profiling_proc_layout_tag(_, _)
-        ; ConsTag = table_io_decl_tag(_, _)
+        ; ConsTag = table_io_entry_tag(_, _)
         ; ConsTag = single_functor_tag
         ; ConsTag = unshared_tag(_)
         ; ConsTag = direct_arg_tag(_)
@@ -895,7 +897,7 @@ get_maybe_reserved_rep(ConsTag, ConsRep) :-
         ; ConsTag = ground_term_const_tag(_, _)
         ; ConsTag = tabling_info_tag(_, _)
         ; ConsTag = deep_profiling_proc_layout_tag(_, _)
-        ; ConsTag = table_io_decl_tag(_, _)
+        ; ConsTag = table_io_entry_tag(_, _)
         ),
         unexpected($module, $pred, "bad cons_tag for du function symbol")
     ).
@@ -904,13 +906,13 @@ get_maybe_reserved_rep(ConsTag, ConsRep) :-
     du_arg_info::out) is det.
 
 generate_du_arg_info(NumUnivTvars, ExistTvars, ConstructorArg, ArgInfo) :-
-    ConstructorArg = ctor_arg(MaybeArgSymName, ArgType, ArgWidth, _Ctxt),
+    ConstructorArg = ctor_arg(MaybeCtorFieldName, ArgType, ArgWidth, _Ctxt),
     (
-        MaybeArgSymName = yes(SymName),
+        MaybeCtorFieldName = yes(ctor_field_name(SymName, _)),
         ArgName = unqualify_name(SymName),
         MaybeArgName = yes(ArgName)
     ;
-        MaybeArgSymName = no,
+        MaybeCtorFieldName = no,
         MaybeArgName = no
     ),
     % The C runtime cannot yet handle the "self" type representation,

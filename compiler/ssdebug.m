@@ -206,13 +206,16 @@
 :- import_module hlds.hlds_goal.
 :- import_module hlds.hlds_pred.
 :- import_module hlds.instmap.
+:- import_module hlds.make_goal.
 :- import_module hlds.passes_aux.
 :- import_module hlds.pred_table.
 :- import_module hlds.quantification.
 :- import_module libs.
 :- import_module libs.globals.
 :- import_module libs.trace_params.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.file_names.
 :- import_module parse_tree.prog_data.
@@ -530,8 +533,8 @@ ssdebug_process_proc(shallow, proc(PredId, ProcId), !ProcInfo, !ModuleInfo) :-
 ssdebug_process_proc(deep, proc(PredId, ProcId), !ProcInfo, !ModuleInfo) :-
         % Transfrom all procedures
     ssdebug_process_proc_2(proc(PredId, ProcId), !ProcInfo, !ModuleInfo).
-    
-    
+
+
 :- pred ssdebug_process_proc_2(
     pred_proc_id::in, proc_info::in, proc_info::out,
     module_info::in, module_info::out) is det.

@@ -49,7 +49,7 @@
 :- import_module ll_backend.continuation_info.
 :- import_module ll_backend.opt_debug.
 :- import_module ll_backend.trace_gen.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.builtin_modules.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.set_of_var.
 :- import_module transform_hlds.
@@ -593,7 +593,7 @@ maybe_create_ite_region_frame(IteRegionOps, CondGoalInfo, CondGoals, ElseGoals,
         ;
             MaybeRbmmInfo = yes(RbmmInfo),
             RbmmInfo = rbmm_goal_info(CondCreatedRegionVars,
-                CondRemovedRegionVars, CondCarriedRegionVars, 
+                CondRemovedRegionVars, CondCarriedRegionVars,
                 CondAllocRegionVars, _CondUsedRegionVars),
             list.reverse(CondGoals, ReversedCondGoals),
             code_info.get_module_info(!.CI, ModuleInfo),
@@ -602,9 +602,9 @@ maybe_create_ite_region_frame(IteRegionOps, CondGoalInfo, CondGoals, ElseGoals,
             set.difference(CondRemovedRegionVars, RemovedAtEndOfThen,
                 NeedToBeProtectedRegionVars),
             (
-                set.empty(CondCreatedRegionVars),
-                set.empty(NeedToBeProtectedRegionVars),
-                set.empty(CondAllocRegionVars)
+                set.is_empty(CondCreatedRegionVars),
+                set.is_empty(NeedToBeProtectedRegionVars),
+                set.is_empty(CondAllocRegionVars)
             ->
                 % When no region-related operations occur in the
                 % condition we do not need the backtracking support code.

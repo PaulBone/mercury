@@ -65,7 +65,7 @@
 */
 
 #define MR_GRADE_PART_0 v18_
-#define MR_GRADE_EXEC_TRACE_VERSION_NO  11
+#define MR_GRADE_EXEC_TRACE_VERSION_NO  12
 #define MR_GRADE_DEEP_PROF_VERSION_NO   4
 #define MR_GRADE_LLC_PAR_VERSION_NO 1
 
@@ -139,10 +139,7 @@
 
 #endif /* ! MR_HIGHLEVEL_CODE */
 
-#if defined(MR_MPS_GC)
-  #define MR_GRADE_PART_4       MR_PASTE2(MR_GRADE_PART_3, _mps)
-  #define MR_GRADE_OPT_PART_4   MR_GRADE_OPT_PART_3 ".mps"
-#elif defined(MR_HGC)
+#if defined(MR_HGC)
   #define MR_GRADE_PART_4       MR_PASTE2(MR_GRADE_PART_3, _hgc)
   #define MR_GRADE_OPT_PART_4   MR_GRADE_OPT_PART_3 ".hgc"
 #elif defined(MR_BOEHM_GC_DEBUG)

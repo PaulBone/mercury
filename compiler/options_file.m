@@ -17,7 +17,7 @@
 :- module make.options_file.
 :- interface.
 
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 
 :- import_module io.
 :- import_module list.
@@ -1138,7 +1138,7 @@ lookup_options_variable(Globals, Vars, OptionsVariableClass, FlagsVar, Result,
             ;
                 BadLibs = [_ | _],
                 Pieces = [words("Error: MLLIBS must contain only"),
-                    words("`-l' options, found") |
+                    quote("-l"), words("options, found") |
                     list_to_pieces(
                         list.map(func(Lib) = add_quotes(Lib), BadLibs))]
                     ++ [suffix(".")],

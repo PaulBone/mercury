@@ -91,8 +91,9 @@
 :- import_module check_hlds.modecheck_util.
 :- import_module check_hlds.modes.
 :- import_module hlds.instmap.
+:- import_module hlds.make_goal.
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_mode.
 
 :- import_module bag.
@@ -568,6 +569,7 @@ unique_modes_check_goal_scope(Reason, SubGoal0, GoalInfo0, GoalExpr,
         ; Reason = promise_purity(_)
         ; Reason = require_detism(_)
         ; Reason = require_complete_switch(_)
+        ; Reason = require_switch_arms_detism(_, _)
         ; Reason = commit(_)
         ; Reason = barrier(_)
         ; Reason = loop_control(_, _, _)

@@ -1,4 +1,6 @@
 %---------------------------------------------------------------------------%
+% vim: ft=mercury ts=4 sw=4 et
+%---------------------------------------------------------------------------%
 % Copyright (C) 2001-2006, 2011 The University of Melbourne.
 % This file may only be copied under the terms of the GNU Library General
 % Public License - see the file COPYING.LIB in the Mercury distribution.
@@ -10,7 +12,7 @@
 % 
 %-----------------------------------------------------------------------------%
 
-:- module mode_robdd__tfeirn.
+:- module mode_robdd.tfeirn.
 :- interface.
 
 :- import_module check_hlds.
@@ -36,10 +38,10 @@
 :- mode no_tfeirn == out(norm_tfeirn).
 
 % Constants.
-:- func one = tfeirn(T).
+:- func one = (tfeirn(T)::no_tfeirn) is det.
 :- pragma type_spec(one/0, T = mc_type).
 
-:- func zero = tfeirn(T).
+:- func zero = (tfeirn(T)::no_tfeirn) is det.
 :- pragma type_spec(zero/0, T = mc_type).
 
 % Conjunction.
@@ -102,11 +104,11 @@
 :- pragma type_spec(disj_vars_eq/3, T = mc_type).
 
 :- func var_restrict_true(var(T)::in, tfeirn(T)::di_tfeirn) =
-		(tfeirn(T)::no_tfeirn) is det.
+		(tfeirn(T)::uo_tfeirn) is det.
 :- pragma type_spec(var_restrict_true/2, T = mc_type).
 
 :- func var_restrict_false(var(T)::in, tfeirn(T)::di_tfeirn) =
-		(tfeirn(T)::no_tfeirn) is det.
+		(tfeirn(T)::uo_tfeirn) is det.
 :- pragma type_spec(var_restrict_false/2, T = mc_type).
 
 %-----------------------------------------------------------------------------%
@@ -621,8 +623,9 @@ ensure_normalised(X) = normalise(X).
 :- func normalise(tfeirn(T)::di_tfeirn) = (tfeirn(T)::no_tfeirn) is det.
 :- pragma type_spec(normalise/1, T = mc_type).
 
-normalise(X) = X :-
-	X ^ normalised = yes.
+normalise(X0) = X :-
+	X0 = mode_robdd(T, F, E, I, R, yes),
+	X = mode_robdd(T, F, E, I, R, yes).
 normalise(mode_robdd(TrueVars0, FalseVars0, EQVars0, ImpVars0, Robdd0, no))
 		= X :-
 	% T <-> F
@@ -684,12 +687,15 @@ normalise(mode_robdd(TrueVars0, FalseVars0, EQVars0, ImpVars0, Robdd0, no))
 					Robdd2, Robdd, ImpVars3, ImpVars),
 				Changed = Changed9 `bool__or` Changed10,
 
-				X0 = mode_robdd(TrueVars, FalseVars, EQVars,
-					ImpVars, Robdd, bool__not(Changed)),
-				( Changed = yes ->
+				(
+					Changed = yes,
+					X0 = mode_robdd(TrueVars, FalseVars,
+						EQVars, ImpVars, Robdd, no),
 					X = normalise(X0)
 				;
-					X = X0
+					Changed = no,
+					X = mode_robdd(TrueVars, FalseVars,
+						EQVars, ImpVars, Robdd, yes)
 				)
 			;
 				X = zero
@@ -776,3 +782,5 @@ to_robdd(X) =
 % 	^ add_implications(X ^ imp_vars).
 
 %---------------------------------------------------------------------------%
+:- end_module mode_robdd.tfeirn.
+%-----------------------------------------------------------------------------%

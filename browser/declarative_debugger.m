@@ -311,8 +311,8 @@
 :- import_module mdb.declarative_edt.
 :- import_module mdb.declarative_oracle.
 :- import_module mdb.util.
-:- import_module mdbcomp.prim_data.
 :- import_module mdbcomp.rtti_access.
+:- import_module mdbcomp.sym_name.
 
 :- import_module bool.
 :- import_module exception.
@@ -885,7 +885,9 @@ handle_diagnoser_exception(internal_error(Loc, Msg), Response, !Diagnoser,
     io.write_string(StdErr, "An internal error has occurred; " ++
         "diagnosis will be aborted.  Debugging\n" ++
         "message follows:\n" ++ Loc ++ ": " ++ Msg ++ "\n" ++
-        "Please report bugs to mercury-bugs@cs.mu.oz.au.\n", !IO),
+        "Please report bugs via the Mercury bug tracking system at\n" ++
+        "<https://www.mercurylang.org/bugs> or via e-mail to" ++
+        "bugs@mercurylang.org.\n", !IO),
     % Reset the analyser, in case it was left in an inconsistent state.
     reset_analyser(!.Diagnoser ^ analyser_state, Analyser),
     !Diagnoser ^ analyser_state := Analyser,

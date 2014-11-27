@@ -1,4 +1,6 @@
 #-----------------------------------------------------------------------------#
+# vim: noet
+#-----------------------------------------------------------------------------#
 
 THIS_DIR = invalid
 
@@ -40,6 +42,7 @@ SINGLEMODULE= \
 	any_to_ground_in_ite_cond_nomax \
 	anys_in_negated_contexts \
 	assert_in_interface \
+	bad_end_module \
 	bad_finalise_decl \
 	bad_initialise_decl \
 	bad_instance \
@@ -72,6 +75,7 @@ SINGLEMODULE= \
 	conflicting_fs \
 	conflicting_tabling_pragmas \
 	constrained_poly_insts \
+	constrained_poly_insts2 \
 	constraint_proof_bug_lib \
 	constructor_warning \
 	cyclic_typeclass \
@@ -188,6 +192,7 @@ SINGLEMODULE= \
 	record_syntax_errors \
 	ref_to_implicit_comma \
 	ref_to_implicit_pred \
+	repeated_field_name \
 	repeated_instance_vars_unsat \
 	require_det_in_lambda \
 	require_scopes \

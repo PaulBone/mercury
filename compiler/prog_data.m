@@ -26,6 +26,7 @@
 :- import_module libs.globals.
 :- import_module libs.rat.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_item.
 :- import_module parse_tree.set_of_var.
 
@@ -215,6 +216,38 @@ best_purity(purity_impure, purity_impure) = purity_impure.
 
 :- pred det_switch_canfail(can_fail::in, can_fail::in, can_fail::out) is det.
 
+%-----------------------------------------------------------------------------%
+
+:- type det_comparison
+    --->    first_detism_tighter_than
+            % The first determinism promises strictly more than the second.
+
+    ;       first_detism_same_as
+            % The first determinism promises exactly as much as the second.
+
+    ;       first_detism_looser_than
+            % The first determinism promises strictly less than the second.
+
+    ;       first_detism_incomparable.
+            % The first determinism promises more than the second in one aspect
+            % (can_fail or soln_count), but promises less in the other aspect.
+
+:- pred compare_determinisms(determinism::in, determinism::in,
+    det_comparison::out) is det.
+
+:- type det_component_comparison
+    --->    first_tighter_than
+    ;       first_same_as
+    ;       first_looser_than.
+
+:- pred compare_canfails(can_fail::in, can_fail::in,
+    det_component_comparison::out) is det.
+
+:- pred compare_solncounts(soln_count::in, soln_count::in,
+    det_component_comparison::out) is det.
+
+%-----------------------------------------------------------------------------%
+
 :- implementation.
 
 determinism_components(detism_det,       cannot_fail, at_most_one).
@@ -225,6 +258,8 @@ determinism_components(detism_cc_multi,  cannot_fail, at_most_many_cc).
 determinism_components(detism_cc_non,    can_fail,    at_most_many_cc).
 determinism_components(detism_erroneous, cannot_fail, at_most_zero).
 determinism_components(detism_failure,   can_fail,    at_most_zero).
+
+%--------------------------%
 
 det_conjunction_detism(DetismA, DetismB, Detism) :-
     % When figuring out the determinism of a conjunction, if the second goal
@@ -264,6 +299,17 @@ det_switch_detism(DetismA, DetismB, Detism) :-
     det_switch_maxsoln(MaxSolnA, MaxSolnB, MaxSoln),
     determinism_components(Detism, CanFail, MaxSoln).
 
+det_negation_det(detism_det,       yes(detism_failure)).
+det_negation_det(detism_semi,      yes(detism_semi)).
+det_negation_det(detism_multi,     no).
+det_negation_det(detism_non,       no).
+det_negation_det(detism_cc_multi,  no).
+det_negation_det(detism_cc_non,    no).
+det_negation_det(detism_erroneous, yes(detism_erroneous)).
+det_negation_det(detism_failure,   yes(detism_det)).
+
+%--------------------------%
+
 det_conjunction_maxsoln(at_most_zero,    at_most_zero,    at_most_zero).
 det_conjunction_maxsoln(at_most_zero,    at_most_one,     at_most_zero).
 det_conjunction_maxsoln(at_most_zero,    at_most_many_cc, at_most_zero).
@@ -292,6 +338,8 @@ det_conjunction_canfail(can_fail,    cannot_fail, can_fail).
 det_conjunction_canfail(cannot_fail, can_fail,    can_fail).
 det_conjunction_canfail(cannot_fail, cannot_fail, cannot_fail).
 
+%--------------------------%
+
 det_disjunction_maxsoln(at_most_zero,    at_most_zero,    at_most_zero).
 det_disjunction_maxsoln(at_most_zero,    at_most_one,     at_most_one).
 det_disjunction_maxsoln(at_most_zero,    at_most_many_cc, at_most_many_cc).
@@ -316,6 +364,8 @@ det_disjunction_canfail(can_fail,    can_fail,    can_fail).
 det_disjunction_canfail(can_fail,    cannot_fail, cannot_fail).
 det_disjunction_canfail(cannot_fail, can_fail,    cannot_fail).
 det_disjunction_canfail(cannot_fail, cannot_fail, cannot_fail).
+
+%--------------------------%
 
 det_switch_maxsoln(at_most_zero,    at_most_zero,    at_most_zero).
 det_switch_maxsoln(at_most_zero,    at_most_one,     at_most_one).
@@ -342,14 +392,79 @@ det_switch_canfail(can_fail,    cannot_fail, can_fail).
 det_switch_canfail(cannot_fail, can_fail,    can_fail).
 det_switch_canfail(cannot_fail, cannot_fail, cannot_fail).
 
-det_negation_det(detism_det,       yes(detism_failure)).
-det_negation_det(detism_semi,      yes(detism_semi)).
-det_negation_det(detism_multi,     no).
-det_negation_det(detism_non,       no).
-det_negation_det(detism_cc_multi,  no).
-det_negation_det(detism_cc_non,    no).
-det_negation_det(detism_erroneous, yes(detism_erroneous)).
-det_negation_det(detism_failure,   yes(detism_det)).
+%-----------------------------------------------------------------------------%
+
+compare_determinisms(DetismA, DetismB, CmpDetism) :-
+    determinism_components(DetismA, CanFailA, SolnsA),
+    determinism_components(DetismB, CanFailB, SolnsB),
+    compare_canfails(CanFailA, CanFailB, CmpCanFail),
+    compare_solncounts(SolnsA, SolnsB, CmpSolns),
+
+    % We can get e.g. tighter canfail and looser solncount
+    % e.g. for a predicate declared multidet and inferred semidet.
+    % Therefore the ordering of the following two tests is important:
+    % we want errors to take precedence over warnings.
+
+    (
+        CmpCanFail = first_tighter_than,
+        (
+            ( CmpSolns = first_tighter_than
+            ; CmpSolns = first_same_as
+            ),
+            CmpDetism = first_detism_tighter_than
+        ;
+            CmpSolns = first_looser_than,
+            CmpDetism = first_detism_incomparable
+        )
+    ;
+        CmpCanFail = first_same_as,
+        (
+            CmpSolns = first_tighter_than,
+            CmpDetism = first_detism_tighter_than
+        ;
+            CmpSolns = first_same_as,
+            CmpDetism = first_detism_same_as
+        ;
+            CmpSolns = first_looser_than,
+            CmpDetism = first_detism_looser_than
+        )
+    ;
+        CmpCanFail = first_looser_than,
+        (
+            CmpSolns = first_tighter_than,
+            CmpDetism = first_detism_incomparable
+        ;
+            ( CmpSolns = first_same_as
+            ; CmpSolns = first_looser_than
+            ),
+            CmpDetism = first_detism_looser_than
+        )
+    ).
+
+compare_canfails(cannot_fail, cannot_fail, first_same_as).
+compare_canfails(cannot_fail, can_fail,    first_tighter_than).
+compare_canfails(can_fail,    cannot_fail, first_looser_than).
+compare_canfails(can_fail,    can_fail,    first_same_as).
+
+compare_solncounts(at_most_zero,    at_most_zero,    first_same_as).
+compare_solncounts(at_most_zero,    at_most_one,     first_tighter_than).
+compare_solncounts(at_most_zero,    at_most_many_cc, first_tighter_than).
+compare_solncounts(at_most_zero,    at_most_many,    first_tighter_than).
+
+compare_solncounts(at_most_one,     at_most_zero,    first_looser_than).
+compare_solncounts(at_most_one,     at_most_one,     first_same_as).
+compare_solncounts(at_most_one,     at_most_many_cc, first_tighter_than).
+compare_solncounts(at_most_one,     at_most_many,    first_tighter_than).
+
+compare_solncounts(at_most_many_cc, at_most_zero,    first_looser_than).
+compare_solncounts(at_most_many_cc, at_most_one,     first_looser_than).
+compare_solncounts(at_most_many_cc, at_most_many_cc, first_same_as).
+compare_solncounts(at_most_many_cc, at_most_many,    first_tighter_than).
+
+compare_solncounts(at_most_many,    at_most_zero,    first_looser_than).
+compare_solncounts(at_most_many,    at_most_one,     first_looser_than).
+compare_solncounts(at_most_many,    at_most_many_cc, first_looser_than).
+compare_solncounts(at_most_many,    at_most_many,    first_same_as).
 
 %-----------------------------------------------------------------------------%
 %
@@ -441,7 +556,7 @@ det_negation_det(detism_failure,   yes(detism_det)).
     ;       eval_loop_check             % loop check only
     ;       eval_memo                   % memoing + loop check
     ;       eval_table_io(              % memoing I/O actions for debugging
-                table_io_is_decl,
+                table_io_entry_kind,
                 table_io_is_unitize
             )
     ;       eval_minimal(eval_minimal_method).
@@ -490,11 +605,36 @@ det_negation_det(detism_failure,   yes(detism_det)).
     --->    hidden_arg_value
     ;       hidden_arg_addr.
 
-:- type table_io_is_decl
-    --->    table_io_decl       % The procedure is tabled for
-                                % declarative debugging.
-    ;       table_io_proc.      % The procedure is tabled only for
-                                % procedural debugging.
+:- type table_io_entry_kind
+    --->    entry_stores_outputs
+            % Each entry in the I/O table stores only the outputs of the
+            % action. The I/O action will be idempotent across retries
+            % in mdb, but attempts to print out the action will cause
+            % a core dump. This option is intended only for implementors
+            % measuring the overheads of the two alternatives just below.
+
+    ;       entry_stores_procid_outputs
+            % Each entry in the I/O table starts with a pointer to the
+            % MR_TableIoEntry structure of the procedure that performed
+            % the action, and also contains the outputs of the action.
+            % This makes the I/O action idempotent across retries and
+            % allows the *name* of the I/O predicate to be printed
+            % by mdb's "print action N" command, but not the values
+            % of the arguments. Not even the output arguments can be printed,
+            % since doing so requires knowing their types, and in general
+            % that requires access to input type_info arguments.
+
+    ;       entry_stores_procid_inputs_outputs.
+            % Each entry in the I/O table starts with a pointer to the
+            % MR_TableIoEntry structure of the procedure that performed
+            % the action, and also contains both the inputs and outputs
+            % of the action.
+            %
+            % This makes the I/O action idempotent across retries and
+            % allows both the name and all the arguments of the I/O predicate
+            % to be printed by mdb's "print action N" command. It also
+            % allows the declarative debugger to consider the action to
+            % be part of the effect of a call to its ancestors.
 
 :- type table_io_is_unitize
     --->    table_io_unitize    % The procedure is tabled for I/O
@@ -1624,7 +1764,7 @@ rename_var(Must, Renaming, Var0, Var) :-
             % about the table that implements memoization, loop checking
             % or the minimal model semantics for the given procedure.
 
-    ;       table_io_decl(shrouded_pred_proc_id)
+    ;       table_io_entry_desc(shrouded_pred_proc_id)
             % The address of a structure that describes the layout of the
             % answer block used by I/O tabling for declarative debugging.
 
@@ -1709,7 +1849,7 @@ cons_id_is_const_struct(ConsId, ConstNum) :-
         ; ConsId = type_info_cell_constructor(_)
         ; ConsId = typeclass_info_cell_constructor
         ; ConsId = tabling_info_const(_)
-        ; ConsId = table_io_decl(_)
+        ; ConsId = table_io_entry_desc(_)
         ; ConsId = deep_profiling_proc_layout(_)
         ),
         fail
@@ -1799,7 +1939,11 @@ cons_id_is_const_struct(ConsId, ConstNum) :-
                 arg_context         :: prog_context
             ).
 
-:- type ctor_field_name == sym_name.
+:- type ctor_field_name
+    --->    ctor_field_name(
+                sym_name,           % The name of the field.
+                prog_context        % The context of the name in the source.
+            ).
 
     % How much space does a constructor argument occupy in the underlying
     % representation.
@@ -2404,6 +2548,7 @@ get_type_kind(kinded_type(_, Kind)) = Kind.
 :- type inst_term   ==  term(inst_var_type).
 :- type inst_varset ==  varset(inst_var_type).
 
+:- type head_inst_vars  ==  map(inst_var, mer_inst).
 :- type inst_var_sub    ==  map(inst_var, mer_inst).
 
 % inst_defn/5 is defined in prog_item.m.

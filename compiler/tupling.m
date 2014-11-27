@@ -108,6 +108,7 @@
 :- import_module hlds.hlds_out.hlds_out_util.
 :- import_module hlds.hlds_pred.
 :- import_module hlds.hlds_rtti.
+:- import_module hlds.make_goal.
 :- import_module hlds.quantification.
 :- import_module libs.compiler_util.
 :- import_module libs.globals.
@@ -116,8 +117,10 @@
 :- import_module ll_backend.call_gen.
 :- import_module ll_backend.live_vars.
 :- import_module ll_backend.liveness.
+:- import_module mdbcomp.
 :- import_module mdbcomp.goal_path.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module mdbcomp.trace_counts.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_mode.
@@ -248,7 +251,7 @@ maybe_tuple_scc_individual_procs(TraceCounts, TuningParams, DepGraph,
         Procs, !ModuleInfo, !Counter, !TransformMap).
 
 :- pred maybe_tuple_scc(trace_counts::in, tuning_params::in,
-    dependency_graph::in, list(pred_proc_id)::in(bound([ground | ground])),
+    dependency_graph::in, list(pred_proc_id)::in,
     module_info::in, module_info::out, counter::in, counter::out,
     transform_map::in, transform_map::out) is det.
 
@@ -320,7 +323,7 @@ scc_has_local_callers(CalleeProcs, DepGraph) :-
 proc_has_local_callers(CalleeProc, DepGraph) :-
     digraph.lookup_key(DepGraph, CalleeProc, CalleeKey),
     digraph.lookup_to(DepGraph, CalleeKey, CallingKeys),
-    not set.empty(CallingKeys).
+    set.is_non_empty(CallingKeys).
 
 %-----------------------------------------------------------------------------%
 
@@ -767,6 +770,7 @@ create_aux_pred(PredId, ProcId, PredInfo, ProcInfo, Counter,
     proc_info_get_inst_varset(ProcInfo, InstVarSet),
     pred_info_get_markers(PredInfo, Markers),
     pred_info_get_origin(PredInfo, OrigOrigin),
+    proc_info_get_has_parallel_conj(ProcInfo, HasParallelConj),
     pred_info_get_var_name_remap(PredInfo, VarNameRemap),
 
     PredModule = pred_info_module(PredInfo),
@@ -797,6 +801,7 @@ create_aux_pred(PredId, ProcId, PredInfo, ProcInfo, Counter,
         InstVarSet,             % in
         Markers,                % in
         address_is_not_taken,   % in
+        HasParallelConj,        % in
         VarNameRemap,           % in
         ModuleInfo0,
         ModuleInfo,
@@ -1451,7 +1456,7 @@ cls_put_in_regs_via_deconstruct(CountInfo,
         VarsToLoad = set.difference(
             set.from_list(DeconstructFieldVars),
             set.from_list(TupleFieldVars)),
-        ( set.non_empty(VarsToLoad) ->
+        ( set.is_non_empty(VarsToLoad) ->
             cls_require_var_in_reg_with_cost(CvLoadCost, DeconstructCellVar,
                 !State),
             set.fold(cls_require_var_in_reg_with_cost(FvLoadCost), VarsToLoad,

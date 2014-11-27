@@ -223,10 +223,13 @@
 :- import_module hlds.hlds_goal.
 :- import_module hlds.hlds_pred.
 :- import_module hlds.instmap.
+:- import_module hlds.make_goal.
 :- import_module hlds.pred_table.
 :- import_module hlds.quantification.
 :- import_module mdbcomp.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.prog_mode.
@@ -381,6 +384,7 @@ expand_try_goals_in_goal(Instmap, Goal0, Goal, !Info) :-
             ; Reason = promise_purity(_)
             ; Reason = require_detism(_)
             ; Reason = require_complete_switch(_)
+            ; Reason = require_switch_arms_detism(_, _)
             ; Reason = commit(_)
             ; Reason = barrier(_)
             ; Reason = from_ground_term(_, from_ground_term_deconstruct)
@@ -718,7 +722,7 @@ extract_from_succeeded_goal(ModuleInfo, SucceededGoal, Goal, Then,
     Conjuncts0 = [DeconstructResult, TestNullTuple | Conjuncts1],
     DeconstructResult = hlds_goal(unify(_ResultVar, _, _, _, _), _),
     TestNullTuple = hlds_goal(unify(_, TestRHS, _, _, _), _),
-    TestRHS = rhs_functor(tuple_cons(0), no, []),
+    TestRHS = rhs_functor(tuple_cons(0), is_not_exist_constr, []),
 
     (
         Conjuncts1 = [hlds_goal(IfThenElse, _) | Rest],

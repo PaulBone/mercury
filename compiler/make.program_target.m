@@ -44,7 +44,7 @@
 :- import_module libs.process_util.
 :- import_module parse_tree.file_names.
 :- import_module parse_tree.module_cmds.
-:- import_module parse_tree.modules.
+:- import_module parse_tree.module_deps_graph.
 :- import_module parse_tree.prog_foreign.
 :- import_module parse_tree.prog_item.
 :- import_module parse_tree.prog_out.
@@ -176,9 +176,6 @@ make_linked_target_2(LinkedTargetFile, Globals, _, Succeeded, !Info, !IO) :-
             CompilationTarget = target_java,
             IntermediateTargetType = module_target_java_code,
             ObjectTargetType = module_target_java_class_code
-        ;
-            CompilationTarget = target_x86_64,
-            sorry($module, $pred, "mmc --make and target x86_64")
         ;
             CompilationTarget = target_erlang,
             IntermediateTargetType = module_target_erlang_code,
@@ -398,7 +395,6 @@ get_foreign_object_targets(Globals, PIC, ModuleName, ObjectTargets,
         ( CompilationTarget = target_java
         ; CompilationTarget = target_csharp
         ; CompilationTarget = target_il
-        ; CompilationTarget = target_x86_64
         ; CompilationTarget = target_erlang
         ),
         ObjectTargets = ForeignObjectTargets
@@ -584,9 +580,7 @@ build_linked_target_2(Globals, MainModuleName, FileType, OutputFileName,
             list.condense(ExtraForeignFiles)),
 
         (
-            ( CompilationTarget = target_c
-            ; CompilationTarget = target_x86_64
-            ),
+            CompilationTarget = target_c,
             maybe_pic_object_file_extension(NoLinkObjsGlobals, PIC,
                 ObjExtToUse)
         ;
@@ -626,9 +620,6 @@ build_linked_target_2(Globals, MainModuleName, FileType, OutputFileName,
                 compile_target_code.link(ErrorStream, FileType, MainModuleName,
                     AllObjects, NoLinkObjsGlobals),
                 Succeeded, !IO)
-        ;
-            CompilationTarget = target_x86_64,
-            sorry($module, $pred, "mmc --make and target x86_64")
         ;
             CompilationTarget = target_il,
             Succeeded = yes
@@ -691,7 +682,7 @@ linked_target_cleanup(Globals, MainModuleName, FileType, OutputFileName,
 %-----------------------------------------------------------------------------%
 
     % When compiling to Java we want to invoke `javac' just once, passing it a
-    % list of all out-of-date `.java' files.  This is a lot quicker than
+    % list of all out-of-date `.java' files. This is a lot quicker than
     % compiling each Java file individually.
     %
 :- pred make_java_files(globals::in, module_name::in, list(module_name)::in,
@@ -1024,11 +1015,11 @@ create_analysis_cache_dir(Globals, Succeeded, CacheDir, !IO) :-
 
 choose_cache_dir_name(Globals, DirName, !IO) :-
     globals.lookup_bool_option(Globals, use_grade_subdirs, UseGradeSubdirs),
-    globals.lookup_string_option(Globals, fullarch, FullArch),
+    globals.lookup_string_option(Globals, target_arch, TargetArch),
     (
         UseGradeSubdirs = yes,
         grade_directory_component(Globals, Grade),
-        DirComponents = ["Mercury", Grade, FullArch, "Mercury",
+        DirComponents = ["Mercury", Grade, TargetArch, "Mercury",
             "analysis_cache"]
     ;
         UseGradeSubdirs = no,
@@ -1059,9 +1050,9 @@ build_analysis_files(Globals, MainModuleName, AllModules,
     ->
         Succeeded = no
     ;
-        % Ensure all interface files are present before continuing.  This
-        % prevents a problem when two parallel branches try to generate the
-        % same missing interface file later.
+        % Ensure all interface files are present before continuing.
+        % This prevents a problem when two parallel branches try to generate
+        % the same missing interface file later.
         % (Although we can't actually build analysis files in parallel yet.)
         make_all_interface_files(Globals, AllModules, Succeeded1, !Info, !IO),
         (
@@ -1139,26 +1130,29 @@ build_analysis_files_2(Globals, MainModuleName, TargetModules,
     ).
 
     % Return a list of modules in reverse order of their dependencies, i.e.
-    % the list is the module dependency graph from bottom-up.  Mutually
+    % the list is the module dependency graph from bottom-up. Mutually
     % dependent modules (modules which form a clique in the dependency graph)
     % are returned adjacent in the list in arbitrary order.
     %
-:- pred reverse_ordered_modules(map(module_name,
-    maybe(module_and_imports))::in,
+:- pred reverse_ordered_modules(
+    map(module_name, maybe(module_and_imports))::in,
     list(module_name)::in, list(module_name)::out) is det.
 
 reverse_ordered_modules(ModuleDeps, Modules0, Modules) :-
-    list.foldl2(add_module_relations(lookup_module_and_imports(ModuleDeps)),
+    list.foldl2(add_module_relations(
+        lookup_module_and_imports_in_maybe_map(ModuleDeps)),
         Modules0, digraph.init, _IntDepsGraph, digraph.init, ImplDepsGraph),
     digraph.atsort(ImplDepsGraph, Order0),
     list.reverse(Order0, Order1),
     list.map(set.to_sorted_list, Order1, Order2),
     list.condense(Order2, Modules).
 
-:- func lookup_module_and_imports(map(module_name, maybe(module_and_imports)),
-    module_name) = module_and_imports.
+:- func lookup_module_and_imports_in_maybe_map(
+    map(module_name, maybe(module_and_imports)), module_name)
+    = module_and_imports.
 
-lookup_module_and_imports(ModuleDeps, ModuleName) = ModuleImports :-
+lookup_module_and_imports_in_maybe_map(ModuleDeps, ModuleName)
+        = ModuleImports :-
     map.lookup(ModuleDeps, ModuleName, MaybeModuleImports),
     (
         MaybeModuleImports = yes(ModuleImports)
@@ -1224,9 +1218,6 @@ build_library(MainModuleName, AllModules, Globals, Succeeded, !Info, !IO) :-
     ;
         Target = target_java,
         build_java_library(Globals, MainModuleName, Succeeded, !Info, !IO)
-    ;
-        Target = target_x86_64,
-        sorry($module, $pred, "target x86_64 not supported yet")
     ;
         Target = target_erlang,
         build_erlang_library(Globals, MainModuleName, AllModules, Succeeded,
@@ -1408,7 +1399,6 @@ install_ints_and_headers(Globals, SubdirLinkSucceeded, ModuleName, Succeeded,
             ( Target = target_java
             ; Target = target_csharp
             ; Target = target_il
-            ; Target = target_x86_64
             ),
             HeaderSucceeded = yes
         ),
@@ -1728,7 +1718,7 @@ maybe_install_library_file(Globals, Linkage, FileName, InstallDir, Succeeded,
             Succeeded0 = yes
         ->
             % Since mmc --make uses --use-subdirs the above FileName will
-            % be directory qualified.  We don't care about the build
+            % be directory qualified. We don't care about the build
             % directory here so we strip that qualification off.
 
             BaseFileName = dir.det_basename(FileName),
@@ -2151,7 +2141,7 @@ check_library_is_installed(Globals, Dirs, Grade, LibName, !Succeeded, !IO) :-
                 [s(LibName), s(Grade)], !IO)
         ), !IO),
     % We check for the presence of a library in a particular grade by seeing
-    % whether its .init file exists.  This will work because all libraries
+    % whether its .init file exists. This will work because all libraries
     % have a grade dependent .init file.
     InitFileName = LibName ++ ".init",
     search_for_file_returning_dir(do_not_open_file, Dirs, InitFileName,

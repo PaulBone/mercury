@@ -1,10 +1,10 @@
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % vim: ft=mercury ts=4 sw=4 et
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % Copyright (C) 2000-2001, 2006-2007 The University of Melbourne.
 % This file may only be copied under the terms of the GNU Library General
 % Public License - see the file COPYING.LIB in the Mercury distribution.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % File: thread.channel.m.
 % Main author: petdr.
@@ -17,8 +17,8 @@
 % thread.  The worker threads can place messages into the channel, and they
 % will be buffered for processing by the logging thread.
 %
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module thread.channel.
 :- interface.
@@ -26,46 +26,46 @@
 :- import_module io.
 :- import_module maybe.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- type channel(T).
 
     % Initialise a channel.
     %
-:- pred channel.init(channel(T)::out, io::di, io::uo) is det.
+:- pred init(channel(T)::out, io::di, io::uo) is det.
 
     % Put an item at the end of the channel.
     %
-:- pred channel.put(channel(T)::in, T::in, io::di, io::uo) is det.
+:- pred put(channel(T)::in, T::in, io::di, io::uo) is det.
 
     % Take an item from the start of the channel, block if there is
     % nothing in the channel.
     %
-:- pred channel.take(channel(T)::in, T::out, io::di, io::uo) is det.
+:- pred take(channel(T)::in, T::out, io::di, io::uo) is det.
 
     % Take an item from the start of the channel.
     % Returns immediately with no if the channel was empty.
     %
-:- pred channel.try_take(channel(T)::in, maybe(T)::out, io::di, io::uo) is det.
+:- pred try_take(channel(T)::in, maybe(T)::out, io::di, io::uo) is det.
 
     % Duplicate a channel.  The new channel sees all (and only) the
-    % data written to the channel after the channel.duplicate call.
+    % data written to the channel after the `duplicate'/4 call.
     % 
-:- pred channel.duplicate(channel(T)::in, channel(T)::out, io::di, io::uo)
+:- pred duplicate(channel(T)::in, channel(T)::out, io::di, io::uo)
     is det.
 
     % Place an item back at the start of the channel.
     %
-:- pred channel.untake(channel(T)::in, T::in, io::di, io::uo) is det.
+:- pred untake(channel(T)::in, T::in, io::di, io::uo) is det.
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
 :- import_module thread.mvar.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- type channel(T)
     --->    channel(
@@ -124,5 +124,5 @@ channel.untake(channel(Read, _Write), Val, !IO) :-
     mvar.put(NewHead, item(Val, Head), !IO),
     mvar.put(Read, NewHead, !IO).
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

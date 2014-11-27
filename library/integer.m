@@ -1,10 +1,10 @@
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % vim: ft=mercury ts=4 sw=4 et wm=0 tw=0
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % Copyright (C) 1997-2000, 2003-2007, 2011-2012 The University of Melbourne.
 % This file may only be copied under the terms of the GNU Library General
 % Public License - see the file COPYING.LIB in the Mercury distribution.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % File: integer.m.
 % Main authors: aet, Dan Hazel <odin@svrc.uq.edu.au>.
@@ -18,8 +18,8 @@
 % NOTE: All operators behave as the equivalent operators on ints do.
 % This includes the division operators: / // rem div mod.
 %
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module integer.
 :- interface.
@@ -34,13 +34,13 @@
 
 :- pred '>='(integer::in, integer::in) is semidet.
 
-:- func integer.integer(int) = integer.
+:- func integer(int) = integer.
 
-:- func integer.to_string(integer) = string.
+:- func to_string(integer) = string.
 
-:- func integer.from_string(string::in) = (integer::out) is semidet.
+:- func from_string(string::in) = (integer::out) is semidet.
 
-:- func integer.det_from_string(string) = integer.
+:- func det_from_string(string) = integer.
 
     % Convert a string in the specified base (2-36) to an integer.
     % The string must contain one or more digits in the specified base,
@@ -48,11 +48,11 @@
     % 10 to 35 are represented by the letters A-Z or a-z.  If the string
     % does not match this syntax then the function fails.
     %
-:- func integer.from_base_string(int, string) = integer is semidet.
+:- func from_base_string(int, string) = integer is semidet.
 
     % As above but throws an exception rather than failing.
     %
-:- func integer.det_from_base_string(int, string) = integer.
+:- func det_from_base_string(int, string) = integer.
 
 :- func '+'(integer) = integer.
 
@@ -90,19 +90,19 @@
 
 :- func \ integer = integer.
 
-:- func integer.abs(integer) = integer.
+:- func abs(integer) = integer.
 
-:- func integer.pow(integer, integer) = integer.
+:- func pow(integer, integer) = integer.
 
-:- func integer.float(integer) = float.
-:- func integer.int(integer) = int.
+:- func float(integer) = float.
+:- func int(integer) = int.
 
-:- func integer.zero = integer.
+:- func zero = integer.
 
-:- func integer.one = integer.
+:- func one = integer.
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
@@ -113,7 +113,7 @@
 :- import_module require.
 :- import_module string.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 % Possible improvements:
 %
@@ -608,7 +608,7 @@ int_to_integer(D) = Int :-
         Int = i(-1, [D])
     ;
         ( int.min_int(D) ->
-            % were we to call int.abs, int overflow might occur.
+            % Were we to call int.abs, int overflow might occur.
             Int = integer(D + 1) - integer.one
         ;
             Int = big_sign(D, pos_int_to_digits(int.abs(D)))
@@ -1058,7 +1058,7 @@ integer.zero = i(0, []).
 
 integer.one = i(1, [1]).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Converting strings to integers.
 %
@@ -1104,7 +1104,7 @@ string_to_integer_acc([C | Cs], Acc) = Result :-
         fail
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Converting integers to strings.
 %
@@ -1161,7 +1161,7 @@ digit_to_string(D, S) :-
     string.int_to_string(D, S1),
     string.pad_left(S1, '0', log10printbase, S).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Essentially duplicated code to work in base `printbase' follows
 %
@@ -1261,11 +1261,10 @@ printbase_pos_mul_list([X|Xs], Carry, Y) =
     printbase_pos_mul_list(Xs, printbase_pos_plus(mul_base(Carry),
         printbase_mul_by_digit(X, Y)), Y).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
-integer.from_base_string(Base0, String) = Integer :-
+integer.from_base_string(Base, String) = Integer :-
     string.index(String, 0, Char),
-    Base = integer(Base0),
     Len = string.length(String),
     ( Char = ('-') ->
         Len > 1,
@@ -1283,14 +1282,13 @@ integer.from_base_string(Base0, String) = Integer :-
         Integer = N
     ).
 
-:- pred accumulate_integer(integer::in, char::in, integer::in, integer::out)
+:- pred accumulate_integer(int::in, char::in, integer::in, integer::out)
     is semidet.
 
 accumulate_integer(Base, Char, !N) :-
-    char.digit_to_int(Char, Digit0),
+    char.base_digit_to_int(Base, Char, Digit0),
     Digit = integer(Digit0),
-    Digit < Base,
-    !:N = (Base * !.N) + Digit.
+    !:N = (integer(Base) * !.N) + Digit.
 
 integer.det_from_base_string(Base, String) = Integer :-
     ( Integer0 = integer.from_base_string(Base, String) ->
@@ -1299,5 +1297,5 @@ integer.det_from_base_string(Base, String) = Integer :-
         error("integer.det_from_base_string")
     ).
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

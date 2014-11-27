@@ -40,7 +40,7 @@
 :- import_module hlds.quantification.
 :- import_module libs.globals.
 :- import_module libs.options.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module ml_backend.ml_code_gen.
 :- import_module ml_backend.ml_code_util.
 :- import_module ml_backend.ml_gen_info.
@@ -182,9 +182,6 @@ foreign_type_required_imports(Target, _TypeCtor - TypeDefn) = Imports :-
             Imports = []
         )
     ;
-        Target = target_x86_64,
-        unexpected($module, $pred, "target x86_64 and --high-level-code")
-    ;
         Target = target_erlang,
         unexpected($module, $pred, "target erlang")
     ).
@@ -214,7 +211,6 @@ ml_gen_init_common_data(ModuleInfo, GlobalData) :-
     ;
         ( Target = target_il
         ; Target = target_erlang
-        ; Target = target_x86_64
         ),
         UseCommonCells = do_not_use_common_cells
     ),

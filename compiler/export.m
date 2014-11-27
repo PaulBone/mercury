@@ -21,7 +21,7 @@
 :- import_module hlds.hlds_module.
 :- import_module hlds.hlds_pred.
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_foreign.
@@ -94,6 +94,7 @@
 :- import_module libs.
 :- import_module libs.file_util.
 :- import_module libs.globals.
+:- import_module mdbcomp.prim_data.
 :- import_module parse_tree.file_names.
 :- import_module parse_tree.module_cmds.
 :- import_module parse_tree.prog_foreign.
@@ -770,7 +771,7 @@ produce_header_file(ModuleInfo, ForeignExportDecls, ModuleName, !IO) :-
 produce_header_file_2([], !IO).
 produce_header_file_2([E | ExportedProcs], !IO) :-
     E = foreign_export_decl(Lang, C_RetType, C_Function, ArgDecls),
-    ( 
+    (
         Lang = lang_c,
         % Output the function header.
         io.write_string(C_RetType, !IO),
@@ -948,7 +949,7 @@ foreign_const_name_and_tag(TypeCtor, Mapping, TagValues, Ctor,
         ; TagVal = ground_term_const_tag(_, _)
         ; TagVal = tabling_info_tag(_, _)
         ; TagVal = deep_profiling_proc_layout_tag(_, _)
-        ; TagVal = table_io_decl_tag(_, _)
+        ; TagVal = table_io_entry_tag(_, _)
         ; TagVal = single_functor_tag
         ; TagVal = unshared_tag(_)
         ; TagVal = direct_arg_tag(_)

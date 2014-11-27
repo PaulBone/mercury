@@ -54,6 +54,9 @@
 :- import_module check_hlds.mode_util.
 :- import_module check_hlds.modecheck_util.
 :- import_module check_hlds.simplify.
+:- import_module check_hlds.simplify.simplify_proc.
+:- import_module check_hlds.simplify.simplify_tasks.
+:- import_module hlds.goal_form.
 :- import_module hlds.goal_util.
 :- import_module hlds.hlds_goal.
 :- import_module hlds.hlds_pred.
@@ -62,7 +65,7 @@
 :- import_module hlds.quantification.
 :- import_module libs.globals.
 :- import_module libs.options.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_type_subst.
@@ -204,8 +207,8 @@ deforest_proc_deltas(proc(PredId, ProcId), CostDelta, SizeDelta, !PDInfo) :-
 
         % Inlining may have created some opportunities for simplification.
         module_info_get_globals(!.ModuleInfo, Globals),
-        simplify.find_simplifications(no, Globals, Simplifications),
-        pd_util.pd_simplify_goal(Simplifications, !Goal, !PDInfo),
+        find_simplify_tasks(no, Globals, SimplifyTasks),
+        pd_util.pd_simplify_goal(SimplifyTasks, !Goal, !PDInfo),
         pd_util.propagate_constraints(!Goal, !PDInfo),
         trace [io(!IO)] (
             pd_debug_output_goal(!.PDInfo, "after constraints\n", !.Goal, !IO)
@@ -836,7 +839,7 @@ should_try_deforestation(DeforestInfo, ShouldTry, !PDInfo) :-
         ),
         OpaqueGoal = hlds_goal(_, OpaqueGoalInfo),
         OpaqueNonLocals = goal_info_get_nonlocals(OpaqueGoalInfo),
-        OpaqueVarsSet = set_of_var.set_to_bitset(OpaqueVars), 
+        OpaqueVarsSet = set_of_var.set_to_bitset(OpaqueVars),
         set_of_var.intersect(OpaqueNonLocals, OpaqueVarsSet, UsedOpaqueVars),
         set_of_var.is_non_empty(UsedOpaqueVars)
     ->
@@ -1793,13 +1796,13 @@ push_goal_into_goal(NonLocals, DeforestInfo, EarlierGoal,
 
     pd_info_get_module_info(!.PDInfo, ModuleInfo),
     module_info_get_globals(ModuleInfo, Globals),
-    simplify.find_simplifications(no, Globals, Simplifications0),
-    SimpList0 = simplifications_to_list(Simplifications0),
+    find_simplify_tasks(no, Globals, SimplifyTasks0),
+    SimpList0 = simplify_tasks_to_list(SimplifyTasks0),
     % Be a bit more aggressive with common structure elimination.
     % This helps achieve folding in some cases.
-    SimpList = [simp_extra_common_struct | SimpList0],
-    Simplifications = list_to_simplifications(SimpList),
-    pd_util.pd_simplify_goal(Simplifications, Goal2, Goal3, !PDInfo),
+    SimpList = [simptask_extra_common_struct | SimpList0],
+    SimplifyTasks = list_to_simplify_tasks(SimpList),
+    pd_util.pd_simplify_goal(SimplifyTasks, Goal2, Goal3, !PDInfo),
     pd_info_set_instmap(InstMap0, !PDInfo),
 
     % Perform any folding which may now be possible.
@@ -2002,10 +2005,11 @@ unfold_call(CheckImprovement, CheckVars, PredId, ProcId, Args,
         proc_info_set_vartypes(VarTypes, ProcInfo1, ProcInfo2),
         proc_info_set_rtti_varmaps(RttiVarMaps, ProcInfo2, ProcInfo3),
         (
-            CalledHasParallelConj = yes,
-            proc_info_set_has_parallel_conj(yes, ProcInfo3, ProcInfo)
+            CalledHasParallelConj = has_parallel_conj,
+            proc_info_set_has_parallel_conj(has_parallel_conj,
+                ProcInfo3, ProcInfo)
         ;
-            CalledHasParallelConj = no,
+            CalledHasParallelConj = has_no_parallel_conj,
             % Leave the has_parallel_conj field of the proc_info as it is.
             ProcInfo = ProcInfo3
         ),
@@ -2052,8 +2056,8 @@ unfold_call(CheckImprovement, CheckVars, PredId, ProcId, Args,
         trace [io(!IO)] (
             pd_debug_message(DebugPD, "Running simplify\n", [], !IO)
         ),
-        simplify.find_simplifications(no, Globals, Simplifications),
-        pd_util.pd_simplify_goal(Simplifications, Goal3, Goal4, !PDInfo),
+        find_simplify_tasks(no, Globals, SimplifyTasks),
+        pd_util.pd_simplify_goal(SimplifyTasks, Goal3, Goal4, !PDInfo),
 
         pd_info_get_cost_delta(!.PDInfo, CostDelta1),
         CostDelta = CostDelta1 - CostDelta0,

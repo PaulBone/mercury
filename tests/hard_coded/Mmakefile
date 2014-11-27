@@ -11,6 +11,7 @@ ORDINARY_PROGS=	\
 	address_of_builtins \
 	agg \
 	array_gen \
+	array_sort \
 	array_test \
 	array_test2 \
 	array_all_tf \
@@ -266,6 +267,7 @@ ORDINARY_PROGS=	\
 	singleton_dups \
 	solve_quadratic \
 	space \
+	spawn_native \
 	special_char \
 	stable_sort \
 	static_no_tag \
@@ -302,19 +304,21 @@ ORDINARY_PROGS=	\
 	switch_detect \
 	system_sort \
 	tag_switch_dup_label \
-	target_mlobjs \
 	term_io_test \
 	term_to_univ_test \
 	test234_sorted_insert \
+	test_char_digits \
 	test_cord \
 	test_cord2 \
 	test_imported_no_tag \
+	test_infinity \
 	test_keys_and_values \
 	test_pretty_printer \
 	test_pretty_printer_defaults \
 	test_semaphore \
 	test_tree_bitset \
 	test_yield \
+	thread_sbrk \
 	tim_qual1 \
 	time_test \
 	trace_goal_1 \
@@ -325,6 +329,7 @@ ORDINARY_PROGS=	\
 	transitive_inst_type \
 	trigraphs \
 	tuple_test \
+	tuple_test2 \
 	type_ctor_desc \
 	type_ctor_desc_manip \
 	type_info_const_inst \
@@ -350,6 +355,7 @@ ORDINARY_PROGS=	\
 	value_enum \
 	words_separator \
 	write \
+	write_float_special \
 	write_reg1 \
 	write_reg2 \
 	write_xml \
@@ -522,7 +528,9 @@ ifeq "$(filter il% csharp% java% erlang%,$(GRADE))" ""
 		factt_sort_test \
 		foreign_type_assertion \
 		pragma_export \
-		runtime_opt
+		runtime_opt \
+		target_mlobjs \
+        weak_ptr
 else
 	C_ONLY_PROGS =
 endif
@@ -904,6 +912,14 @@ tl_backjump_test.out: tl_backjump_test
 		grep . $@.tmp; \
 		exit 1; \
 	fi	
+
+# weak_ptr's output is extreamly volatile, it depends on Boehm GC's behavour
+# which can vary depending on many different things.  All we can hope to do
+# is check that it doesn't crash.
+
+weak_ptr.out: weak_ptr
+	./weak_ptr
+	echo "Output is not part of test, see Mmakefile" > $@
 
 #-----------------------------------------------------------------------------#
 

@@ -18,7 +18,7 @@
 
 :- import_module hlds.hlds_module.
 :- import_module hlds.passes_aux.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module ll_backend.global_data.
 :- import_module ll_backend.llds.
 
@@ -51,6 +51,8 @@
 :- import_module backend_libs.type_class_info.
 :- import_module backend_libs.type_ctor_info.
 :- import_module check_hlds.simplify.
+:- import_module check_hlds.simplify.simplify_proc.
+:- import_module check_hlds.simplify.simplify_tasks.
 :- import_module hlds.arg_info.
 :- import_module hlds.hlds_goal.
 :- import_module hlds.hlds_out.
@@ -76,6 +78,7 @@
 :- import_module ll_backend.store_alloc.
 :- import_module ll_backend.transform_llds.
 :- import_module ll_backend.unify_gen.
+:- import_module mdbcomp.prim_data.
 :- import_module mdbcomp.program_representation.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.file_names.
@@ -326,8 +329,8 @@ llds_backend_pass_for_proc(!HLDS, ConstStructMap, PredId, PredInfo,
     ;
         FollowCode = no
     ),
-    find_simplifications(no, Globals, Simplifications0),
-    SimpList0 = simplifications_to_list(Simplifications0),
+    find_simplify_tasks(no, Globals, SimplifyTasks0),
+    SimpList0 = simplify_tasks_to_list(SimplifyTasks0),
 
     globals.lookup_bool_option(Globals, constant_propagation, ConstProp),
     globals.lookup_bool_option(Globals, profile_deep, DeepProf),
@@ -345,16 +348,17 @@ llds_backend_pass_for_proc(!HLDS, ConstStructMap, PredId, PredInfo,
         ConstProp = yes,
         ProfTrans = no
     ->
-        list.cons(simp_constant_prop, SimpList0, SimpList1)
+        list.cons(simptask_constant_prop, SimpList0, SimpList1)
     ;
-        SimpList1 = list.delete_all(SimpList0, simp_constant_prop)
+        SimpList1 = list.delete_all(SimpList0, simptask_constant_prop)
     ),
 
-    SimpList = [simp_do_once, simp_elim_removable_scopes | SimpList1],
-    Simplifications = list_to_simplifications(SimpList),
+    SimpList = [simptask_mark_code_model_changes,
+        simptask_elim_removable_scopes | SimpList1],
+    SimplifyTasks = list_to_simplify_tasks(SimpList),
     write_proc_progress_message("% Simplifying ", PredId, ProcId,
         !.HLDS, !IO),
-    simplify_proc(Simplifications, PredId, ProcId, !HLDS, !ProcInfo),
+    simplify_proc(SimplifyTasks, PredId, ProcId, !HLDS, !ProcInfo),
     write_proc_progress_message("% Computing liveness in ", PredId, ProcId,
         !.HLDS, !IO),
     detect_liveness_proc(!.HLDS, PredProcId, !ProcInfo),
@@ -626,7 +630,7 @@ llds_output_pass(HLDS, GlobalData0, Procs, ModuleName, Succeeded,
         InternalLabelToLayoutMap, ProcLabelToLayoutMap,
         CallSites, CoveragePoints, ProcStatics,
         ProcHeadVarNums, ProcVarNames, ProcBodyBytecodes,
-        TableIoDecls, TableIoDeclMap, ProcEventLayouts,
+        TableIoEntries, TableIoEntryMap, ProcEventLayouts,
         ExecTraces, ProcLayoutDatas, ModuleLayoutDatas),
     maybe_write_string(Verbose, " done.\n", !IO),
     maybe_report_stats(Stats, !IO),
@@ -689,7 +693,7 @@ llds_output_pass(HLDS, GlobalData0, Procs, ModuleName, Succeeded,
         InternalLabelToLayoutMap, ProcLabelToLayoutMap,
         CallSites, CoveragePoints, ProcStatics,
         ProcHeadVarNums, ProcVarNames, ProcBodyBytecodes, PPStringTable,
-        TableIoDecls, TableIoDeclMap, ProcEventLayouts, ExecTraces,
+        TableIoEntries, TableIoEntryMap, ProcEventLayouts, ExecTraces,
         ProcLayoutDatas, ModuleLayoutDatas, ClosureLayoutDatas,
         AllocSites, AllocIdMap, ChunkedModules,
         UserInitPredCNames, UserFinalPredCNames, ComplexityProcs),

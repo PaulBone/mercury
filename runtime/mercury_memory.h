@@ -1,5 +1,6 @@
 /*
 ** Copyright (C) 1994-2000,2002, 2004, 2006, 2008 The University of Melbourne.
+** Copyright (C) 2014 The Mercury Team.
 ** This file may only be copied under the terms of the GNU Library General
 ** Public License - see the file COPYING.LIB in the Mercury distribution.
 */
@@ -27,9 +28,6 @@
 #include "mercury_conf.h"	/* for MR_CONSERVATIVE_GC, etc. */
 
 #if defined(MR_CONSERVATIVE_GC)
-  #if defined(MR_MPS_GC)
-    #include "mercury_mps.h"	/* for GC_FREE */
-  #endif
   #if defined(MR_BOEHM_GC)
     #define GC_I_HIDE_POINTERS
     #include "gc.h"		/* for GC_FREE */
@@ -159,6 +157,11 @@ extern	void 	MR_ensure_big_enough_buffer(char **buffer_ptr,
 **	The memory will not be garbage collected, and so
 **	it should be explicitly deallocated using MR_GC_free().
 **
+** MR_GC_malloc_atomic(bytes):
+**  Allocates the given number of bytes.
+**  Pointers to GC objects may not be stored in this object.  This allows
+**  the GC to optimize it's marking phase.
+**
 ** MR_GC_realloc(ptr, bytes):
 **	Reallocates the memory block pointed to by ptr.
 **
@@ -175,10 +178,23 @@ extern	void 	MR_ensure_big_enough_buffer(char **buffer_ptr,
 **      XXX this interface is subject to change.
 **
 ** Note: consider using the _attrib variants below.
+**
+** MR_new_weak_ptr(ptr, object):
+**  Create a weak pointer to object and store it in the memory pointed to by
+**  ptr (a double pointer).  object must have been allocated using one of
+**  the MR_GC methods.  Weak pointers only work with the Boehm collector
+**  (.gc grades).  In other grades this is an ordinary pointer.
+**
+** MR_weak_ptr_read(weak_ptr):
+**  Dereference a weak pointer.  Returns NULL of the pointed to object has
+**  been deallocated.  If weak_ptr is NULL then NULL is returned, so the
+**  programmer doesn't need to do an extra NULL check incase their pointer
+**  is deliberatly NULL;
 */
 
 extern	void	*MR_GC_malloc(size_t num_bytes);
 extern	void	*MR_GC_malloc_uncollectable(size_t num_bytes);
+extern	void	*MR_GC_malloc_atomic(size_t num_bytes);
 extern	void	*MR_GC_realloc(void *ptr, size_t num_bytes);
 
 typedef void 	(*MR_GC_finalizer)(void *ptr, void *data);
@@ -206,6 +222,77 @@ typedef void 	(*MR_GC_finalizer)(void *ptr, void *data);
   	GC_REGISTER_FINALIZER((ptr), (finalizer), (data), 0, 0)
 #else
   #define MR_GC_register_finalizer(ptr, finalizer, data)
+#endif
+
+/*
+** Don't dereference a weak pointer directly, it won't work as the pointer
+** is hidden from the GC by storing its negated bits.
+*/
+#ifdef  MR_BOEHM_GC
+#define MR_NULL_WEAK_PTR    0
+typedef GC_hidden_pointer   MR_weak_ptr;
+#else
+#define MR_NULL_WEAK_PTR    NULL
+typedef void*               MR_weak_ptr;
+#endif
+
+/*
+** Create a weak pointer to obj and store the pointer in the memory pointed
+** to by weak_ptr, which must be a pointer to an MR_weak_ptr.  obj must not
+** be an internal pointer and weak_ptr must be located within a heap object
+** managed by the GC.
+*/
+#ifdef  MR_BOEHM_GC
+#define MR_new_weak_ptr(weak_ptr, obj)                              \
+    do {                                                                \
+        int result;                                                     \
+                                                                        \
+        *(weak_ptr) = GC_HIDE_POINTER((obj));                           \
+        /*                                                              \
+        ** This call takes a double pointer, so it can clear the        \
+        ** user's pointer. Recall that *weak_ptr is a hidden pointer    \
+        ** a pointer cast to an int.                                    \
+        */                                                              \
+        result =                                                        \
+            GC_general_register_disappearing_link((void**)(weak_ptr), (obj)); \
+                                                                        \
+        if (GC_DUPLICATE == result) {                                   \
+            MR_fatal_error(                                             \
+                "Error registering weak pointer: already registered");  \
+        } else if (GC_NO_MEMORY == result) {                            \
+            MR_fatal_error(                                             \
+                "Error registering weak pointer: out of memory");       \
+        }                                                               \
+    } while(0)
+#else
+#define MR_new_weak_ptr(weak_ptr, obj)                              \
+    do {                                                                \
+        *(weak_ptr) = (obj);                                                \
+    } while(0)
+#endif
+
+/*
+** Don't call this directly, it must be protected by Boehm's allocation
+** lock, see MR_weak_ptr_read below
+*/
+#ifdef MR_BOEHM_GC
+extern void*
+MR_weak_ptr_read_unsafe(void* weak_ptr);
+#endif
+
+/*
+** Use this before dereferencing a weak pointer.  weak_ptr must be a pointer
+** to an MR_weak_ptr.  This returns the real pointer that the weak pointer
+** represents.
+*/
+#ifdef MR_BOEHM_GC
+#define MR_weak_ptr_read(weak_ptr) \
+    ((MR_NULL_WEAK_PTR != *(weak_ptr)) ?                                      \
+        GC_call_with_alloc_lock(MR_weak_ptr_read_unsafe, (weak_ptr)) :   \
+        NULL)
+#else
+#define MR_weak_ptr_read(weak_ptr) \
+    (*(weak_ptr))
 #endif
 
 /*

@@ -58,7 +58,7 @@ MR_hash_float(MR_Float f)
 /*
 ** MR_sprintf_float(buf, f)
 **
-** fills buff with the string representation of the float, f, such that
+** Fills buf with the string representation of the float, f, such that
 ** the string representation has enough precision to represent the
 ** float, f.
 **
@@ -70,6 +70,20 @@ MR_sprintf_float(char *buf, MR_Float f)
 {
     MR_Float round_trip = 0.0;
     int      i = MR_FLT_MIN_PRECISION;
+
+    if (MR_is_nan(f)) {
+        strcpy(buf, "nan");
+        return;
+    }
+
+    if (MR_is_infinite(f)) {
+        if (f < 0) {
+            strcpy(buf, "-infinity");
+        } else {
+            strcpy(buf, "infinity");
+        }
+        return;
+    }
 
     /*
     ** Print the float at increasing precisions until the float
@@ -108,7 +122,7 @@ MR_sprintf_float(char *buf, MR_Float f)
 }
 
 MR_bool
-MR_is_nan(MR_Float Flt)
+MR_is_nan_func(MR_Float Flt)
 {
 #if defined(MR_USE_SINGLE_PREC_FLOAT) && defined(MR_HAVE_ISNANF)
     return isnanf(Flt);
@@ -122,7 +136,7 @@ MR_is_nan(MR_Float Flt)
 }
 
 MR_bool
-MR_is_inf(MR_Float Flt)
+MR_is_infinite_func(MR_Float Flt)
 {
     /*
     ** On Solaris, isinf() is detected by configure but we pass -fno-builtin

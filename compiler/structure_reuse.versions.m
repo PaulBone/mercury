@@ -68,7 +68,7 @@
 :- import_module libs.globals.
 :- import_module libs.options.
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_util.
 :- import_module transform_hlds.ctgc.structure_reuse.analysis.
 
@@ -250,7 +250,7 @@ create_fresh_pred_proc_info_copy_2(PredId, PredInfo, ProcInfo, ReusePredName,
     % unconditional reuse annotations.
     %
     % XXX the same problem occurs with `--intermodule-optimisation'
-    % 
+    %
 :- pred check_cond_process_proc(convert_potential_reuse::in,
     reuse_as_table::in, pred_proc_id::in, module_info::in, module_info::out)
     is det.

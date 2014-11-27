@@ -672,17 +672,8 @@ generate_builtin(CodeModel, PredId, ProcId, Args, Code, !CI) :-
     get_module_info(!.CI, ModuleInfo),
     ModuleName = predicate_module(ModuleInfo, PredId),
     PredName = predicate_name(ModuleInfo, PredId),
-    (
-        builtin_ops.translate_builtin(ModuleName, PredName,
-            ProcId, Args, SimpleCode0)
-    ->
-        SimpleCode = SimpleCode0
-    ;
-        length(Args, Arity),
-        format("unknown builtin predicate: %s/%d",
-            [s(PredName), i(Arity)], Msg),
-        unexpected($module, $pred, Msg)
-    ),
+    builtin_ops.translate_builtin(ModuleName, PredName,
+        ProcId, Args, SimpleCode),
     (
         CodeModel = model_det,
         (
@@ -841,5 +832,5 @@ give_vars_consecutive_arg_infos([Var | Vars], RegType, N, ArgMode,
     give_vars_consecutive_arg_infos(Vars, RegType, N + 1, ArgMode, ArgInfos).
 
 %---------------------------------------------------------------------------%
-:- end_module call_gen.
+:- end_module ll_backend.call_gen.
 %---------------------------------------------------------------------------%

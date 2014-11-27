@@ -15,13 +15,13 @@
 % but which are implemented just as normal user-level code
 % rather than with special coding in the compiler.
 % 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module builtin.
 :- interface.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Types
 %
@@ -42,7 +42,7 @@
     %
 :- type c_pointer.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Insts
 %
@@ -71,7 +71,7 @@
 :- inst old == any.
 :- inst new == free.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Standard modes
 %
@@ -88,7 +88,7 @@
 :- mode di(Inst)  == Inst >> clobbered.
 :- mode mdi(Inst) == Inst >> mostly_clobbered.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Unique modes
 %
@@ -107,7 +107,7 @@
     %
 :- mode di == unique >> clobbered.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % "Mostly" unique modes
 %
@@ -126,7 +126,7 @@
     %
 :- mode mdi == mostly_unique >> mostly_clobbered.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Dynamic modes
 %
@@ -142,7 +142,7 @@
 :- mode no == new >> old.
 :- mode oo == old >> old.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Predicates
 %
@@ -175,7 +175,7 @@
     %
 :- pred false is failure.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % This function is useful for converting polymorphic non-solver type
     % values with inst any to inst ground (the compiler recognises that
@@ -187,7 +187,7 @@
     %
 :- func unsafe_cast_any_to_ground(T::ia) = (T::out) is det.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % A call to the function `promise_only_solution(Pred)' constitutes a
     % promise on the part of the caller that `Pred' has at most one
@@ -233,7 +233,7 @@
     pred(T, IO, IO)::in(pred(out, di, uo) is cc_multi), T::out,
     IO::di, IO::uo) is det.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % unify(X, Y) is true iff X = Y.
     %
@@ -361,7 +361,7 @@
 %   all Vars pred
 %   call/N
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
     
     % `semidet_succeed' is exactly the same as `true', except that
     % the compiler thinks that it is semi-deterministic.  You can use
@@ -398,7 +398,7 @@
     %
 :- semipure pred semipure_true is det.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
     
     % dynamic_cast(X, Y) succeeds with Y = X iff X has the same ground type
     % as Y (so this may succeed if Y is of type list(int), say, but not if
@@ -406,23 +406,16 @@
     %
 :- pred dynamic_cast(T1::in, T2::out) is semidet.
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
 % Everything below here is not intended to be part of the public interface,
 % and will not be included in the Mercury library reference manual.
 
-% This import is needed by the Mercury clauses for semidet_succeed/0
-% and semidet_fail/0.
-%
-:- import_module int.
-
-%-----------------------------------------------------------------------------%
-
 :- interface.
-    
+
     % `get_one_solution' and `get_one_solution_io' are impure alternatives
     % to `promise_one_solution' and `promise_one_solution_io', respectively.
     % They get a solution to the procedure, without requiring any promise
@@ -457,14 +450,27 @@
 :- pred compare_representation(comparison_result, T, T).
 :- mode compare_representation(uo, in, in) is cc_multi.
 
+    % Set up Mercury runtime to call special predicates implemented in this
+    % module.
+    %
+:- impure pred init_runtime_hooks is det.
+
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+
 :- implementation.
 
-%-----------------------------------------------------------------------------%
+    % This import is needed by the Mercury clauses for semidet_succeed/0
+    % and semidet_fail/0.
+    %
+:- import_module int.
+
+%---------------------------------------------------------------------------%
 
 false :-
     fail.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 % NOTE: dynamic_cast/2 is handled specially compiler/const_prop.m.
 % Any changes here may need to be reflected here.
@@ -472,7 +478,7 @@ false :-
 dynamic_cast(X, Y) :-
     private_builtin.typed_unify(X, Y).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % XXX The calls to unsafe_promise_unique below work around
     % mode checker limitations.
@@ -504,7 +510,7 @@ get_one_solution_io(Pred, X, !IO) :-
         impure impure_true
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % IMPORTANT: any changes or additions to external predicates should be
 % reflected in the definition of pred_is_external in
@@ -553,23 +559,154 @@ X @>  Y :-
 X @>= Y :-
     not compare((<), X, Y).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%
+% Unify/compare of tuples
+%
 
-:- pragma foreign_decl("C", "#include ""mercury_type_info.h""").
+% We implement these predicates in Mercury mainly to allow the compiler to
+% perform the deep profiling transformation on them. init_runtime_hooks sets
+% fields in `MR_special_pred_hooks' structure to point to the actual
+% implementations, because we do not want the runtime to have unresolved
+% references into the library when it is built.
 
-:- interface.
+:- pragma foreign_decl("C", "#include ""mercury_ho_call.h""").
 
-:- pred call_rtti_generic_unify(T::in, T::in) is semidet.
-:- pred call_rtti_generic_compare(comparison_result::out, T::in, T::in) is det.
+init_runtime_hooks.
 
-:- implementation.
-:- use_module erlang_rtti_implementation.
-:- use_module rtti_implementation.
+:- pragma foreign_proc("C",
+    init_runtime_hooks,
+    [will_not_call_mercury, thread_safe, may_not_duplicate],
+"
+#ifdef MR_HIGHLEVEL_CODE
+    MR_special_pred_hooks.MR_unify_tuple_pred = ML_unify_tuple;
+    MR_special_pred_hooks.MR_compare_tuple_pred = ML_compare_tuple;
+    MR_special_pred_hooks.MR_compare_rep_tuple_pred = ML_compare_rep_tuple;
+#else
+    MR_special_pred_hooks.MR_unify_tuple_pred =
+        MR_ENTRY(mercury__builtin__unify_tuple_2_0);
+    MR_special_pred_hooks.MR_compare_tuple_pred =
+        MR_ENTRY(mercury__builtin__compare_tuple_3_0);
+    MR_special_pred_hooks.MR_compare_rep_tuple_pred =
+        MR_ENTRY(mercury__builtin__compare_rep_tuple_3_0);
+#endif
+").
 
-call_rtti_generic_unify(X, Y) :-
-    rtti_implementation.generic_unify(X, Y).
-call_rtti_generic_compare(Res, X, Y) :-
-    rtti_implementation.generic_compare(Res, X, Y).
+:- pred unify_tuple(T::in, T::in) is semidet.
+
+:- pragma foreign_export("C", unify_tuple(in, in), "ML_unify_tuple").
+
+unify_tuple(TermA, TermB) :-
+    tuple_arity(TermA, Arity),
+    unify_tuple_pos(TermA, TermB, 0, Arity).
+
+:- pred unify_tuple_pos(T::in, T::in, int::in, int::in) is semidet.
+
+unify_tuple_pos(TermA, TermB, Index, Arity) :-
+    ( Index >= Arity ->
+        true
+    ;
+        tuple_arg(TermA, Index, SubTermA),
+        tuple_arg(TermB, Index, SubTermB),
+        private_builtin.unsafe_type_cast(SubTermB, CastSubTermB),
+        ( builtin.unify(SubTermA, CastSubTermB) ->
+            unify_tuple_pos(TermA, TermB, Index + 1, Arity)
+        ;
+            fail
+        )
+    ).
+
+:- pred compare_tuple(comparison_result::uo, T::in, T::in) is det.
+
+:- pragma foreign_export("C", compare_tuple(uo, in, in), "ML_compare_tuple").
+
+compare_tuple(Result, TermA, TermB) :-
+    tuple_arity(TermA, Arity),
+    compare_tuple_pos(Result, TermA, TermB, 0, Arity).
+
+:- pred compare_tuple_pos(comparison_result::uo, T::in, T::in,
+    int::in, int::in) is det.
+
+compare_tuple_pos(Result, TermA, TermB, Index, Arity) :-
+    ( Index >= Arity ->
+        Result = (=)
+    ;
+        tuple_arg(TermA, Index, SubTermA),
+        tuple_arg(TermB, Index, SubTermB),
+        private_builtin.unsafe_type_cast(SubTermB, CastSubTermB),
+        builtin.compare(SubResult, SubTermA, CastSubTermB),
+        (
+            SubResult = (=),
+            compare_tuple_pos(Result, TermA, TermB, Index + 1, Arity)
+        ;
+            ( SubResult = (<)
+            ; SubResult = (>)
+            ),
+            Result = SubResult
+        )
+    ).
+
+:- pred compare_rep_tuple(comparison_result::uo, T::in, T::in) is cc_multi.
+
+:- pragma foreign_export("C", compare_rep_tuple(uo, in, in),
+    "ML_compare_rep_tuple").
+
+compare_rep_tuple(Result, TermA, TermB) :-
+    tuple_arity(TermA, Arity),
+    compare_rep_tuple_pos(Result, TermA, TermB, 0, Arity).
+
+:- pred compare_rep_tuple_pos(comparison_result::uo, T::in, T::in,
+    int::in, int::in) is cc_multi.
+
+compare_rep_tuple_pos(Result, TermA, TermB, Index, Arity) :-
+    ( Index >= Arity ->
+        Result = (=)
+    ;
+        tuple_arg(TermA, Index, SubTermA),
+        tuple_arg(TermB, Index, SubTermB),
+        private_builtin.unsafe_type_cast(SubTermB, CastSubTermB),
+        builtin.compare_representation(SubResult, SubTermA, CastSubTermB),
+        (
+            SubResult = (=),
+            compare_rep_tuple_pos(Result, TermA, TermB, Index + 1, Arity)
+        ;
+            ( SubResult = (<)
+            ; SubResult = (>)
+            ),
+            Result = SubResult
+        )
+    ).
+
+:- pred tuple_arity(T::in, int::out) is det.
+
+:- pragma foreign_proc("C",
+    tuple_arity(_Term::in, Arity::out),
+    [will_not_call_mercury, promise_pure, thread_safe],
+"
+    Arity = MR_TYPEINFO_GET_VAR_ARITY_ARITY((MR_TypeInfo) TypeInfo_for_T);
+").
+
+tuple_arity(_, _) :-
+   private_builtin.sorry("tuple_arity/2").
+
+:- some [ArgT] pred tuple_arg(T::in, int::in, ArgT::out) is det.
+
+:- pragma foreign_proc("C",
+    tuple_arg(Term::in, Index::in, Arg::out),
+    [will_not_call_mercury, promise_pure, thread_safe],
+"
+    MR_TypeInfo type_info = (MR_TypeInfo) TypeInfo_for_T;
+    MR_Word     *arg_vector = (MR_Word *) Term;
+
+    TypeInfo_for_ArgT =
+        (MR_Word) MR_TYPEINFO_GET_VAR_ARITY_ARG_VECTOR(type_info)[1 + Index];
+    Arg = arg_vector[Index];
+").
+
+tuple_arg(_, _, -1) :-
+   private_builtin.sorry("tuple_arg/3").
+
+%---------------------------------------------------------------------------%
 
 :- pragma foreign_code("C#", "
     //
@@ -859,11 +996,11 @@ __Compare____tuple_0_0(object x, object y)
 ").
 
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 % unsafe_promise_unique is a compiler builtin.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma foreign_proc("C",
     copy(Value::ui, Copy::uo),
@@ -939,7 +1076,7 @@ __Compare____tuple_0_0(object x, object y)
     Y = X
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 %
 % A definition of the Mercury type void/0 is needed because we can generate
@@ -968,7 +1105,7 @@ __Compare____tuple_0_0(object x, object y)
     }
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma foreign_code("Java", "
 
@@ -1107,7 +1244,7 @@ __Compare____tuple_0_0(object x, object y)
     }
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % semidet_succeed and semidet_fail
 %
@@ -1176,7 +1313,7 @@ semidet_true :-
 semidet_false :-
     semidet_fail.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % cc_multi_equal
 %
@@ -1240,7 +1377,7 @@ semidet_false :-
     Y = X
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 impure_true :-
     impure private_builtin.imp.
@@ -1248,7 +1385,7 @@ impure_true :-
 semipure_true :-
     semipure private_builtin.semip.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma foreign_proc("C",
     unsafe_cast_any_to_ground(X::ia) = (Y::out),
@@ -1278,6 +1415,6 @@ semipure_true :-
     Y = X
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 :- end_module builtin.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

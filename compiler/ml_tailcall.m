@@ -78,7 +78,7 @@
 :- implementation.
 
 :- import_module hlds.hlds_pred.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module ml_backend.ml_util.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
@@ -687,4 +687,6 @@ report_nontailcall_warning(Globals, Warning, !IO) :-
         % Don't warn about these.
     ).
 
+%-----------------------------------------------------------------------------%
+:- end_module ml_backend.ml_tailcall.
 %-----------------------------------------------------------------------------%

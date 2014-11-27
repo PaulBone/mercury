@@ -81,10 +81,16 @@
     mer_inst::in, mer_inst::out) is det.
 
     % inst_list_apply_substitution(Subst, Insts0, Insts) is true
-    % iff Inst is the inst that results from applying Subst to Insts0.
+    % iff Insts is the result of applying Subst to every inst in Insts0.
     %
 :- pred inst_list_apply_substitution(inst_var_sub::in,
     list(mer_inst)::in, list(mer_inst)::out) is det.
+
+    % inst_apply_substitution(Inst0, Subst, Inst) is true iff Inst is the inst
+    % that results from applying Subst to Inst0.
+    %
+:- pred inst_apply_substitution(inst_var_sub::in, mer_inst::in, mer_inst::out)
+    is det.
 
     % mode_list_apply_substitution(Subst, Modes0, Modes) is true
     % iff Mode is the mode that results from applying Subst to Modes0.
@@ -93,7 +99,7 @@
     list(mer_mode)::in, list(mer_mode)::out) is det.
 
 :- pred rename_apart_inst_vars(inst_varset::in, inst_varset::in,
-    list(mer_mode)::in, list(mer_mode)::out) is det.
+    inst_varset::out, list(mer_mode)::in, list(mer_mode)::out) is det.
 
     % inst_contains_unconstrained_var(Inst) iff Inst includes an
     % unconstrained inst variable.
@@ -108,6 +114,11 @@
     %
 :- pred get_arg_insts(mer_inst::in, cons_id::in, arity::in,
     list(mer_inst)::out) is semidet.
+
+    % As above, but abort instead of failing.
+    %
+:- pred get_arg_insts_det(mer_inst::in, cons_id::in, arity::in,
+    list(mer_inst)::out) is det.
 
     % Given a (list of) bound_insts, get the corresponding cons_ids.
     % The type_ctor, if given,
@@ -163,7 +174,8 @@
 
 :- implementation.
 
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.builtin_modules.
+:- import_module mdbcomp.sym_name.
 
 :- import_module map.
 :- import_module require.
@@ -298,12 +310,6 @@ inst_list_apply_substitution_2(Subst, [A0 | As0], [A | As]) :-
     inst_apply_substitution(Subst, A0, A),
     inst_list_apply_substitution_2(Subst, As0, As).
 
-    % inst_substitute_arg(Inst0, Subst, Inst) is true iff Inst is the inst that
-    % results from substituting all occurrences of Param in Inst0 with Arg.
-    %
-:- pred inst_apply_substitution(inst_var_sub::in, mer_inst::in, mer_inst::out)
-    is det.
-
 inst_apply_substitution(Subst, Inst0, Inst) :-
     (
         ( Inst0 = not_reached
@@ -431,29 +437,29 @@ mode_list_apply_substitution_2(Subst, [A0 | As0], [A | As]) :-
 
 %-----------------------------------------------------------------------------%
 
-rename_apart_inst_vars(VarSet, NewVarSet, Modes0, Modes) :-
-    varset.merge_subst(VarSet, NewVarSet, _, Sub),
-    list.map(rename_apart_inst_vars_in_mode(Sub), Modes0, Modes).
+rename_apart_inst_vars(VarSet, NewVarSet, MergedVarSet, Modes0, Modes) :-
+    varset.merge_renaming(VarSet, NewVarSet, MergedVarSet, Renaming),
+    list.map(rename_apart_inst_vars_in_mode(Renaming), Modes0, Modes).
 
-:- pred rename_apart_inst_vars_in_mode(substitution(inst_var_type)::in,
+:- pred rename_apart_inst_vars_in_mode(renaming(inst_var_type)::in,
     mer_mode::in, mer_mode::out) is det.
 
-rename_apart_inst_vars_in_mode(Sub, Mode0, Mode) :-
+rename_apart_inst_vars_in_mode(Renaming, Mode0, Mode) :-
     (
         Mode0 = (I0 -> F0),
-        rename_apart_inst_vars_in_inst(Sub, I0, I),
-        rename_apart_inst_vars_in_inst(Sub, F0, F),
+        rename_apart_inst_vars_in_inst(Renaming, I0, I),
+        rename_apart_inst_vars_in_inst(Renaming, F0, F),
         Mode = (I -> F)
     ;
         Mode0 = user_defined_mode(Name, Insts0),
-        list.map(rename_apart_inst_vars_in_inst(Sub), Insts0, Insts),
+        list.map(rename_apart_inst_vars_in_inst(Renaming), Insts0, Insts),
         Mode = user_defined_mode(Name, Insts)
     ).
 
-:- pred rename_apart_inst_vars_in_inst(substitution(inst_var_type)::in,
+:- pred rename_apart_inst_vars_in_inst(renaming(inst_var_type)::in,
     mer_inst::in, mer_inst::out) is det.
 
-rename_apart_inst_vars_in_inst(Sub, Inst0, Inst) :-
+rename_apart_inst_vars_in_inst(Renaming, Inst0, Inst) :-
     (
         ( Inst0 = not_reached
         ; Inst0 = free
@@ -465,7 +471,7 @@ rename_apart_inst_vars_in_inst(Sub, Inst0, Inst) :-
         (
             HOInstInfo0 = higher_order(pred_inst_info(PorF, Modes0,
                 MaybeArgRegs, Det)),
-            list.map(rename_apart_inst_vars_in_mode(Sub), Modes0, Modes),
+            list.map(rename_apart_inst_vars_in_mode(Renaming), Modes0, Modes),
             HOInstInfo = higher_order(pred_inst_info(PorF, Modes,
                 MaybeArgRegs, Det))
         ;
@@ -478,7 +484,7 @@ rename_apart_inst_vars_in_inst(Sub, Inst0, Inst) :-
         (
             HOInstInfo0 = higher_order(pred_inst_info(PorF, Modes0,
                 MaybeArgRegs, Det)),
-            list.map(rename_apart_inst_vars_in_mode(Sub), Modes0, Modes),
+            list.map(rename_apart_inst_vars_in_mode(Renaming), Modes0, Modes),
             HOInstInfo = higher_order(pred_inst_info(PorF, Modes,
                 MaybeArgRegs, Det))
         ;
@@ -499,23 +505,23 @@ rename_apart_inst_vars_in_inst(Sub, Inst0, Inst) :-
             list.map(
                 (pred(bound_functor(C, Is0)::in, bound_functor(C, Is)::out)
                         is det :-
-                    list.map(rename_apart_inst_vars_in_inst(Sub), Is0, Is)
+                    list.map(rename_apart_inst_vars_in_inst(Renaming), Is0, Is)
                 ), BoundInsts0, BoundInsts),
             % The substitution can invalidate all the existing test results.
             Inst = bound(Uniq0, inst_test_no_results, BoundInsts)
         )
     ;
         Inst0 = inst_var(Var0),
-        ( map.search(Sub, Var0, term.variable(Var1, _)) ->
+        ( map.search(Renaming, Var0, Var1) ->
             Inst = inst_var(Var1)
         ;
             Inst = Inst0
         )
     ;
         Inst0 = constrained_inst_vars(Vars0, SubInst0),
-        rename_apart_inst_vars_in_inst(Sub, SubInst0, SubInst),
+        rename_apart_inst_vars_in_inst(Renaming, SubInst0, SubInst),
         Vars = set.map(func(Var0) =
-            ( map.search(Sub, Var0, term.variable(Var, _)) ->
+            ( map.search(Renaming, Var0, Var) ->
                 Var
             ;
                 Var0
@@ -523,28 +529,29 @@ rename_apart_inst_vars_in_inst(Sub, Inst0, Inst) :-
         Inst = constrained_inst_vars(Vars, SubInst)
     ;
         Inst0 = defined_inst(Name0),
-        ( rename_apart_inst_vars_in_inst_name(Sub, Name0, Name1) ->
+        ( rename_apart_inst_vars_in_inst_name(Renaming, Name0, Name1) ->
             Inst = defined_inst(Name1)
         ;
             Inst = Inst0
         )
     ;
         Inst0 = abstract_inst(Sym, SubInsts0),
-        list.map(rename_apart_inst_vars_in_inst(Sub), SubInsts0, SubInsts),
+        list.map(rename_apart_inst_vars_in_inst(Renaming),
+            SubInsts0, SubInsts),
         Inst = abstract_inst(Sym, SubInsts)
     ).
 
-:- pred rename_apart_inst_vars_in_inst_name(substitution(inst_var_type)::in,
+:- pred rename_apart_inst_vars_in_inst_name(renaming(inst_var_type)::in,
     inst_name::in, inst_name::out) is semidet.
 
-rename_apart_inst_vars_in_inst_name(Sub, InstName0, InstName) :-
+rename_apart_inst_vars_in_inst_name(Renaming, InstName0, InstName) :-
     (
         InstName0 = user_inst(Sym, Insts0),
-        list.map(rename_apart_inst_vars_in_inst(Sub), Insts0, Insts),
+        list.map(rename_apart_inst_vars_in_inst(Renaming), Insts0, Insts),
         InstName = user_inst(Sym, Insts)
     ;
         InstName0 = typed_inst(Type, Name0),
-        rename_apart_inst_vars_in_inst_name(Sub, Name0, Name),
+        rename_apart_inst_vars_in_inst_name(Renaming, Name0, Name),
         InstName = typed_inst(Type, Name)
     ;
         InstName0 = typed_ground(_U, _T),
@@ -689,6 +696,13 @@ get_arg_insts(Inst, ConsId, Arity, ArgInsts) :-
     ;
         Inst = any(Uniq, _),
         list.duplicate(Arity, any(Uniq, none), ArgInsts)
+    ).
+
+get_arg_insts_det(Inst, ConsId, Arity, ArgInsts) :-
+    ( get_arg_insts(Inst, ConsId, Arity, ArgInstsPrime) ->
+        ArgInsts = ArgInstsPrime
+    ;
+        unexpected($module, $pred, "get_arg_insts failed")
     ).
 
 :- pred get_arg_insts_2(list(bound_inst)::in, cons_id::in, list(mer_inst)::out)

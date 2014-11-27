@@ -274,21 +274,45 @@ such as pretty-printing.
          (declarations, clauses, etc.)
 
 	<p>
-	The result of this stage is a parse tree that has a one-to-one
-	correspondence with the source code.  The parse tree data structure
-	definition is in prog_data.m and prog_item.m, while the code to create
-	it is in prog_io.m and its submodules prog_io_dcg.m (which handles
-	clauses using Definite Clause Grammar notation), prog_io_goal.m (which
-	handles goals), prog_io_pragma.m (which handles pragma declarations),
-	prog_io_typeclass.m (which handles typeclass and instance
-	declarations), prog_io_type_defn.m (which handles type definitions),
-	prog_io_mutable.m (which handles initialize, finalize
-	and mutable declarations), prog_io_sym_name.m (which handles parsing
-	symbol names and specifiers) and prog_io_util.m (which defines
-	types and predicates needed by the other prog_io*.m modules.
+	The result of this stage is a parse tree
+    that has a one-to-one correspondence with the source code.
+    The parse tree data structure definition is in prog_data.m and prog_item.m,
+    while the code to create it is in the prog_io*.m modules:
+    <ul>
+    <li>
+    prog_io.m handles the top level tasks of reading in
+    whole Mercury source files.
+    <li>
+    prog_io_find.m locates source files containing Mercury modules.
+    <li>
+    prog_io_item.m parses in the top level parts of items,
+    particularly declarations.
+    <li>
+    prog_io_dcg.m parses clauses using Definite Clause Grammar notation.
+    <li>
+    prog_io_goal.m parses goals.
+    <li>
+    prog_io_type_defn.m and prog_io_mode_defn parse type and mode definitions.
+    <li>
+	prog_io_typeclass.m parses typeclass and instance declarations.
+    <li>
+    prog_io_pragma.m parses pragma declarations.
+    <li>
+	prog_io_mutable.m parses initialize, finalize and mutable declarations.
+    <li>
+    prog_io_sym_name.m parses symbol names and specifiers.
+    <li>
+    prog_io_error.m defines the types that represents the possible outcomes
+    of parsing a source file.
+    <li>
+    prog_io_util.m defines some types and predicates needed by the other
+    prog_io*.m modules.
+    </ul>
+
+	<p>
+
 	builtin_lib_types.m contains definitions about types, type constructors
-	and function symbols that the Mercury implementation needs to know
-	about.
+	and function symbols that the Mercury implementation needs to know about.
 
 	<p>
 
@@ -317,20 +341,15 @@ such as pretty-printing.
 	.int, .opt etc files.
 
 	<p>
-	modules.m has the code to write out `.int', `.int2', `.int3',
-	`.d' and `.dep' files.
+	write_module_interface_files.m has the code to write out
+    `.int0', `.int', `.int2', and `.int3' files.
+
+	<p>
+	modules.m figures out what interface files to read,
+    and also does a bunch of other semi-related things.
 
 	<p>
 	write_deps_file.m writes out Makefile fragments.
-
-	<p>
-	file_names.m does conversions between module names and file names.
-	It uses java_names.m, which contains predicates for dealing with names
-	of things in Java.
-
-	<p>
-	module_cmds.m handles the commands for manipulating interface files of
-	various kinds.
 
 	<p>
 	module_imports.m contains the module_imports type and its access
@@ -338,12 +357,25 @@ such as pretty-printing.
 	direct dependencies (those caused by imports) between modules.
 
 	<p>
-	deps_map.m contains the data structure for recording indirect
-	dependencies between modules, and the predicates for creating it.
+	deps_map.m and module_deps_graph.m contain data structures
+    for recording indirect dependencies between modules,
+    and the predicates for creating and using them.
+
+	<p>
+	file_names.m does conversions between module names and file names.
+	It uses java_names.m, which contains predicates for dealing with names
+	of things in Java.
 
 	<p>
 	source_file_map.m contains code to read, write and search
 	the mapping between module names and file names.
+
+	<p>
+	module_cmds.m handles the commands for manipulating interface files of
+	various kinds.
+
+	<p>
+	item_util.m contains some utility predicates dealing with items.
 
 <li><p> module qualification of types, insts and modes
 
@@ -578,7 +610,10 @@ HLDS goals match various criteria.
 
 <dt> goal_util.m
 <dd> Contains various miscellaneous utility predicates for manipulating
-HLDS goals, e.g. for renaming variables.
+HLDS goals, such as attaching features to goals.
+
+<dt> make_goal.m
+<dd> Contains predicates for creating new HLDS goals.
 
 <dt> passes_aux.m
 <dd> Contains code to write progress messages, and higher-order code
@@ -951,27 +986,96 @@ so that the compiler does the right thing for options such as
 	`exception' module instead.
 	<p>
 
-<dt> simplification (simplify.m)
+<dt> simplification (simplify.m and its submodules)
 
 	<dd>
-	simplify.m finds and exploits opportunities for simplifying the
+	Simplification finds and exploits opportunities for simplifying the
 	internal form of the program, both to optimize the code and to
 	massage the code into a form the code generator will accept.
 	It also warns the programmer about any constructs that are so simple
 	that they should not have been included in the program in the first
 	place.  (That's why this pass needs to be part of semantic analysis:
 	because it can report warnings.)
-	simplify.m converts complicated unifications into procedure calls.
-	simplify.m calls common.m which looks for (a) construction unifications
+
+    <p>
+    simplify.m is a package of submodules.
+    <ol>
+    <li>
+    simplify_goal.m handles simplifications that involve
+    the interaction of a goal with its environment,
+    and then invokes one of the goal-type-specific submodules
+    for further processing.
+    <li>
+    simplify_goal_call.m handles calls (plain, generic and foreign code).
+    Using const_prop.m in the transform_hlds.m package,
+    it attempts to partially evaluate calls to builtin procedures
+    if the inputs are all constants.
+    <li>
+    simplify_goal_unify.m handles unifications.
+    Amongst other things, it converts complicated unifications
+    into procedure calls.
+    <li>
+    simplify_goal_conj.m handles conjunctions.
+    It inlines nested conjunctions, eliminates unreachable code,
+    and eliminates assign unification conjuncts
+    (replacing the assigned-to variable with the assigned-from variable
+    in the rest of the conjunction) if this is possible.
+    <li>
+    simplify_goal_disj.m handles disjunctions (and atomic goals).
+    It eliminates unnecessary disjunction wrappers,
+    and transforms semidet disjunctions into if-then-elses
+    if this possible.
+    <li>
+    simplify_goal_ite.m handles if-then-elses (and negations).
+    It warns about if-then-elses in which
+    either the then-part or the else-part is unreachable,
+    and about if-then-elses that should be replaced by switches.
+    <li>
+    simplify_goal_switch.m handles switches.
+    It eliminates switch arms that cannot fail, and switches with no arms left.
+    <li>
+    simplify_goal_scope.m handles scope goals.
+    It eliminates unnecessary nested scopes,
+    replaces from_ground_term_construct scopes
+    with a single assignment unifications referencing
+    a constant structure in a constant structure database
+    (to eliminate the need for any later passes to traverse the scope),
+    and evaluates compile-time conditions on trace goals,
+    eliminating either the compile-time condition wrapper on the trace goal
+    (if the condition is true)
+    or the trace goal scope altogether
+    (if the condition is false).
+    <li>
+	common.m looks for (a) construction unifications
 	that construct a term that is the same as one that already exists,
-	or (b) repeated calls to a predicate with the same inputs, and replaces
-	them with assignment unifications.
-	simplify.m also attempts to partially evaluate calls to builtin
-	procedures if the inputs are all constants (this is const_prop.m
-	in the transform_hlds.m package).
-	simplify.m also calls format_call.m to look for
-	(possibly) incorrect uses of string.format io.format.
-	<p>
+	or (b) repeated calls to a predicate with the same inputs.
+    It replaces both with assignment unifications.
+    It is invoked by the goal-type-specific submodules above.
+    <li>
+	format_call.m looks for calls to predicates such as
+    string.format and io.format.
+    It reports calls in which the types of the values to be printed
+    disagree with the format string,
+    and/or calls in which the agreement cannot be established.
+    It also attempts to partially evaluate the correct calls,
+    essentially interpreting the format string at compile time,
+    not runtime.
+    <li>
+    simplify_proc.m handles the top-level processing of procedures
+    and their bodies.
+    <li>
+    simplify_info.m defines the data structure
+    that is threaded through the code of the submodules above,
+    containing the information those submodules need.
+    <li>
+    simplify_tasks.m defines the type that identifies the tasks
+    that the simplification package may be asked to do.
+    Simplification can be invoked at several different points
+    in the compilation process;
+    different invocations need to perform different subsets
+    of the tasks that simplification is capable of.
+    </ol>
+    <p>
 
 <dt> unused imports (unused_imports.m)
 

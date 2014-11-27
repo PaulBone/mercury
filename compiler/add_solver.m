@@ -13,7 +13,7 @@
 :- import_module hlds.hlds_pred.
 :- import_module hlds.make_hlds.make_hlds_passes.
 :- import_module hlds.make_hlds.qual_info.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
 
@@ -215,9 +215,7 @@ add_solver_type_clause_items(TypeSymName, TypeParams, SolverTypeDetails,
         Target = target_erlang,
         Lang = lang_erlang
     ;
-        ( Target = target_il
-        ; Target = target_x86_64
-        ),
+        Target = target_il,
         WhatMsg = "solver type conversion functions for this backend",
         sorry($module, WhatMsg)
     ),
@@ -242,7 +240,7 @@ add_solver_type_clause_items(TypeSymName, TypeParams, SolverTypeDetails,
         Lang = lang_erlang,
         Impl = fp_impl_ordinary("Y = X", yes(Context))
     ),
-    
+
     % The `func(in) = out(<i_ground>) is det' mode.
     %
     ToGroundRepnSymName = solver_to_ground_repn_symname(TypeSymName, Arity),
@@ -336,5 +334,5 @@ add_solver_type_clause_items(TypeSymName, TypeParams, SolverTypeDetails,
         !QualInfo, !Specs).
 
 %-----------------------------------------------------------------------------%
- :- end_module add_solver.
+:- end_module hlds.make_hlds.add_solver.
 %-----------------------------------------------------------------------------%

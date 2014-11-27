@@ -20,7 +20,7 @@
 
 :- import_module hlds.hlds_pred.
 :- import_module libs.globals.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
 
@@ -53,13 +53,13 @@
     % Emit an error if something is exported. (Used to check for
     % when things shouldn't be exported.)
     %
-:- pred error_if_exported(import_status::in, prog_context::in, string::in,
-    list(error_spec)::in, list(error_spec)::out) is det.
+:- pred error_if_exported(import_status::in, prog_context::in,
+    format_components::in, list(error_spec)::in, list(error_spec)::out) is det.
 
     % Emit an error reporting that something should not have occurred in
     % a module interface.
     %
-:- pred error_is_exported(prog_context::in, string::in,
+:- pred error_is_exported(prog_context::in, format_components::in,
     list(error_spec)::in, list(error_spec)::out) is det.
 
 %----------------------------------------------------------------------------%
@@ -106,11 +106,10 @@ multiple_def_error(Status, Name, Arity, DefType, Context, OrigContext,
     ).
 
 undefined_pred_or_func_error(Name, Arity, Context, DescPieces, !Specs) :-
-    % This used to say `preceding' instead of `corresponding.'
-    % Which is more correct?
     Pieces = [words("Error:") | DescPieces] ++ [words("for"),
         sym_name_and_arity(Name / Arity),
-        words("without corresponding `pred' or `func' declaration.")],
+        words("without corresponding"), decl("pred"), words("or"),
+        decl("func"), words("declaration.")],
     Msg = simple_msg(Context, [always(Pieces)]),
     Spec = error_spec(severity_error, phase_parse_tree_to_hlds, [Msg]),
     !:Specs = [Spec | !.Specs].
@@ -192,15 +191,16 @@ maybe_undefined_pred_error(Globals, Name, Arity, PredOrFunc, Status,
     ;
         Pieces = [words("Error:") | DescPieces] ++ [words("for"),
             simple_call(simple_call_id(PredOrFunc, Name, Arity)), nl,
-            words("without preceding"), quote(pred_or_func_to_str(PredOrFunc)),
-            words("declaration."), nl],
+            words("without corresponding"),
+            decl(pred_or_func_to_str(PredOrFunc)), words("declaration."), nl],
         Msg = simple_msg(Context, [always(Pieces)]),
         Spec = error_spec(severity_error, phase_parse_tree_to_hlds, [Msg]),
         !:Specs = [Spec | !.Specs]
     ).
 
-error_is_exported(Context, Item, !Specs) :-
-    Pieces = [words("Error:"), fixed(Item), words("in module interface."), nl],
+error_is_exported(Context, ItemPieces, !Specs) :-
+    Pieces = [words("Error:")] ++ ItemPieces ++
+        [words("in module interface."), nl],
     Msg = simple_msg(Context, [always(Pieces)]),
     Spec = error_spec(severity_error, phase_parse_tree_to_hlds, [Msg]),
     !:Specs = [Spec | !.Specs].
@@ -213,5 +213,5 @@ error_if_exported(Status, Context, Item, !Specs) :-
     ).
 
 %----------------------------------------------------------------------------%
-:- end_module make_hlds_error.
+:- end_module hlds.make_hlds.make_hlds_error.
 %----------------------------------------------------------------------------%

@@ -105,7 +105,9 @@
 :- import_module libs.file_util.
 :- import_module libs.globals.
 :- import_module libs.options.
+:- import_module mdbcomp.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.file_names.
 :- import_module parse_tree.mercury_to_mercury.
@@ -378,7 +380,7 @@ handle_structure_reuse_requests_2(Repeats, SharingTable, Requests,
         maybe_write_string(VeryVerbose, "% done.\n", !IO)
     ),
 
-    ( set.empty(NewRequests) ->
+    ( set.is_empty(NewRequests) ->
         trace [io(!IO)] (
             maybe_write_string(VeryVerbose,
                 "% No more structure reuse requests.\n", !IO)

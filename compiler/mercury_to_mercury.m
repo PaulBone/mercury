@@ -48,6 +48,7 @@
 
 :- import_module libs.globals.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_item.
 
@@ -1614,8 +1615,8 @@ mercury_format_cons_id(NeedsBrackets, ConsId, !U) :-
         ConsId = tabling_info_const(_),
         add_string("<tabling info>", !U)
     ;
-        ConsId = table_io_decl(_),
-        add_string("<table_io_decl>", !U)
+        ConsId = table_io_entry_desc(_),
+        add_string("<table_io_entry_desc>", !U)
     ;
         ConsId = deep_profiling_proc_layout(_),
         add_string("<deep_profiling_proc_layout>", !U)
@@ -2060,7 +2061,7 @@ mercury_output_remaining_ctor_args(Varset, [A | As], !IO) :-
     io::di, io::uo) is det.
 
 mercury_output_ctor_arg_name_prefix(no, !IO).
-mercury_output_ctor_arg_name_prefix(yes(Name), !IO) :-
+mercury_output_ctor_arg_name_prefix(yes(ctor_field_name(Name, _Ctxt)), !IO) :-
     mercury_output_bracketed_sym_name(Name, !IO),
     io.write_string(" :: ", !IO).
 
@@ -2790,7 +2791,7 @@ mercury_output_goal_2(Expr, VarSet, Indent, !IO) :-
         mercury_output_promise_eqv_solutions_goal(Vars, StateVars,
             DotSVars, ColonSVars, Goal, VarSet, Indent,
             "promise_equivalent_solution_sets", !IO)
-    ;   
+    ;
         Expr = promise_equivalent_solution_arbitrary_expr(Vars, StateVars,
             DotSVars, ColonSVars, Goal),
         mercury_output_promise_eqv_solutions_goal(Vars, StateVars,
@@ -2848,6 +2849,41 @@ mercury_output_goal_2(Expr, VarSet, Indent, !IO) :-
     ;
         Expr = require_complete_switch_expr(Var, Goal),
         io.write_string("require_complete_switch [", !IO),
+        mercury_output_var(VarSet, no, Var, !IO),
+        io.write_string("] (", !IO),
+        Indent1 = Indent + 1,
+        mercury_output_newline(Indent1, !IO),
+        mercury_output_goal(Goal, VarSet, Indent1, !IO),
+        mercury_output_newline(Indent, !IO),
+        io.write_string(")", !IO)
+    ;
+        Expr = require_switch_arms_detism_expr(Var, Detism, Goal),
+        (
+            Detism = detism_det,
+            io.write_string("require_switch_arms_det", !IO)
+        ;
+            Detism = detism_semi,
+            io.write_string("require_switch_arms_semidet", !IO)
+        ;
+            Detism = detism_multi,
+            io.write_string("require_switch_arms_multi", !IO)
+        ;
+            Detism = detism_non,
+            io.write_string("require_switch_arms_nondet", !IO)
+        ;
+            Detism = detism_cc_multi,
+            io.write_string("require_switch_arms_cc_multi", !IO)
+        ;
+            Detism = detism_cc_non,
+            io.write_string("require_switch_arms_cc_nondet", !IO)
+        ;
+            Detism = detism_erroneous,
+            io.write_string("require_switch_arms_erroneous", !IO)
+        ;
+            Detism = detism_failure,
+            io.write_string("require_switch_arms_failure", !IO)
+        ),
+        io.write_string(" [", !IO),
         mercury_output_var(VarSet, no, Var, !IO),
         io.write_string("] (", !IO),
         Indent1 = Indent + 1,
@@ -3030,7 +3066,7 @@ mercury_output_goal_2(Expr, VarSet, Indent, !IO) :-
         Expr = call_expr(Name, Terms, Purity),
         write_purity_prefix(Purity, !IO),
         mercury_output_call(Name, Terms, VarSet, Indent, !IO)
-    ;   
+    ;
         Expr = unify_expr(A, B, Purity),
         write_purity_prefix(Purity, !IO),
         mercury_output_term(VarSet, no, A, !IO),
@@ -3069,6 +3105,7 @@ mercury_output_connected_goal(Goal, VarSet, Indent, !IO) :-
         ; Expr = promise_purity_expr(_, _)
         ; Expr = require_detism_expr(_, _)
         ; Expr = require_complete_switch_expr(_, _)
+        ; Expr = require_switch_arms_detism_expr(_, _, _)
         ; Expr = conj_expr(_, _)
         ; Expr = atomic_expr(_, _, _, _, _)
         ; Expr = trace_expr(_, _, _, _, _)
@@ -3878,7 +3915,7 @@ mercury_format_pragma_foreign_enum(FEInfo, !U) :-
 mercury_format_pragma_foreign_proc_export(FPEInfo, !U) :-
     FPEInfo = pragma_info_foreign_proc_export(Lang, PredNameModesPF,
         ExportName),
-    PredNameModesPF = pred_name_modes_pf(Name, ModeList, PredOrFunc), 
+    PredNameModesPF = pred_name_modes_pf(Name, ModeList, PredOrFunc),
     varset.init(Varset), % The varset isn't really used.
     InstInfo = simple_inst_info(Varset),
     add_string(":- pragma foreign_export(", !U),

@@ -28,8 +28,9 @@
 
     % Warn about variables with overlapping scopes.
     %
-:- pred warn_overlap(list(quant_warning)::in, prog_varset::in,
-    simple_call_id::in, list(error_spec)::in, list(error_spec)::out) is det.
+:- pred add_quant_warnings(simple_call_id::in, prog_varset::in,
+    list(quant_warning)::in, list(error_spec)::in, list(error_spec)::out)
+    is det.
 
     % Warn about variables which occur only once but don't start with
     % an underscore, or about variables which do start with an underscore
@@ -86,16 +87,16 @@
 
 %----------------------------------------------------------------------------%
 
-warn_overlap(Warnings, VarSet, PredCallId, !Specs) :-
-    !:Specs =
-        list.map(warn_overlap_to_spec(VarSet, PredCallId), Warnings)
-        ++ !.Specs.
+add_quant_warnings(PredCallId, VarSet, Warnings, !Specs) :-
+    WarningSpecs =
+        list.map(quant_warning_to_spec(PredCallId, VarSet), Warnings),
+    !:Specs = WarningSpecs ++ !.Specs.
 
-:- func warn_overlap_to_spec(prog_varset, simple_call_id, quant_warning)
+:- func quant_warning_to_spec(simple_call_id, prog_varset, quant_warning)
     = error_spec.
 
-warn_overlap_to_spec(VarSet, PredCallId, Warn) = Spec :-
-    Warn = warn_overlap(Vars, Context),
+quant_warning_to_spec(PredCallId, VarSet, Warning) = Spec :-
+    Warning = warn_overlap(Vars, Context),
     Pieces1 =
         [words("In clause for"), simple_call(PredCallId), suffix(":"), nl],
     ( Vars = [Var] ->
@@ -237,6 +238,7 @@ warn_singletons_in_goal(Goal, QuantVars, !Info) :-
             ( Reason = promise_purity(_)
             ; Reason = require_detism(_)
             ; Reason = require_complete_switch(_)
+            ; Reason = require_switch_arms_detism(_, _)
             ; Reason = commit(_)
             ; Reason = barrier(_)
             ; Reason = trace_goal(_, _, _, _, _)
@@ -665,7 +667,7 @@ check_fp_body_for_success_indicator(ModuleInfo, Lang, Context, SimpleCallId,
                 ( list.member(SuccIndStr, BodyPieces) ->
                     LangStr = foreign_language_string(Lang),
                     Pieces = [
-                        words("warning: the "), fixed(LangStr),
+                        words("Warning: the"), fixed(LangStr),
                         words("code for"), simple_call(SimpleCallId),
                         words("may set"), quote(SuccIndStr), suffix(","),
                         words("but it cannot fail.")
@@ -691,7 +693,7 @@ check_fp_body_for_success_indicator(ModuleInfo, Lang, Context, SimpleCallId,
                 ;
                     LangStr = foreign_language_string(Lang),
                     Pieces = [
-                        words("warning: the "), fixed(LangStr),
+                        words("Warning: the"), fixed(LangStr),
                         words("code for"), simple_call(SimpleCallId),
                         words("does not appear to set"),
                         quote(SuccIndStr), suffix(","),
@@ -736,7 +738,7 @@ check_fp_body_for_return(Lang, Context, SimpleCallId, BodyPieces, !Specs) :-
         ( list.member("return", BodyPieces) ->
             LangStr = foreign_language_string(Lang),
             Pieces = [
-                words("warning: the "), fixed(LangStr),
+                words("Warning: the"), fixed(LangStr),
                 words("code for"), simple_call(SimpleCallId),
                 words("may contain a"), quote("return"),
                 words("statement."), nl
@@ -760,7 +762,7 @@ check_fp_body_for_return(Lang, Context, SimpleCallId, BodyPieces, !Specs) :-
             )
         ->
             Pieces = [
-                words("warning: the IL code for"), simple_call(SimpleCallId),
+                words("Warning: the IL code for"), simple_call(SimpleCallId),
                 words("may contain a"), quote("ret"),
                 words("or"), quote("jmp"),
                 words("instruction."), nl
@@ -907,5 +909,5 @@ promise_ex_error(PromiseType, Context, Message, !Specs) :-
     !:Specs = [Spec | !.Specs].
 
 %-----------------------------------------------------------------------------%
-:- end_module make_hlds_warn.
+:- end_module hlds.make_hlds.make_hlds_warn.
 %-----------------------------------------------------------------------------%

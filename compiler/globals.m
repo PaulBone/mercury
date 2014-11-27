@@ -5,15 +5,15 @@
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %-----------------------------------------------------------------------------%
-% 
+%
 % File: globals.m.
 % Main author: fjh.
-% 
+%
 % This module exports the `globals' type and associated access predicates.
 % The globals type is used to collect together all the various data
 % that would be global variables in an imperative language.
 % This global data is stored in the io.state.
-% 
+%
 %-----------------------------------------------------------------------------%
 %-----------------------------------------------------------------------------%
 
@@ -23,7 +23,7 @@
 :- import_module libs.options.
 :- import_module libs.trace_params.
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data. % for module_name
+:- import_module mdbcomp.sym_name. % for module_name
 :- import_module mdbcomp.feedback.
 
 :- import_module bool.
@@ -43,8 +43,6 @@
                             % IL is the Microsoft .NET Intermediate Language.
     ;       target_csharp   % Generate C#.
     ;       target_java     % Generate Java.
-    ;       target_x86_64   % Compile directly to x86_64 assembler.
-                            % (Work in progress.)
     ;       target_erlang.  % Generate Erlang.
 
 :- type foreign_language
@@ -71,10 +69,10 @@
 :- func simple_foreign_language_string(foreign_language) = string.
 
     % The GC method specifies how we do garbage collection.
-    % The last four alternatives are for the C and asm back-ends;
-    % the first alternative is for compiling to IL or Java,
-    % where the target language implementation handles garbage
-    % collection automatically.
+    % The last five alternatives are for the C back-ends;
+    % the first alternative is for compiling to C#, Java, Il or Erlang
+    % where the target language implementation handles garbage collection
+    % automatically.
     %
 :- type gc_method
     --->    gc_automatic
@@ -94,19 +92,12 @@
     ;       gc_hgc
             % Ralph Becket's hgc conservative collector.
 
-    ;       gc_mps
-            % A different conservative collector, based on Ravenbrook Limited's
-            % MPS (Memory Pool System) kit. Benchmarking indicated that
-            % this one performed worse than the Boehm collector,
-            % so we don't really support this option anymore.
-
     ;       gc_accurate.
             % Our own Mercury-specific home-grown copying collector.
             % See runtime/mercury_accurate_gc.c and compiler/ml_elim_nested.m.
 
-    % Returns yes if the GC method is conservative, i.e. if it is `boehm'
-    % or `mps'. Conservative GC methods don't support heap reclamation
-    % on failure.
+    % Returns yes if the GC method is conservative, i.e. if it is `boehm'.
+    % Conservative GC methods don't support heap reclamation on failure.
     %
 :- func gc_is_conservative(gc_method) = bool.
 
@@ -124,7 +115,7 @@
 :- type may_be_thread_safe == bool.
 
     % For the C backends, what type of C compiler are we using?
-    % 
+    %
 :- type c_compiler_type
     --->    cc_gcc(
                 gcc_major_ver :: maybe(int),
@@ -132,13 +123,12 @@
 
                 gcc_minor_ver :: maybe(int),
                 % The minor version number, if known.
-                
+
                 gcc_patch_level :: maybe(int)
                 % The patch level, if known.
                 % This is only available since gcc 3.0.
             )
     ;       cc_clang(maybe(clang_version))
-    ;       cc_lcc
     ;       cc_cl(maybe(int))
     ;       cc_unknown.
 
@@ -173,7 +163,7 @@
     --->    env_type_posix
             % A generic POSIX-like environment: this covers most Linux systems,
             % Mac OS X, FreeBSD, Solaris etc.
-    
+
     ;       env_type_cygwin
             % The Cygwin shell and utilities on Windows.
 
@@ -181,18 +171,18 @@
             % MinGW with the MSYS environment on Windows.
 
     ;       env_type_win_cmd
-            % The Windows command-line interpreter (cmd.exe). 
-            
+            % The Windows command-line interpreter (cmd.exe).
+
     ;       env_type_powershell.
             % Windows PowerShell.
-            % (NOTE: COMSPEC must be pointing to powershell.exe not cmd.exe.)            
+            % (NOTE: COMSPEC must be pointing to powershell.exe not cmd.exe.)
 
     % The tracing levels to use for a module when doing the source to source
     % debugging tranformation.
 :- type ssdb_trace_level
     --->    none
             % No tracing of this module
-            
+
     ;       shallow
             % Shallow trace all procedures in this module
 
@@ -289,7 +279,7 @@
 :- pred set_trace_level_none(globals::in, globals::out) is det.
 :- pred set_ssdb_trace_level(ssdb_trace_level::in,
     globals::in, globals::out) is det.
-:- pred set_maybe_feedback_info(maybe(feedback_info)::in, 
+:- pred set_maybe_feedback_info(maybe(feedback_info)::in,
     globals::in, globals::out) is det.
 :- pred set_file_install_cmd(file_install_cmd::in,
     globals::in, globals::out) is det.
@@ -328,7 +318,7 @@
 :- pred current_grade_supports_par_conj(globals::in, bool::out) is det.
 
     % Check that code compiled in the current grade supports concurrent
-    % execution, i.e. that spawn/3 will create a new thread instead of 
+    % execution, i.e. that spawn/3 will create a new thread instead of
     % aborting execution.
     %
 :- pred current_grade_supports_concurrency(globals::in, bool::out) is det.
@@ -393,7 +383,6 @@ convert_target_2("csharp", target_csharp).
 convert_target_2("java", target_java).
 convert_target_2("il", target_il).
 convert_target_2("c", target_c).
-convert_target_2("x86_64", target_x86_64).
 convert_target_2("erlang", target_erlang).
 
 convert_foreign_language(String, ForeignLanguage) :-
@@ -415,7 +404,6 @@ convert_gc_method("conservative", gc_boehm).
 convert_gc_method("boehm", gc_boehm).
 convert_gc_method("boehm_debug", gc_boehm_debug).
 convert_gc_method("hgc", gc_hgc).
-convert_gc_method("mps", gc_mps).
 convert_gc_method("accurate", gc_accurate).
 convert_gc_method("automatic", gc_automatic).
 
@@ -438,17 +426,11 @@ convert_c_compiler_type(CC_Str, C_CompilerType) :-
         convert_c_compiler_type_with_version(CC_Str, C_CompilerType)
     ).
 
-% NOTE: we currently accept strings of the form cl_<version> or 
-% msvc_<version> for Visual C; support for the former is deprecated and
-% will be dropped once the configure script begins generated the latter.
-
 :- pred convert_c_compiler_type_simple(string::in, c_compiler_type::out)
     is semidet.
 
 convert_c_compiler_type_simple("gcc",      cc_gcc(no, no, no)).
 convert_c_compiler_type_simple("clang",    cc_clang(no)).
-convert_c_compiler_type_simple("lcc",      cc_lcc).
-convert_c_compiler_type_simple("cl",       cc_cl(no)).
 convert_c_compiler_type_simple("msvc",     cc_cl(no)).
 convert_c_compiler_type_simple("unknown",  cc_unknown).
 
@@ -462,8 +444,6 @@ convert_c_compiler_type_with_version(CC_Str, C_CompilerType) :-
         convert_gcc_version(Major, Minor, Patch, C_CompilerType)
     ; Tokens = ["clang", Major, Minor, Patch] ->
         convert_clang_version(Major, Minor, Patch, C_CompilerType)
-    ; Tokens = ["cl", Version] ->
-        convert_msvc_version(Version, C_CompilerType)
     ; Tokens = ["msvc", Version] ->
         convert_msvc_version(Version, C_CompilerType)
     ;
@@ -473,7 +453,7 @@ convert_c_compiler_type_with_version(CC_Str, C_CompilerType) :-
     % Create the value of C compiler type when we have (some) version
     % information for gcc available.
     % We only accept version information that has the following form:
-    % 
+    %
     %   u_u_u
     %   <major>_u_u
     %   <major>_<minor>_<u>
@@ -490,7 +470,7 @@ convert_c_compiler_type_with_version(CC_Str, C_CompilerType) :-
     c_compiler_type::out) is semidet.
 
 convert_gcc_version(MajorStr, MinorStr, PatchStr, C_CompilerType) :-
-    ( 
+    (
         MajorStr = "u",
         MinorStr = "u",
         PatchStr = "u"
@@ -530,7 +510,7 @@ convert_gcc_version(MajorStr, MinorStr, PatchStr, C_CompilerType) :-
     % Create the value of C compiler type when we have (some) version
     % information for clang available.
     % We only accept version information that has the following form:
-    % 
+    %
     %   <major>_<minor>_<patch>
     %
 :- pred convert_clang_version(string::in, string::in, string::in,
@@ -580,7 +560,6 @@ compilation_target_string(target_c)    = "C".
 compilation_target_string(target_csharp) = "C#".
 compilation_target_string(target_il)   = "IL".
 compilation_target_string(target_java) = "Java".
-compilation_target_string(target_x86_64) = "x86_64".
 compilation_target_string(target_erlang) = "Erlang".
 
 foreign_language_string(lang_c) = "C".
@@ -598,7 +577,6 @@ simple_foreign_language_string(lang_erlang) = "erlang".
 gc_is_conservative(gc_boehm) = yes.
 gc_is_conservative(gc_boehm_debug) = yes.
 gc_is_conservative(gc_hgc) = yes.
-gc_is_conservative(gc_mps) = yes.
 gc_is_conservative(gc_none) = no.
 gc_is_conservative(gc_accurate) = no.
 gc_is_conservative(gc_automatic) = no.
@@ -777,14 +755,14 @@ current_grade_supports_tabling(Globals, TablingSupported) :-
     globals.get_target(Globals, Target),
     globals.get_gc_method(Globals, GC_Method),
     globals.lookup_bool_option(Globals, highlevel_data, HighLevelData),
-    ( 
+    (
         Target = target_c,
         GC_Method \= gc_accurate,
         HighLevelData = no
     ->
-        TablingSupported = yes 
+        TablingSupported = yes
     ;
-        TablingSupported = no 
+        TablingSupported = no
     ).
 
     % Parallel conjunctions only supported on lowlevel C parallel grades.
@@ -827,10 +805,6 @@ current_grade_supports_concurrency(Globals, ThreadsSupported) :-
         ; Target = target_csharp
         ),
         ThreadsSupported = yes
-    ;
-        % Threads are not yet supported in the x86_64 backend.
-        Target = target_x86_64,
-        ThreadsSupported = no
     ).
 
 get_any_intermod(Globals, AnyIntermod) :-
@@ -936,7 +910,6 @@ io_get_maybe_source_file_map(MaybeSourceFileMap, !IO) :-
 io_set_maybe_source_file_map(MaybeSourceFileMap, !IO) :-
     set_maybe_source_file_map(MaybeSourceFileMap, !IO).
 
-%-----------------------------------------------------------------------------%
 %-----------------------------------------------------------------------------%
 :- end_module libs.globals.
 %-----------------------------------------------------------------------------%

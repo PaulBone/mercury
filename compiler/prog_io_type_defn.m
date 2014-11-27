@@ -16,7 +16,7 @@
 
 :- interface.
 
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_item.
 :- import_module parse_tree.prog_io_util.
@@ -325,23 +325,24 @@ convert_constructor_arg_list(ModuleName, VarSet, [Term | Terms])
                 MaybeConstructorArgs = error1([Spec])
             ;
                 SymNameArgs = [],
-                MaybeFieldName = yes(SymName),
+                NameCtxt = get_term_context(NameTerm),
+                MaybeCtorFieldName = yes(ctor_field_name(SymName, NameCtxt)),
                 MaybeConstructorArgs =
                     convert_constructor_arg_list_2(ModuleName,
-                        VarSet, MaybeFieldName, TypeTerm, Terms)
+                        VarSet, MaybeCtorFieldName, TypeTerm, Terms)
             )
         )
     ;
-        MaybeFieldName = no,
+        MaybeCtorFieldName = no,
         TypeTerm = Term,
         MaybeConstructorArgs = convert_constructor_arg_list_2(ModuleName,
-            VarSet, MaybeFieldName, TypeTerm, Terms)
+            VarSet, MaybeCtorFieldName, TypeTerm, Terms)
     ).
 
-:- func convert_constructor_arg_list_2(module_name, varset, maybe(sym_name),
-    term, list(term)) = maybe1(list(constructor_arg)).
+:- func convert_constructor_arg_list_2(module_name, varset,
+    maybe(ctor_field_name), term, list(term)) = maybe1(list(constructor_arg)).
 
-convert_constructor_arg_list_2(ModuleName, VarSet, MaybeFieldName,
+convert_constructor_arg_list_2(ModuleName, VarSet, MaybeCtorFieldName,
         TypeTerm, Terms) = MaybeArgs :-
     ContextPieces = [words("In type definition:")],
     parse_type(TypeTerm, VarSet, ContextPieces, MaybeType),
@@ -349,7 +350,7 @@ convert_constructor_arg_list_2(ModuleName, VarSet, MaybeFieldName,
         MaybeType = ok1(Type),
         Context = get_term_context(TypeTerm),
         % Initially every argument is assumed to occupy one word.
-        Arg = ctor_arg(MaybeFieldName, Type, full_word, Context),
+        Arg = ctor_arg(MaybeCtorFieldName, Type, full_word, Context),
         MaybeTailArgs =
             convert_constructor_arg_list(ModuleName, VarSet, Terms),
         (
@@ -401,18 +402,18 @@ process_du_ctors(Params, VarSet, BodyTerm, [Ctor | Ctors], !Specs) :-
         set.list_to_set(ExistQVars, ExistQVarsSet),
         set.list_to_set(Params, ParamsSet),
         set.intersect(ExistQVarsSet, ParamsSet, ExistQParamsSet),
-        set.non_empty(ExistQParamsSet)
+        set.is_non_empty(ExistQParamsSet)
     ->
         % There should be no duplicate names to remove.
         set.to_sorted_list(ExistQParamsSet, ExistQParams),
         varset.coerce(VarSet, GenericVarSet),
-        ExistQParamVarsStr =
-            mercury_vars_to_string(GenericVarSet, no, ExistQParams),
+        ExistQParamVarsStrs = list.map(mercury_var_to_string(GenericVarSet, no),
+            ExistQParams),
         Pieces = [words("Error:"),
             words(choose_number(ExistQParams,
-                "type variable", "type variables")),
-            words(ExistQParamVarsStr),
-            words(choose_number(ExistQParams, "has", "have")),
+                "type variable", "type variables"))] ++
+            list_to_quoted_pieces(ExistQParamVarsStrs) ++
+            [words(choose_number(ExistQParams, "has", "have")),
             words("overlapping scopes"),
             words("(explicit type quantifier shadows argument type)."), nl],
         Spec = error_spec(severity_error, phase_term_to_parse_tree,

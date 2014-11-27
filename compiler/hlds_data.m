@@ -20,7 +20,7 @@
 :- import_module hlds.hlds_pred.
 :- import_module libs.globals.
 :- import_module mdbcomp.goal_path.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 
 :- import_module assoc_list.
@@ -344,11 +344,11 @@ cons_table_optimize(!ConsTable) :-
 
 :- interface.
 
-:- type ctor_field_table == map(ctor_field_name, list(hlds_ctor_field_defn)).
+:- type ctor_field_table == map(sym_name, list(hlds_ctor_field_defn)).
 
 :- type hlds_ctor_field_defn
     --->    hlds_ctor_field_defn(
-                % Context of the field definition.
+                % The context of the field definition.
                 field_context   :: prog_context,
 
                 field_status    :: import_status,
@@ -630,9 +630,9 @@ cons_table_optimize(!ConsTable) :-
             % This is for constants representing procedure descriptions for
             % deep profiling.
 
-    ;       table_io_decl_tag(pred_id, proc_id)
+    ;       table_io_entry_tag(pred_id, proc_id)
             % This is for constants representing the structure that allows us
-            % to decode the contents of the memory block containing the
+            % to decode the contents of the answer block containing the
             % headvars of I/O primitives.
 
     ;       single_functor_tag
@@ -769,7 +769,7 @@ get_primary_tag(Tag) = MaybePrimaryTag :-
         ; Tag = type_info_const_tag(_)
         ; Tag = typeclass_info_const_tag(_)
         ; Tag = tabling_info_tag(_, _)
-        ; Tag = table_io_decl_tag(_, _)
+        ; Tag = table_io_entry_tag(_, _)
         ; Tag = deep_profiling_proc_layout_tag(_, _)
         ),
         MaybePrimaryTag = no
@@ -804,7 +804,7 @@ get_secondary_tag(Tag) = MaybeSecondaryTag :-
         ; Tag = typeclass_info_const_tag(_)
         ; Tag = tabling_info_tag(_, _)
         ; Tag = deep_profiling_proc_layout_tag(_, _)
-        ; Tag = table_io_decl_tag(_, _)
+        ; Tag = table_io_entry_tag(_, _)
         ; Tag = no_tag
         ; Tag = reserved_address_tag(_)
         ; Tag = unshared_tag(_PrimaryTag)

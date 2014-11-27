@@ -656,7 +656,6 @@ ml_gen_static_vector_type(MLDS_ModuleName, MLDS_Context, Target, ArgTypes,
         ;
             ( Target = target_il
             ; Target = target_erlang
-            ; Target = target_x86_64
             ),
             unexpected($module, $pred, "unsupported target language")
         ),
@@ -798,7 +797,7 @@ cons_id_to_alloc_site_string(ConsId) = TypeStr :-
         ; ConsId = type_ctor_info_const(_, _, _)
         ; ConsId = base_typeclass_info_const(_, _, _, _)
         ; ConsId = tabling_info_const(_)
-        ; ConsId = table_io_decl(_)
+        ; ConsId = table_io_entry_desc(_)
         ; ConsId = deep_profiling_proc_layout(_)
         ),
         unexpected($module, $pred, "unexpected cons_id")

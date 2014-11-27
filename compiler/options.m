@@ -130,6 +130,7 @@
     ;       warn_table_with_inline
     ;       warn_non_term_special_preds
     ;       warn_known_bad_format_calls
+    ;       warn_only_one_format_string_error
     ;       warn_unknown_format_calls
     ;       warn_obsolete
     ;       warn_insts_without_matching_type
@@ -212,6 +213,8 @@
     ;       output_library_link_flags
     ;       output_grade_defines
     ;       output_c_include_directory_flags
+    ;       output_target_arch
+    ;       output_class_dir
 
     % Auxiliary output options
     ;       smart_recompilation
@@ -309,8 +312,6 @@
     ;       csharp              % target csharp
     ;       csharp_only         % target csharp + target_code_only
     % XXX The following options need to be documented.
-    ;       x86_64              % target x86_64
-    ;       x86_64_only         % target x86_64 + target_code_only
     ;       erlang              % target erlang
     ;       erlang_only         % target erlang + target_code_only
 
@@ -652,7 +653,6 @@
     ;       enable_const_struct
     ;       common_struct
     ;       common_struct_preds
-    ;       common_goal
     ;       constraint_propagation
     ;       local_constraint_propagation
     ;       optimize_unused_args
@@ -760,7 +760,7 @@
     ;         smart_atomic_indexing
     ;         smart_string_indexing
     ;         smart_tag_indexing
-    ;         smart_float_indexing  
+    ;         smart_float_indexing
 
     ;       static_ground_cells
     ;       static_ground_floats
@@ -1013,7 +1013,7 @@
     ;       typecheck_ambiguity_error_limit
     ;       help
     ;       version
-    ;       fullarch
+    ;       target_arch
     ;       cross_compiling
     ;       local_module_id
     ;       analysis_file_cache_dir
@@ -1129,6 +1129,7 @@ option_defaults_2(warning_option, [
     warn_table_with_inline              -   bool(yes),
     warn_non_term_special_preds         -   bool(yes),
     warn_known_bad_format_calls         -   bool(yes),
+    warn_only_one_format_string_error   -   bool(yes),
     warn_unknown_format_calls           -   bool(no),
     warn_obsolete                       -   bool(yes),
     warn_insts_without_matching_type    -   bool(yes),
@@ -1216,7 +1217,9 @@ option_defaults_2(output_option, [
     output_cflags                       -   bool(no),
     output_library_link_flags           -   bool(no),
     output_grade_defines                -   bool(no),
-    output_c_include_directory_flags    -   bool(no)
+    output_c_include_directory_flags    -   bool(no),
+    output_target_arch                  -   bool(no),
+    output_class_dir                    -   bool(no)
 ]).
 option_defaults_2(aux_output_option, [
     % Auxiliary Output Options
@@ -1297,8 +1300,6 @@ option_defaults_2(compilation_model_option, [
     csharp_only                         -   special,
     java                                -   special,
     java_only                           -   special,
-    x86_64                              -   special,
-    x86_64_only                         -   special,
     erlang                              -   special,
     erlang_only                         -   special,
 
@@ -1574,11 +1575,6 @@ option_defaults_2(optimization_option, [
     enable_const_struct                 -   bool(yes),
     common_struct                       -   bool(no),
     common_struct_preds                 -   string(""),
-    common_goal                         -   bool(yes),
-                                        % common_goal is not really an
-                                        % optimization, since it affects
-                                        % the semantics.
-
     constraint_propagation              -   bool(no),
     local_constraint_propagation        -   bool(no),
     optimize_duplicate_calls            -   bool(no),
@@ -1824,7 +1820,7 @@ option_defaults_2(link_option, [
     frameworks                          -   accumulating([]),
     framework_directories               -   accumulating([]),
     sign_assembly                       -   string(""),
-    cstack_reserve_size                 -   int(-1),    
+    cstack_reserve_size                 -   int(-1),
 
     shared_library_extension            -   string(".so"),
                                         % The `mmc' script will override the
@@ -1932,7 +1928,7 @@ option_defaults_2(miscellaneous_option, [
     typecheck_ambiguity_error_limit     -   int(3000),
     help                                -   bool(no),
     version                             -   bool(no),
-    fullarch                            -   string(""),
+    target_arch                         -   string(""),
     cross_compiling                     -   bool(no),
     local_module_id                     -   accumulating([]),
     analysis_file_cache_dir             -   string(""),
@@ -1991,6 +1987,7 @@ long_option("halt-at-warn",             halt_at_warn).
 long_option("halt-at-syntax-errors",    halt_at_syntax_errors).
 long_option("halt-at-auto-parallel-failure", halt_at_auto_parallel_failure).
 long_option("warn-singleton-variables", warn_singleton_vars).
+long_option("warn-singleton-vars",      warn_singleton_vars).
 long_option("warn-overlapping-scopes",  warn_overlapping_scopes).
 long_option("warn-det-decls-too-lax",   warn_det_decls_too_lax).
 long_option("warn-inferred-erroneous",  warn_inferred_erroneous).
@@ -2013,6 +2010,8 @@ long_option("warn-wrong-module-name",   warn_wrong_module_name).
 long_option("warn-smart-recompilation", warn_smart_recompilation).
 long_option("warn-undefined-options-variables",
                     warn_undefined_options_variables).
+long_option("warn-undefined-options-vars",
+                    warn_undefined_options_variables).
 long_option("warn-non-tail-recursion",  warn_non_tail_recursion).
 long_option("warn-target-code",         warn_target_code).
 long_option("warn-up-to-date",          warn_up_to_date).
@@ -2021,6 +2020,8 @@ long_option("warn-dead-procs",          warn_dead_procs).
 long_option("warn-table-with-inline",   warn_table_with_inline).
 long_option("warn-non-term-special-preds", warn_non_term_special_preds).
 long_option("warn-known-bad-format-calls", warn_known_bad_format_calls).
+long_option("warn-only-one-format-string-error",
+                    warn_only_one_format_string_error).
 long_option("warn-unknown-format-calls", warn_unknown_format_calls).
 long_option("warn-obsolete",             warn_obsolete).
 long_option("warn-insts-without-matching-type",
@@ -2128,6 +2129,9 @@ long_option("output-c-include-directory-flags",
     output_c_include_directory_flags).
 long_option("output-c-include-dir-flags",
     output_c_include_directory_flags).
+long_option("output-target-arch",       output_target_arch).
+long_option("output-class-directory",   output_class_dir).
+long_option("output-class-dir",         output_class_dir).
 
 % aux output options
 long_option("smart-recompilation",      smart_recompilation).
@@ -2219,10 +2223,6 @@ long_option("csharp",               csharp).
 long_option("C#",                   csharp).
 long_option("csharp-only",          csharp_only).
 long_option("C#-only",              csharp_only).
-long_option("x86_64",               x86_64).
-long_option("x86-64",               x86_64).
-long_option("x86_64-only",          x86_64_only).
-long_option("x86-64-only",          x86_64_only).
 long_option("erlang",               erlang).
 long_option("Erlang",               erlang).
 long_option("erlang-only",          erlang_only).
@@ -2451,7 +2451,6 @@ long_option("inline-vars-threshold",        inline_vars_threshold).
 long_option("const-struct",         enable_const_struct).
 long_option("common-struct",        common_struct).
 long_option("common-struct-preds",  common_struct_preds).
-long_option("common-goal",          common_goal).
 long_option("excess-assign",        excess_assign).
 long_option("optimize-format-calls",         optimize_format_calls).
 long_option("optimize-duplicate-calls", optimize_duplicate_calls).
@@ -2913,8 +2912,8 @@ long_option("typecheck-ambiguity-error-limit",
 long_option("help",                 help).
 long_option("version",              version).
 long_option("filenames-from-stdin", filenames_from_stdin).
-long_option("fullarch",             fullarch).
-long_option("target-arch",          fullarch).
+long_option("fullarch",             target_arch).
+long_option("target-arch",          target_arch).
 long_option("cross-compiling",      cross_compiling).
 long_option("local-module-id",      local_module_id).
 long_option("analysis-file-cache-dir",  analysis_file_cache_dir).
@@ -2980,11 +2979,6 @@ special_handler(csharp, none, !.OptionTable, ok(!:OptionTable)) :-
     map.set(target, string("csharp"), !OptionTable).
 special_handler(csharp_only, none, !.OptionTable, ok(!:OptionTable)) :-
     map.set(target, string("csharp"), !OptionTable),
-    map.set(target_code_only, bool(yes), !OptionTable).
-special_handler(x86_64, none, !.OptionTable, ok(!:OptionTable)) :-
-    map.set(target, string("x86_64"), !OptionTable).
-special_handler(x86_64_only, none, !.OptionTable, ok(!:OptionTable)) :-
-    map.set(target, string("x86_64"), !OptionTable),
     map.set(target_code_only, bool(yes), !OptionTable).
 special_handler(erlang, none, !.OptionTable, ok(!:OptionTable)) :-
     map.set(target, string("erlang"), !OptionTable).
@@ -3536,7 +3530,7 @@ options_help_warning -->
         "--inhibit-accumulator-warnings",
         "\tDon't warn about argument order rearrangement caused",
         "\tby --introduce-accumulators.",
-        "--no-warn-singleton-variables",
+        "--no-warn-singleton-vars, --no-warn-singleton-variables",
         "\tDon't warn about variables which only occur once.",
         "--no-warn-overlapping-scopes",
         "\tDon't warn about variables which occur in overlapping scopes.",
@@ -3599,6 +3593,7 @@ options_help_warning -->
         "\tdeclaration does not match the module's file name.",
         "--no-warn-smart-recompilation",
         "\tDisable warnings from the smart recompilation system.",
+        "--no-warn-undefined-options-vars",
         "--no-warn-undefined-options-variables",
         "\tDo not warn about references to undefined variables in",
         "\toptions files with `--make'.",
@@ -3629,6 +3624,11 @@ options_help_warning -->
         "\tDo not warn about calls to string.format or io.format that",
         "\tthe compiler knows for sure contain mismatches between the",
         "\tformat string and the supplied values.",
+        "--no-warn-only-one-format-string-error",
+        "\tIf a format string has more one than mismatch with the supplied,",
+        "\tvalues, generate a warning for all mismatches, not just the first.",
+        "\tThe later mismatches may be avalanche errors caused by earlier",
+        "\tmismatches.",
         "--warn-unknown-format-calls",
         "\tWarn about calls to string.format or io.format for which",
         "\tthe compiler cannot tell whether there are any mismatches",
@@ -3880,13 +3880,18 @@ options_help_output -->
         "\tPrint the flags that are passed to the C compiler to define the",
         "\tmacros used to specify the compilation grade.",
         "\tThe flags are printed to the standard output.",
-        "--output-c-include-dir-flags, --output-c-include-directory-flags", 
+        "--output-c-include-dir-flags, --output-c-include-directory-flags",
         "\tPrint the flags that are passed to the C compiler to specify",
         "\twhich directories to search for C header files.",
         "\tThis includes the C header files from the standard library.",
-        "\tThe flags are printed to the standard output."
+        "\tThe flags are printed to the standard output.",
+        "--output-target-arch",
+        "\tPrint the target architecture to the standard output.",
+        "--output-class-dir, --output-class-directory",
+        "\tPrint to standard output the name of the directory in which",
+        "\tgenerated Java class will be placed."
     ]).
-        
+
 :- pred options_help_aux_output(io::di, io::uo) is det.
 
 options_help_aux_output -->
@@ -4277,7 +4282,7 @@ options_help_compilation_model -->
 % The ilc grade is not documented because it is not useful;
 % it has been superceded by the il grade.
         "\tor one of those with one or more of the grade modifiers",
-        "\t`.gc', `.mps', `.prof', `.memprof', `.profdeep', `.tr',",
+        "\t`.gc', `.prof', `.memprof', `.profdeep', `.tr',",
         "\t`.spf', `.stseg', `.debug', `.par' and/or `.pic_reg' appended.",
         "\tDepending on your particular installation, only a subset",
         "\tof these possible grades will have been installed.",
@@ -4475,13 +4480,12 @@ options_help_compilation_model -->
 
     io.write_string("      Miscellaneous optional features\n"),
     write_tabbed_lines([
-        "--gc {none, boehm, hgc, mps, accurate, automatic}",
-        "--garbage-collection {none, boehm, hgc, mps, accurate, automatic}",
+        "--gc {none, boehm, hgc, accurate, automatic}",
+        "--garbage-collection {none, boehm, hgc, accurate, automatic}",
         "\t\t\t\t(`java', `csharp', `il' and `erlang'",
         "\t\t\t\t\tgrades use `--gc automatic',",
         "\t\t\t\t`.gc' grades use `--gc boehm',",
         "\t\t\t\t`.hgc' grades use `--gc hgc',",
-        "\t\t\t\t`.mps' grades use `--gc mps',",
         "\t\t\t\tother grades use `--gc none'.)",
         "\tSpecify which method of garbage collection to use",
         "\t(default: boehm).",
@@ -4489,8 +4493,6 @@ options_help_compilation_model -->
         "\t`hgc' is our own conservative collector;",
         "\t`accurate' is our own type-accurate copying GC;",
         "\tit requires `--high-level-code'.",
-        "\t`mps' is a different conservative collector, based on",
-        "\tRavenbrook Limited's MPS (Memory Pool System) kit.",
         "\t`automatic' means the target language provides it.",
         "\tThis is the case for the IL, C#, Java and Erlang back-ends,",
         "\twhich always use the garbage collector of the underlying",
@@ -5619,8 +5621,8 @@ options_help_link -->
         "\t-R option above (such as Mac OS X).",
         "-l <library>, --library <library>",
         "\tLink with the specified library.",
-        "--link-object <object-file>",
-        "\tLink with the specified object file.",
+        "--link-object <file>",
+        "\tLink with the specified object or archive file.",
         "--search-lib-files-dir <directory>",
         "--search-library-files-directory <directory>",
         "\tSearch <directory> for Mercury library files have not yet been",
@@ -5718,7 +5720,7 @@ options_help_link -->
         "\tin the specified key file.",
         "\t(This option is only meaningful when generating library",
         "\tassemblies with the C# backend.)",
-        
+
         "--cstack-reserve-size <size>",
         "\tSet the total size of the C stack in virtual memory for",
         "\texecutables.  The stack size is given in bytes.",
@@ -5938,8 +5940,9 @@ options_help_misc -->
         "--version",
         "\tDisplay the compiler version.",
 
-        % The `--fullarch' option is reserved for
-        % use by the `Mercury.config' file.
+        % The `--target-arch' options is reserved for use by the
+        % `Mercury.config' file.  The `--fullarch' option is a deprecated
+        % synonym for this.
 
         "--cross-compiling",
         "\tDo not assume that the code being generated is for the",

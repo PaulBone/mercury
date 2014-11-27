@@ -94,6 +94,7 @@
 :- import_module libs.globals.
 :- import_module libs.options.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module ml_backend.java_util.
 :- import_module ml_backend.ml_code_util.  % for ml_gen_local_var_decl_flags.
 :- import_module ml_backend.ml_global_data.
@@ -2064,19 +2065,12 @@ write_main_driver(Indent, ClassName, !IO) :-
         "jmercury.runtime.JavaInternal.args = args;",
         "jmercury.runtime.JavaInternal.exit_status = 0;",
         "benchmarking.ML_initialise();",
-        "try {",
-        "   " ++ ClassName ++ ".main_2_p_0();",
-        "   jmercury.runtime.JavaInternal.run_finalisers();",
-        "} catch (jmercury.runtime.Exception e) {",
-        "   exception.ML_report_uncaught_exception(",
-        "       (univ.Univ_0) e.exception);",
-        "   if (System.getenv(""MERCURY_SUPPRESS_STACK_TRACE"") == null) {",
-        "       e.printStackTrace(System.err);",
-        "   }",
-        "   if (jmercury.runtime.JavaInternal.exit_status == 0) {",
-        "       jmercury.runtime.JavaInternal.exit_status = 1;",
-        "   }",
-        "}",
+        "Runnable run_main = new Runnable() {",
+        "    public void run() {",
+        "        " ++ ClassName ++ ".main_2_p_0();",
+        "    }",
+        "};",
+        "jmercury.runtime.JavaInternal.runMain(run_main);",
         "java.lang.System.exit(jmercury.runtime.JavaInternal.exit_status);"
     ],
     list.foldl(write_indented_line(Indent + 1), Body, !IO),

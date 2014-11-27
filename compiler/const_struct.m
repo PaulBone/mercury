@@ -120,7 +120,7 @@
 :- import_module libs.options.
 :- import_module libs.trace_params.
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 
 :- import_module int.
 :- import_module maybe.
@@ -158,7 +158,6 @@ const_struct_db_init(Globals, Db) :-
     ;
         ( Target = target_il
         ; Target = target_csharp
-        ; Target = target_x86_64
         ; Target = target_erlang
         ),
         PolyEnabled = no,

@@ -51,6 +51,7 @@
 :- import_module mdbcomp.feedback.automatic_parallelism.
 :- import_module mdbcomp.goal_path.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module mdbcomp.program_representation.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
@@ -119,7 +120,7 @@ do_apply_implicit_parallelism_transformation(SourceFileMap, Specs,
             AnyPredIntroducedParallelism = introduced_parallelism,
             predicate_table_set_preds(PredMap, PredTable0, PredTable),
             module_info_set_predicate_table(PredTable, !ModuleInfo),
-            module_info_set_contains_par_conj(!ModuleInfo)
+            module_info_set_has_parallel_conj(!ModuleInfo)
         )
     ;
         map.lookup(SourceFileMap, ModuleName, ModuleFilename),
@@ -206,7 +207,7 @@ cpc_proc_is_in_module(ModuleName, ProcLabel - CPC, IMProcLabel - CPC) :-
 :- pred maybe_parallelise_pred(parallelism_info::in,
     pred_id::in, pred_table::in, pred_table::out,
     introduced_parallelism::in, introduced_parallelism::out,
-    module_info::in, module_info::out, 
+    module_info::in, module_info::out,
     list(error_spec)::in, list(error_spec)::out) is det.
 
 maybe_parallelise_pred(ParallelismInfo, PredId, !PredTable,
@@ -230,7 +231,7 @@ maybe_parallelise_pred(ParallelismInfo, PredId, !PredTable,
 :- pred maybe_parallelise_proc(parallelism_info::in,
     pred_info::in, pred_id::in, proc_id::in, proc_table::in, proc_table::out,
     introduced_parallelism::in, introduced_parallelism::out,
-    module_info::in, module_info::out, 
+    module_info::in, module_info::out,
     list(error_spec)::in, list(error_spec)::out) is det.
 
 maybe_parallelise_proc(ParallelismInfo, PredInfo, _PredId, ProcId,
@@ -247,11 +248,11 @@ maybe_parallelise_proc(ParallelismInfo, PredInfo, _PredId, ProcId,
     ( map.search(CPCMap, IMProcLabel, CPCProc) ->
         proc_info_get_has_parallel_conj(ProcInfo0, HasParallelConj),
         (
-            HasParallelConj = yes,
+            HasParallelConj = has_parallel_conj,
             Spec = report_already_parallelised(PredInfo),
             !:Specs = [Spec | !.Specs]
         ;
-            HasParallelConj = no,
+            HasParallelConj = has_no_parallel_conj,
             parallelise_proc(CPCProc, PredInfo, ProcInfo0, ProcInfo,
                 ProcIntroducedParallelism, !ModuleInfo, !Specs),
             (
@@ -312,7 +313,7 @@ parallelise_proc(CPCProc, PredInfo, !ProcInfo,
         % In the future we'll specialise the procedure for parallelism,
         % We don't do that now so simply replace the procedure's body.
         proc_info_set_goal(Goal, !ProcInfo),
-        proc_info_set_has_parallel_conj(yes, !ProcInfo)
+        proc_info_set_has_parallel_conj(has_parallel_conj, !ProcInfo)
     ;
         IntroducedParallelism = have_not_introduced_parallelism
     ).

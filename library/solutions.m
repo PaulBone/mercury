@@ -1,17 +1,17 @@
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % vim: ft=mercury ts=4 sw=4 et wm=0 tw=0
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % Copyright (C) 1994-2007 The University of Melbourne.
 % This file may only be copied under the terms of the GNU Library General
 % Public License - see the file COPYING.LIB in the Mercury distribution.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % 
 % File: solutions.m.
 % Main author: fjh.
 % Stability: medium.
 % 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module solutions.
 :- interface.
@@ -20,7 +20,7 @@
 :- import_module list.
 :- import_module set.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
     
     % solutions/2 collects all the solutions to a predicate and returns
     % them as a list in sorted order, with duplicates removed.
@@ -48,7 +48,8 @@
 :- pred unsorted_solutions(pred(T), list(T)).
 :- mode unsorted_solutions(pred(out) is multi, out(non_empty_list))
     is cc_multi.
-:- mode unsorted_solutions(pred(out) is nondet, out) is cc_multi.
+:- mode unsorted_solutions(pred(out) is nondet, out)
+    is cc_multi.
 
 :- func aggregate(pred(T), func(T, U) = U, U) = U.
 :- mode aggregate(pred(out) is multi, func(in, in) = out is det, in)
@@ -191,24 +192,26 @@
 :- mode do_while(pred(out) is nondet, pred(in, out, di, uo) is cc_multi, di, uo)
     is cc_multi.
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
 :- import_module mutvar.
+:- import_module require.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 % NOTE: the all-solutions predicates are handled specially in
 %       browser/declarative_tree.m.  Any changes here may need to be reflected
 %       there.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 solutions(Pred, List) :-
     builtin_solutions(Pred, UnsortedList),
-    list.sort_and_remove_dups(UnsortedList, List).
+    list.sort_and_remove_dups(UnsortedList, List0),
+    assert_num_solutions(Pred, List0, List).
 
 solutions(P) = S :-
     solutions(P, S).
@@ -222,7 +225,9 @@ solutions_set(Pred, Set) :-
 
 unsorted_solutions(Pred, List) :-
     builtin_solutions(Pred, UnsortedList),
-    cc_multi_equal(UnsortedList, List).
+    ( List = UnsortedList
+    ; List = UnsortedList
+    ).
 
 aggregate(P, F, Acc0) = Acc :-
     aggregate(P, (pred(X::in, A0::in, A::out) is det :- A = F(X, A0)),
@@ -245,16 +250,38 @@ unsorted_aggregate2(Generator, Accumulator, !Acc1, !Acc2) :-
     cc_multi_equal(!Acc1),
     cc_multi_equal(!Acc2).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pred builtin_solutions(pred(T), list(T)).
-:- mode builtin_solutions(pred(out) is multi, out) is det.  % really cc_multi
-:- mode builtin_solutions(pred(out) is nondet, out) is det. % really cc_multi
+:- mode builtin_solutions(pred(out) is multi, out(non_empty_list))
+     is det. % really cc_multi
+:- mode builtin_solutions(pred(out) is nondet, out)
+     is det. % really cc_multi
 
 builtin_solutions(Generator, UnsortedList) :-
-    builtin_aggregate(Generator, list.cons, [], UnsortedList).
+    builtin_aggregate(Generator, list.cons, [], UnsortedList0),
+    assert_num_solutions(Generator, UnsortedList0, UnsortedList).
 
-%-----------------------------------------------------------------------------%
+:- pred assert_num_solutions(pred(T), list(T), list(T)).
+:- mode assert_num_solutions(pred(out) is multi,
+     in, out(non_empty_list)) is det.
+:- mode assert_num_solutions(pred(out) is nondet,
+     in, out) is det.
+
+:- pragma promise_equivalent_clauses(assert_num_solutions/3).
+
+assert_num_solutions(_Pred::pred(out) is multi,
+        List0::in, List::out(non_empty_list)) :-
+    (
+        List0 = [],
+        unexpected($module, $pred, "no solutions")
+    ;
+        List0 = [_ | _],
+        List = List0
+    ).
+assert_num_solutions(_Pred::pred(out) is nondet, List::in, List::out).
+
+%---------------------------------------------------------------------------%
 %
 % This section defines builtin_aggregate/4 which takes a closure of type
 % pred(T) in which the remaining argument is output, and backtracks over
@@ -378,7 +405,7 @@ builtin_aggregate(GeneratorPred, CollectorPred, !Accumulator) :-
         impure discard_trail_ticket
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma promise_pure(builtin_aggregate2/6).
 
@@ -455,7 +482,7 @@ builtin_aggregate2(GeneratorPred, CollectorPred, !Accumulator1, !Accumulator2) :
         impure discard_trail_ticket
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 % The code for do_while/4 is essentially the same as the code for
 % builtin_aggregate (above).  See the detailed comments above.
@@ -982,6 +1009,6 @@ end_all_soln_neg_context_more.
 
 end_all_soln_neg_context_no_more.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 :- end_module solutions.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

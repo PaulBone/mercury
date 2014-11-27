@@ -50,6 +50,7 @@
 :- implementation.
 
 :- import_module hlds.hlds_goal.
+:- import_module hlds.make_goal.
 :- import_module hlds.instmap.
 :- import_module libs.globals.
 :- import_module libs.options.
@@ -267,7 +268,7 @@ evaluate_det_call_float_2(ProcName, ModeNum, _CrossCompiling, X, Y,
         OutputArg = Y,
         OutputArgVal = -XVal
     ).
-            
+
 :- pred evaluate_det_call_string_2(string::in, int::in, bool::in,
     arg_hlds_info::in, arg_hlds_info::in, arg_hlds_info::out,
     cons_id::out) is semidet.
@@ -280,7 +281,7 @@ evaluate_det_call_string_2(ProcName, ModeNum, _CrossCompiling, X, Y,
     OutputArg = Y,
     CodePointCountX = string.count_codepoints(XVal),
     OutputArgVal = int_const(CodePointCountX).
-        
+
 :- pred evaluate_det_call_int_3(string::in, int::in, bool::in,
     arg_hlds_info::in, arg_hlds_info::in, arg_hlds_info::in,
     arg_hlds_info::out, cons_id::out) is semidet.

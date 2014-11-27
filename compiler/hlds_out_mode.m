@@ -109,6 +109,7 @@
 :- import_module check_hlds.mode_util.
 :- import_module hlds.instmap.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.mercury_to_mercury.
 :- import_module parse_tree.prog_io_util.
 :- import_module parse_tree.prog_util.
@@ -607,9 +608,9 @@ cons_id_and_args_to_term_full(ConsId, ArgTerms, Term) :-
         FunctorName = "tabling_info_const",
         Term = term.functor(term.string(FunctorName), [], Context)
     ;
-        ConsId = table_io_decl(_),
+        ConsId = table_io_entry_desc(_),
         term.context_init(Context),
-        FunctorName = "table_io_decl",
+        FunctorName = "table_io_entry_desc",
         Term = term.functor(term.string(FunctorName), [], Context)
     ;
         ConsId = deep_profiling_proc_layout(_),
@@ -805,12 +806,26 @@ mercury_format_structured_inst(Inst, Indent, Lang, InclAddr, InstVarSet, !U) :-
                 inst_test_results_to_term(term.context_init, InstResults),
             InstResultsStr =
                 mercury_term_to_string(varset.init, no, InstResultsTerm),
-            mercury_format_tabs(Indent, !U),
+            mercury_format_tabs(Indent + 1, !U),
             add_string(InstResultsStr, !U),
             add_string(",\n", !U)
         ),
-        mercury_format_structured_bound_insts(BoundInsts, Indent,
+        (
+            Lang = output_mercury
+        ;
+            Lang = output_debug,
+            mercury_format_tabs(Indent + 1, !U),
+            add_string("[\n", !U)
+        ),
+        mercury_format_structured_bound_insts(BoundInsts, Indent + 1,
             Lang, InclAddr, InstVarSet, !U),
+        (
+            Lang = output_mercury
+        ;
+            Lang = output_debug,
+            mercury_format_tabs(Indent + 1, !U),
+            add_string("]\n", !U)
+        ),
         mercury_format_tabs(Indent, !U),
         add_string(")\n", !U)
     ;
@@ -835,11 +850,11 @@ mercury_format_structured_inst(Inst, Indent, Lang, InclAddr, InstVarSet, !U) :-
         add_string("\n", !U)
     ;
         Inst = abstract_inst(Name, Args),
-        mercury_format_structured_inst_name(user_inst(Name, Args), 0,
+        mercury_format_structured_inst_name(user_inst(Name, Args), yes, Indent,
             Lang, InclAddr, InstVarSet, !U)
     ;
         Inst = defined_inst(InstName),
-        mercury_format_structured_inst_name(InstName, 0,
+        mercury_format_structured_inst_name(InstName, yes, Indent,
             Lang, InclAddr, InstVarSet, !U)
     ;
         Inst = not_reached,
@@ -894,21 +909,26 @@ get_inst_addr(_, -1).
 
 %-----------------------------------------------------------------------------%
 
-:- pred mercury_format_structured_inst_name(inst_name::in, int::in,
+:- pred mercury_format_structured_inst_name(inst_name::in, bool::in, int::in,
     output_lang::in, incl_addr::in, inst_varset::in, U::di, U::uo) is det
     <= output(U).
 
-mercury_format_structured_inst_name(InstName, Indent, Lang, InclAddr,
-        InstVarSet, !U) :-
+mercury_format_structured_inst_name(InstName, FirstIndentPrinted, Indent,
+        Lang, InclAddr, InstVarSet, !U) :-
+    (
+        FirstIndentPrinted = no,
+        mercury_format_tabs(Indent, !U)
+    ;
+        FirstIndentPrinted = yes
+    ),
     (
         InstName = user_inst(Name, Args),
         (
             Args = [],
-            mercury_format_tabs(Indent, !U),
-            mercury_format_bracketed_sym_name(Name, !U)
+            mercury_format_bracketed_sym_name(Name, !U),
+            add_string("\n", !U)
         ;
             Args = [_ | _],
-            mercury_format_tabs(Indent, !U),
             mercury_format_sym_name(Name, !U),
             add_string("(\n", !U),
             mercury_format_structured_inst_list(Args, Indent + 1,
@@ -918,7 +938,6 @@ mercury_format_structured_inst_name(InstName, Indent, Lang, InclAddr,
         )
     ;
         InstName = merge_inst(InstA, InstB),
-        mercury_format_tabs(Indent, !U),
         add_string("$merge_inst(\n", !U),
         mercury_format_structured_inst_list([InstA, InstB], Indent + 1,
             Lang, InclAddr, InstVarSet, !U),
@@ -927,21 +946,19 @@ mercury_format_structured_inst_name(InstName, Indent, Lang, InclAddr,
     ;
         InstName = shared_inst(SubInstName),
         add_string("$shared_inst(\n", !U),
-        mercury_format_structured_inst_name(SubInstName, Indent + 1,
+        mercury_format_structured_inst_name(SubInstName, no, Indent + 1,
             Lang, InclAddr, InstVarSet, !U),
         mercury_format_tabs(Indent, !U),
         add_string(")\n", !U)
     ;
         InstName = mostly_uniq_inst(SubInstName),
-        mercury_format_tabs(Indent, !U),
         add_string("$mostly_uniq_inst(\n", !U),
-        mercury_format_structured_inst_name(SubInstName, Indent + 1,
+        mercury_format_structured_inst_name(SubInstName, no, Indent + 1,
             Lang, InclAddr, InstVarSet, !U),
         mercury_format_tabs(Indent, !U),
         add_string(")\n", !U)
     ;
         InstName = unify_inst(IsLive, InstA, InstB, Real),
-        mercury_format_tabs(Indent, !U),
         add_string("$unify(", !U),
         mercury_format_is_live_comma(IsLive, !U),
         mercury_format_real_comma(Real, !U),
@@ -952,31 +969,28 @@ mercury_format_structured_inst_name(InstName, Indent, Lang, InclAddr,
         add_string(")\n", !U)
     ;
         InstName = ground_inst(SubInstName, IsLive, Uniq, Real),
-        mercury_format_tabs(Indent, !U),
         add_string("$ground(", !U),
         mercury_format_is_live_comma(IsLive, !U),
         mercury_format_real_comma(Real, !U),
         mercury_format_uniqueness(Uniq, "shared", !U),
         add_string(",\n", !U),
-        mercury_format_structured_inst_name(SubInstName, Indent + 1,
+        mercury_format_structured_inst_name(SubInstName, no, Indent + 1,
             Lang, InclAddr, InstVarSet, !U),
         mercury_format_tabs(Indent, !U),
         add_string(")\n", !U)
     ;
         InstName = any_inst(SubInstName, IsLive, Uniq, Real),
-        mercury_format_tabs(Indent, !U),
         add_string("$any(", !U),
         mercury_format_is_live_comma(IsLive, !U),
         mercury_format_real_comma(Real, !U),
         mercury_format_uniqueness(Uniq, "shared", !U),
         add_string(",\n", !U),
-        mercury_format_structured_inst_name(SubInstName, Indent + 1,
+        mercury_format_structured_inst_name(SubInstName, no, Indent + 1,
             Lang, InclAddr, InstVarSet, !U),
         mercury_format_tabs(Indent, !U),
         add_string(")\n", !U)
     ;
         InstName = typed_ground(Uniqueness, Type),
-        mercury_format_tabs(Indent, !U),
         add_string("$typed_ground(", !U),
         mercury_format_uniqueness(Uniqueness, "shared", !U),
         add_string(", ", !U),
@@ -985,12 +999,11 @@ mercury_format_structured_inst_name(InstName, Indent, Lang, InclAddr,
         add_string(")\n", !U)
     ;
         InstName = typed_inst(Type, SubInstName),
-        mercury_format_tabs(Indent, !U),
         add_string("$typed_inst(", !U),
         varset.init(TypeVarSet),
         mercury_format_type(TypeVarSet, no, Type, !U),
         add_string(",\n", !U),
-        mercury_format_structured_inst_name(SubInstName, Indent + 1,
+        mercury_format_structured_inst_name(SubInstName, no, Indent + 1,
             Lang, InclAddr, InstVarSet, !U),
         mercury_format_tabs(Indent, !U),
         add_string(")\n", !U)

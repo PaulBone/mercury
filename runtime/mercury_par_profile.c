@@ -1055,7 +1055,7 @@ MR_setup_parprof(void)
     ** Put the startup event in the buffer.
     */
     put_event_header(&global_buffer, MR_TS_EVENT_STARTUP, 0);
-    put_engine_id(&global_buffer, (MR_EngineId)MR_num_threads);
+    put_engine_id(&global_buffer, (MR_EngineId)MR_num_ws_engines);
 
     flush_event_buffer(&global_buffer);
 }
@@ -1967,7 +1967,7 @@ MR_open_output_file_and_write_prelude(void)
 
     MR_parprof_output_file = fopen(MR_parprof_output_filename, "w");
     if (!MR_parprof_output_file) {
-        perror(MR_parprof_output_filename);
+        MR_perror(MR_parprof_output_filename);
         return;
     }
 
@@ -1993,7 +1993,7 @@ MR_close_output_file(void)
         put_be_uint16(&global_buffer, MR_TS_EVENT_DATA_END);
         if (flush_event_buffer(&global_buffer)) {
             if (EOF == fclose(MR_parprof_output_file)) {
-                perror(MR_parprof_output_filename);
+                MR_perror(MR_parprof_output_filename);
             }
             MR_parprof_output_file = NULL;
             MR_parprof_output_filename = NULL;
@@ -2054,7 +2054,7 @@ flush_event_buffer(struct MR_parprof_event_buffer *buffer)
         if (0 == fwrite(buffer->MR_ppbuffer_data, buffer->MR_ppbuffer_pos, 1,
             MR_parprof_output_file))
         {
-            perror(MR_parprof_output_filename);
+            MR_perror(MR_parprof_output_filename);
             MR_parprof_output_file = NULL;
             MR_parprof_output_filename = NULL;
         }
@@ -2274,7 +2274,7 @@ gettimeofday_nsecs(void)
     struct timeval      tv;
 
     if (0 != gettimeofday(&tv, NULL)) {
-        perror("gettimeofday()");
+        MR_perror("gettimeofday()");
         /*
         ** Return a stupid value generating an obviously bad logfile
         ** rather than crashing a program that may otherwise work.

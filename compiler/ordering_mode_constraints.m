@@ -421,7 +421,8 @@ add_ordering_constraint(Constraint, !OCI) :-
         constraint_transitive_closure(!.OCI, Constraint, NewConstraints),
 
         % No cycles. (lt(X, X) is a contradiction)
-        set.empty(set.filter(pred(lt(X, X)::in) is semidet, NewConstraints)),
+        set.is_empty(
+            set.filter(pred(lt(X, X)::in) is semidet, NewConstraints)),
 
         !OCI ^ oci_constraints :=
             set.union(NewConstraints, !.OCI ^ oci_constraints)
@@ -681,7 +682,7 @@ topological_sort_min_reordering(Constraints0, Conjuncts0, Ordering) :-
     ;
         % No cantidates for First, so we are only done if there were
         % no nodes (conjuncts) left to begin with.
-        set.empty(Conjuncts0),
+        set.is_empty(Conjuncts0),
         Ordering = []
     ).
 
@@ -811,5 +812,5 @@ dump_goal_goal_paths(Globals, Indent, Goal, !IO) :-
     ).
 
 %-----------------------------------------------------------------------------%
-:- end_module ordering_mode_constraints.
+:- end_module check_hlds.ordering_mode_constraints.
 %-----------------------------------------------------------------------------%

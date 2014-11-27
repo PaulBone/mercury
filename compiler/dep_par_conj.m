@@ -152,7 +152,9 @@
 :- import_module hlds.quantification.
 :- import_module libs.globals.
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_mode.
@@ -263,9 +265,9 @@ maybe_sync_dep_par_conjs_in_proc(PredId, ProcId, !ModuleInfo, !ProcsToScan,
     module_info_proc_info(!.ModuleInfo, PredId, ProcId, ProcInfo),
     proc_info_get_has_parallel_conj(ProcInfo, HasParallelConj),
     (
-        HasParallelConj = no
+        HasParallelConj = has_no_parallel_conj
     ;
-        HasParallelConj = yes,
+        HasParallelConj = has_parallel_conj,
         sync_dep_par_conjs_in_proc(PredId, ProcId, set_of_var.init,
             !ModuleInfo, !ProcsToScan, !PPStringTable)
     ).
@@ -1911,7 +1913,7 @@ maybe_specialize_call_and_goals(RevGoals0, Goal0, FwdGoals0,
         % Don't push signals or waits into any procedure that contains a new
         % parallel conjunction, unless this is a recursive call.
         (
-            proc_info_get_has_parallel_conj(ProcInfo, yes)
+            proc_info_get_has_parallel_conj(ProcInfo, has_parallel_conj)
         =>
             (
                 PredProcId = CallerPredProcId
@@ -3173,7 +3175,8 @@ make_future_name_var_and_goal(Name, FutureNameVar, Goal, !VarSet, !VarTypes,
     add_var_type(FutureNameVar, IntType, !VarTypes),
     allocate_pp_string(Name, NameId, !PPStringTable),
     Ground = ground(unique, none),
-    GoalExpr = unify(FutureNameVar, rhs_functor(int_const(NameId), no, []),
+    GoalExpr = unify(FutureNameVar,
+        rhs_functor(int_const(NameId), is_not_exist_constr, []),
         (free(IntType) -> Ground) - (Ground -> Ground),
         construct(FutureNameVar, int_const(NameId), [], [],
             construct_statically, cell_is_unique, no_construct_sub_info),

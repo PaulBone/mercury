@@ -59,13 +59,16 @@
 :- import_module hlds.hlds_pred.
 :- import_module hlds.hlds_rtti.
 :- import_module hlds.instmap.
+:- import_module hlds.make_goal.
 :- import_module hlds.pred_table.
 :- import_module hlds.quantification.
 :- import_module hlds.special_pred.
 :- import_module libs.file_util.
 :- import_module libs.globals.
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_mode.
 :- import_module parse_tree.prog_out.
@@ -121,7 +124,7 @@ specialize_higher_order(!ModuleInfo, !IO) :-
         % performed in case any of the specialized versions are called
         % from other modules.
 
-        ( set.empty(UserSpecPreds) ->
+        ( set.is_empty(UserSpecPreds) ->
             PredIds = PredIds0,
             UserSpecPredList = []
         ;
@@ -192,7 +195,7 @@ process_ho_spec_requests(!GlobalInfo, !IO) :-
     higher_order_global_info::out, io::di, io::uo) is det.
 
 recursively_process_ho_spec_requests(!GlobalInfo, !IO) :-
-    ( set.empty(!.GlobalInfo ^ hogi_requests) ->
+    ( set.is_empty(!.GlobalInfo ^ hogi_requests) ->
         true
     ;
         process_ho_spec_requests(!GlobalInfo, !IO),
@@ -917,7 +920,7 @@ is_interesting_cons_id(Params, ConsId) = IsInteresting :-
         ; ConsId = ground_term_const(_, _)
         ; ConsId = tabling_info_const(_)
         ; ConsId = deep_profiling_proc_layout(_)
-        ; ConsId = table_io_decl(_)
+        ; ConsId = table_io_entry_desc(_)
         ),
         IsInteresting = no
     ;
@@ -1216,7 +1219,7 @@ construct_specialized_higher_order_call(PredId, ProcId, AllArgs, GoalInfo,
     maybe_specialize_call(hlds_goal(GoalExpr1, GoalInfo),
         hlds_goal(GoalExpr, _), !Info).
 
-:- pred maybe_specialize_call(hlds_goal::in(plain_call), hlds_goal::out,
+:- pred maybe_specialize_call(hlds_goal::in(goal_plain_call), hlds_goal::out,
     higher_order_info::in, higher_order_info::out) is det.
 
 maybe_specialize_call(hlds_goal(GoalExpr0, GoalInfo),
@@ -1365,7 +1368,8 @@ maybe_specialize_pred_const(hlds_goal(GoalExpr0, GoalInfo),
             NewConsId = closure_cons(NewShroudedPredProcId, EvalMethod),
             Unify = construct(LVar, NewConsId, NewArgs, UniModes,
                 HowToConstruct, CellIsUnique, no_construct_sub_info),
-            GoalExpr2 = unify(LVar, rhs_functor(NewConsId, no, NewArgs),
+            GoalExpr2 = unify(LVar,
+                rhs_functor(NewConsId, is_not_exist_constr, NewArgs),
                 UniMode, Unify, Context),
 
             % Make sure any constants in the ExtraTypeInfoGoals are recorded.
@@ -2127,7 +2131,8 @@ interpret_typeclass_info_manipulator(Manipulator, Args, Goal0, Goal, !Info) :-
                 KnownVarMap0, KnownVarMap),
             !Info ^ hoi_known_var_map := KnownVarMap,
 
-            SelectedConsIdRHS = rhs_functor(SelectedConsId, no, []),
+            SelectedConsIdRHS =
+                rhs_functor(SelectedConsId, is_not_exist_constr, []),
             UnifyMode = (free -> SelectedConstInst) -
                 (SelectedConstInst -> SelectedConstInst),
             Uni = construct(OutputVar, SelectedConsId, [], [],
@@ -2551,7 +2556,8 @@ unwrap_no_tag_arg(OuterType, WrappedType, Context, Constructor, Arg,
     InstMapDelta = instmap_delta_bind_var(UnwrappedArg),
     goal_info_init(NonLocals, InstMapDelta, detism_det, purity_pure, Context,
         GoalInfo),
-    GoalExpr = unify(Arg, rhs_functor(ConsId, no, [UnwrappedArg]),
+    GoalExpr = unify(Arg,
+        rhs_functor(ConsId, is_not_exist_constr, [UnwrappedArg]),
         in_mode - out_mode,
         deconstruct(Arg, ConsId, [UnwrappedArg], UniModes,
             cannot_fail, cannot_cgc),
@@ -3299,7 +3305,7 @@ construct_higher_order_terms(ModuleInfo, HeadVars0, NewHeadVars, ArgModes0,
         ConstInstMapDelta = instmap_delta_from_assoc_list([LVar - ConstInst]),
         goal_info_init(ConstNonLocals, ConstInstMapDelta, detism_det,
             purity_pure, ConstGoalInfo),
-        RHS = rhs_functor(ConsId, no, CurriedHeadVars1),
+        RHS = rhs_functor(ConsId, is_not_exist_constr, CurriedHeadVars1),
         UniMode = (free -> ConstInst) - (ConstInst -> ConstInst),
         ConstGoalExpr = unify(LVar, RHS, UniMode,
             construct(LVar, ConsId, CurriedHeadVars1, UniModes,

@@ -200,9 +200,12 @@
 :- import_module check_hlds.inst_match.
 :- import_module check_hlds.inst_util.
 :- import_module check_hlds.type_util.
+:- import_module hlds.goal_form.
 :- import_module hlds.hlds_data.
 :- import_module mdbcomp.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_mode.
 :- import_module parse_tree.prog_type.
 :- import_module parse_tree.prog_type_subst.
@@ -1328,7 +1331,7 @@ recompute_instmap_delta_2(RecomputeAtomic, GoalExpr0, GoalExpr, GoalInfo,
     ;
         GoalExpr0 = shorthand(ShortHand0),
         (
-            ShortHand0 = atomic_goal(GoalType, Outer, Inner, MaybeOutputVars, 
+            ShortHand0 = atomic_goal(GoalType, Outer, Inner, MaybeOutputVars,
                 MainGoal0, OrElseGoals0, OrElseInners),
             Goals0 = [MainGoal0 | OrElseGoals0],
             NonLocals = goal_info_get_nonlocals(GoalInfo),
@@ -1468,9 +1471,10 @@ recompute_instmap_delta_call(PredId, ProcId, Args, VarTypes, InstMap,
     ;
         proc_info_get_argmodes(ProcInfo, ArgModes0),
         proc_info_get_inst_varset(ProcInfo, ProcInstVarSet),
-        InstVarSet = !.RI ^ ri_inst_varset,
-        rename_apart_inst_vars(InstVarSet, ProcInstVarSet,
+        InstVarSet0 = !.RI ^ ri_inst_varset,
+        rename_apart_inst_vars(InstVarSet0, ProcInstVarSet, InstVarSet,
             ArgModes0, ArgModes1),
+        !RI ^ ri_inst_varset := InstVarSet,
         mode_list_get_initial_insts(ModuleInfo0, ArgModes1, InitialInsts),
 
         % Compute the inst_var substitution from the initial insts
@@ -1564,7 +1568,7 @@ recompute_instmap_delta_unify(Uni, UniMode0, UniMode, GoalInfo,
         InstMap, InstMapDelta, !RI) :-
     % Deconstructions are the only types of unifications that can require
     % updating of the instmap_delta after simplify.m has been run.
-    % Type specialization may require constructions of type-infos, 
+    % Type specialization may require constructions of type-infos,
     % typeclass-infos or predicate constants to be added to the
     % instmap_delta.
     ModuleInfo0 = !.RI ^ ri_module_info,
@@ -1652,7 +1656,7 @@ cons_id_to_shared_inst(ModuleInfo, ConsId, NumArgs) = MaybeInst :-
         ; ConsId = tuple_cons(_)
         ),
         MaybeInst = no
-    ;   
+    ;
         % Note that before the change that introduced the char_const functor,
         % we used to handle character constants as user-defined cons_ids.
         ( ConsId = int_const(_)
@@ -1662,7 +1666,7 @@ cons_id_to_shared_inst(ModuleInfo, ConsId, NumArgs) = MaybeInst :-
         ),
         MaybeInst = yes(bound(shared, inst_test_results_fgtc,
             [bound_functor(ConsId, [])]))
-    ;   
+    ;
         ConsId = impl_defined_const(_),
         unexpected($module, $pred, "impl_defined_const")
     ;
@@ -1685,7 +1689,7 @@ cons_id_to_shared_inst(ModuleInfo, ConsId, NumArgs) = MaybeInst :-
         ; ConsId = typeclass_info_const(_)
         ; ConsId = ground_term_const(_, _)
         ; ConsId = tabling_info_const(_)
-        ; ConsId = table_io_decl(_)
+        ; ConsId = table_io_entry_desc(_)
         ; ConsId = deep_profiling_proc_layout(_)
         ),
         MaybeInst = yes(ground(shared, none))

@@ -56,7 +56,7 @@
 
 :- import_module hlds.hlds_module.
 :- import_module libs.globals.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.module_imports.
 
 :- import_module bool.
@@ -87,14 +87,14 @@
 :- import_module hlds.hlds_pred.
 :- import_module libs.file_util.
 :- import_module libs.options.
-:- import_module mdbcomp.prim_data.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.file_names.
+:- import_module parse_tree.item_util.
 :- import_module parse_tree.mercury_to_mercury.
-:- import_module parse_tree.modules.
 :- import_module parse_tree.module_cmds.
 :- import_module parse_tree.prog_item.
 :- import_module parse_tree.prog_io.
+:- import_module parse_tree.prog_io_error.
 :- import_module transform_hlds.ctgc.
 :- import_module transform_hlds.ctgc.structure_reuse.
 :- import_module transform_hlds.ctgc.structure_reuse.analysis.
@@ -203,7 +203,8 @@ grab_trans_opt_files(Globals, TransOptDeps, !Module, FoundError, !IO) :-
     append_pseudo_decl(md_opt_imported, !Module),
     module_and_imports_add_items(OptItems, !Module),
     module_and_imports_add_specs(OptSpecs, !Module),
-    module_and_imports_set_error(no_module_errors, !Module),
+    % XXX why ignore any existing errors?
+    module_and_imports_set_errors(set.init, !Module),
 
     maybe_write_string(Verbose, "% Done.\n", !IO).
 
@@ -238,5 +239,5 @@ read_trans_opt_files(Globals, [Import | Imports], !Items, !Specs, !Error,
     read_trans_opt_files(Globals, Imports, !Items, !Specs, !Error, !IO).
 
 %-----------------------------------------------------------------------------%
-:- end_module trans_opt.
+:- end_module transform_hlds.trans_opt.
 %-----------------------------------------------------------------------------%

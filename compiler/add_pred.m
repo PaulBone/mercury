@@ -18,7 +18,7 @@
 
 :- import_module hlds.hlds_module.
 :- import_module hlds.hlds_pred.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module hlds.make_hlds.make_hlds_passes.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
@@ -41,7 +41,8 @@
 :- pred do_add_new_proc(inst_varset::in, arity::in, list(mer_mode)::in,
     maybe(list(mer_mode))::in, maybe(list(is_live))::in,
     detism_decl::in, maybe(determinism)::in, prog_context::in,
-    is_address_taken::in, pred_info::in, pred_info::out, proc_id::out) is det.
+    is_address_taken::in, has_parallel_conj::in,
+    pred_info::in, pred_info::out, proc_id::out) is det.
 
     % Add a mode declaration for a predicate.
     %
@@ -80,6 +81,7 @@
 :- import_module hlds.pred_table.
 :- import_module libs.globals.
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.prog_mode.
 :- import_module parse_tree.prog_out.
@@ -283,7 +285,7 @@ add_builtin(PredId, Types, CompilationTarget, !PredInfo) :-
         Ground = ground(shared, none),
         ConsId = int_const(0),
         LHS = ZeroVar,
-        RHS = rhs_functor(ConsId, no, []),
+        RHS = rhs_functor(ConsId, is_not_exist_constr, []),
         UniMode = ((Free - Ground) -> (Ground - Ground)),
         Unification = construct(ZeroVar, ConsId, [], [UniMode],
             construct_dynamically, cell_is_shared, no_construct_sub_info),
@@ -383,14 +385,14 @@ add_builtin(PredId, Types, CompilationTarget, !PredInfo) :-
 
 do_add_new_proc(InstVarSet, Arity, ArgModes, MaybeDeclaredArgModes,
         MaybeArgLives, DetismDecl, MaybeDet, Context, IsAddressTaken,
-        PredInfo0, PredInfo, ModeId) :-
+        HasParallelConj, PredInfo0, PredInfo, ModeId) :-
     pred_info_get_procedures(PredInfo0, Procs0),
     pred_info_get_arg_types(PredInfo0, ArgTypes),
     pred_info_get_var_name_remap(PredInfo0, VarNameRemap),
     next_mode_id(Procs0, ModeId),
     proc_info_init(Context, Arity, ArgTypes, MaybeDeclaredArgModes, ArgModes,
-        MaybeArgLives, DetismDecl, MaybeDet, IsAddressTaken, VarNameRemap,
-        NewProc0),
+        MaybeArgLives, DetismDecl, MaybeDet, IsAddressTaken, HasParallelConj,
+        VarNameRemap, NewProc0),
     proc_info_set_inst_varset(InstVarSet, NewProc0, NewProc),
     map.det_insert(ModeId, NewProc, Procs0, Procs),
     pred_info_set_procedures(Procs, PredInfo0, PredInfo).
@@ -418,7 +420,8 @@ module_add_mode(InstVarSet, PredName, Modes, MaybeDet, Status, MContext,
     ;
         preds_add_implicit_report_error(!ModuleInfo, ModuleName,
             PredName, Arity, PredOrFunc, Status, IsClassMethod, MContext,
-            origin_user(PredName), [words("mode declaration")], PredId, !Specs)
+            origin_user(PredName), [decl("mode"), words("declaration")],
+            PredId, !Specs)
     ),
     module_info_get_predicate_table(!.ModuleInfo, PredicateTable1),
     predicate_table_get_preds(PredicateTable1, Preds0),
@@ -470,9 +473,11 @@ module_do_add_mode(InstVarSet, Arity, Modes, MaybeDet, IsClassMethod, MContext,
     ),
     % Add the mode declaration to the pred_info for this procedure.
     ArgLives = no,
+    % Before the simplification pass, HasParallelConj is not meaningful.
+    HasParallelConj = has_no_parallel_conj,
     do_add_new_proc(InstVarSet, Arity, Modes, yes(Modes), ArgLives,
         DetismDecl, MaybeDet, MContext, address_is_not_taken,
-        !PredInfo, ProcId).
+        HasParallelConj, !PredInfo, ProcId).
 
 preds_add_implicit_report_error(!ModuleInfo, ModuleName, PredName, Arity,
         PredOrFunc, Status, IsClassMethod, Context, Origin, DescPieces,
@@ -554,8 +559,9 @@ unspecified_det_for_local(Name, Arity, PredOrFunc, Context, !Specs) :-
     MainPieces = [words("Error: no determinism declaration for local"),
         simple_call(simple_call_id(PredOrFunc, Name, Arity)), suffix(".")],
     VerbosePieces = [words("(This is an error because"),
-        words("you specified the `--no-infer-det' options."),
-        words("Use the `--infer-det' option if you want the compiler"),
+        words("you specified the"), quote("--no-infer-det"), words("option."),
+        words("Use the"), quote("--infer-det"),
+        words("option if you want the compiler"),
         words("to automatically infer the determinism"),
         words("of local predicates.)")],
     InnerComponents = [always(MainPieces), verbose_only(VerbosePieces)],

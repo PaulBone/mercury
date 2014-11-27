@@ -62,6 +62,7 @@
 :- import_module libs.globals.
 :- import_module libs.options.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_foreign.
 :- import_module parse_tree.prog_type.
@@ -638,6 +639,9 @@ erl_gen_goal_expr(GoalExpr, CodeModel, Detism, InstMap, Context,
             unexpected($module, $pred, "require_detism")
         ;
             Reason = require_complete_switch(_),
+            unexpected($module, $pred, "require_complete_switch")
+        ;
+            Reason = require_switch_arms_detism(_, _),
             unexpected($module, $pred, "require_complete_switch")
         ;
             ( Reason = exist_quant(_)

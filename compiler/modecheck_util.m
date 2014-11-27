@@ -16,6 +16,7 @@
 :- import_module check_hlds.mode_info.
 :- import_module hlds.
 :- import_module hlds.hlds_goal.
+:- import_module hlds.hlds_module.
 :- import_module hlds.hlds_pred.
 :- import_module hlds.instmap.
 :- import_module parse_tree.
@@ -176,6 +177,12 @@
 :- pred get_live_vars(list(prog_var)::in, list(is_live)::in,
     list(prog_var)::out) is det.
 
+    % Return a map of all the inst variables in the given modes, and the
+    % sub-insts to which they are constrained.
+    %
+:- pred get_constrained_inst_vars(module_info::in, list(mer_mode)::in,
+    head_inst_vars::out) is det.
+
 %-----------------------------------------------------------------------------%
 %-----------------------------------------------------------------------------%
 
@@ -185,15 +192,17 @@
 :- import_module check_hlds.inst_match.
 :- import_module check_hlds.inst_util.
 :- import_module check_hlds.mode_errors.
+:- import_module check_hlds.mode_util.
 :- import_module check_hlds.modecheck_goal.
 :- import_module check_hlds.modecheck_unify.
 :- import_module check_hlds.polymorphism.
 :- import_module check_hlds.type_util.
-:- import_module hlds.hlds_module.
 :- import_module hlds.pred_table.
 :- import_module hlds.special_pred.
 :- import_module mdbcomp.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
+:- import_module parse_tree.prog_mode.
 :- import_module parse_tree.prog_type.
 :- import_module parse_tree.set_of_var.
 
@@ -204,7 +213,9 @@
 :- import_module pair.
 :- import_module require.
 :- import_module set.
+:- import_module set_tree234.
 :- import_module term.
+:- import_module unit.
 :- import_module varset.
 
 %-----------------------------------------------------------------------------%
@@ -224,8 +235,8 @@ handle_extra_goals(MainGoal, extra_goals(BeforeGoals0, AfterGoals0),
         GoalInfo0, Args0, Args, InstMap0, Goal, !ModeInfo) :-
     mode_info_get_errors(!.ModeInfo, Errors),
     (
-        % There's no point adding extra goals if the code is
-        % unreachable anyway.
+        % There is no point adding extra goals if the code is unreachable
+        % anyway.
         instmap_is_reachable(InstMap0),
 
         % If we recorded errors processing the goal, it will have to be
@@ -266,7 +277,7 @@ handle_extra_goals(MainGoal, extra_goals(BeforeGoals0, AfterGoals0),
         % there is a bug in the code to add extra goals.
         mode_info_set_checking_extra_goals(yes, !ModeInfo),
 
-        % We've already worked out which procedure should be called,
+        % We have already worked out which procedure should be called,
         % we don't need to do it again.
         mode_info_set_may_change_called_proc(may_not_change_called_proc,
             !ModeInfo),
@@ -308,7 +319,7 @@ modecheck_conj_list_no_delay([Goal0 | Goals0], [Goal | Goals], !ModeInfo) :-
     mode_info_get_instmap(!.ModeInfo, InstMap),
     ( instmap_is_unreachable(InstMap) ->
         % We should not mode-analyse the remaining goals, since they
-        % are unreachable.  Instead we optimize them away, so that
+        % are unreachable. Instead we optimize them away, so that
         % later passes won't complain about them not having mode information.
         mode_info_remove_goals_live_vars(Goals0, !ModeInfo),
         Goals  = []
@@ -462,12 +473,14 @@ modecheck_var_is_live_exact_match(VarId, ExpectedIsLive, !ModeInfo) :-
 modecheck_var_has_inst_list_exact_match(Vars, Insts, ArgNum, Subst,
         !ModeInfo) :-
     modecheck_var_has_inst_list_exact_match_2(Vars, Insts, ArgNum,
-        map.init, Subst, !ModeInfo).
+        map.init, Subst, !ModeInfo),
+    modecheck_head_inst_vars(Vars, Subst, !ModeInfo).
 
 modecheck_var_has_inst_list_no_exact_match(Vars, Insts, ArgNum, Subst,
         !ModeInfo) :-
     modecheck_var_has_inst_list_no_exact_match_2(Vars, Insts, ArgNum,
-        map.init, Subst, !ModeInfo).
+        map.init, Subst, !ModeInfo),
+    modecheck_head_inst_vars(Vars, Subst, !ModeInfo).
 
 :- pred modecheck_var_has_inst_list_exact_match_2(list(prog_var)::in,
     list(mer_inst)::in, int::in, inst_var_sub::in, inst_var_sub::out,
@@ -510,7 +523,9 @@ modecheck_var_has_inst_list_no_exact_match_2([Var | Vars], [Inst | Insts],
     inst_var_sub::in, inst_var_sub::out,
     mode_info::in, mode_info::out) is det.
 
-modecheck_var_has_inst_exact_match(Var, Inst, !Subst, !ModeInfo) :-
+modecheck_var_has_inst_exact_match(Var, Inst0, !Subst, !ModeInfo) :-
+    % Apply the substitution computed while matching earlier arguments.
+    inst_apply_substitution(!.Subst, Inst0, Inst),
     mode_info_get_instmap(!.ModeInfo, InstMap),
     instmap_lookup_var(InstMap, Var, VarInst),
     mode_info_get_var_types(!.ModeInfo, VarTypes),
@@ -531,7 +546,9 @@ modecheck_var_has_inst_exact_match(Var, Inst, !Subst, !ModeInfo) :-
     inst_var_sub::in, inst_var_sub::out,
     mode_info::in, mode_info::out) is det.
 
-modecheck_var_has_inst_no_exact_match(Var, Inst, !Subst, !ModeInfo) :-
+modecheck_var_has_inst_no_exact_match(Var, Inst0, !Subst, !ModeInfo) :-
+    % Apply the substitution computed while matching earlier arguments.
+    inst_apply_substitution(!.Subst, Inst0, Inst),
     mode_info_get_instmap(!.ModeInfo, InstMap),
     instmap_lookup_var(InstMap, Var, VarInst),
     mode_info_get_var_types(!.ModeInfo, VarTypes),
@@ -562,6 +579,35 @@ modecheck_introduced_type_info_var_has_inst_no_exact_match(Var, Type, Inst,
         WaitingVars = set_of_var.make_singleton(Var),
         ModeError = mode_error_var_has_inst(Var, VarInst, Inst),
         mode_info_error(WaitingVars, ModeError, !ModeInfo)
+    ).
+
+%-----------------------------------------------------------------------------%
+
+:- pred modecheck_head_inst_vars(list(prog_var)::in, inst_var_sub::in,
+    mode_info::in, mode_info::out) is det.
+
+modecheck_head_inst_vars(Vars, InstVarSub, !ModeInfo) :-
+    mode_info_get_head_inst_vars(!.ModeInfo, HeadInstVars),
+    ( map.foldl(modecheck_head_inst_var(HeadInstVars), InstVarSub, unit, _) ->
+        true
+    ;
+        mode_info_get_instmap(!.ModeInfo, InstMap),
+        instmap_lookup_vars(InstMap, Vars, VarInsts),
+        WaitingVars = set_of_var.list_to_set(Vars),
+        ModeError = mode_error_no_matching_mode(Vars, VarInsts),
+        mode_info_error(WaitingVars, ModeError, !ModeInfo)
+    ).
+
+:- pred modecheck_head_inst_var(inst_var_sub::in, inst_var::in, mer_inst::in,
+    unit::in, unit::out) is semidet.
+
+modecheck_head_inst_var(HeadInstVars, InstVar, Subst, !Acc) :-
+    ( map.search(HeadInstVars, InstVar, Inst) ->
+        % Subst should not change the constraint.
+        Subst = constrained_inst_vars(InstVars, Inst),
+        set.member(InstVar, InstVars)
+    ;
+        true
     ).
 
 %-----------------------------------------------------------------------------%
@@ -629,10 +675,11 @@ modecheck_set_var_inst(Var0, NewInst, MaybeUInst, !ModeInfo) :-
         instmap_lookup_var(InstMap0, Var0, OldInst),
         mode_info_get_module_info(!.ModeInfo, ModuleInfo0),
         % The final new inst must be computed by unifying the old inst
-        % and the tentative new inst. However, unifying a large inst with
-        % itself can be VERY expensive; it can be worse than quadratic.
-        % The OldInst = NewInst here may incrase execution time slightly
-        % in normal cases, but should reduce it greatly in worst cases.
+        % and the tentative new inst. However, abstractly unifying
+        % a large inst with itself can be VERY expensive; it can be worse
+        % than quadratic. The OldInst = NewInst test here may increase
+        % execution time slightly in normal cases, but should reduce it
+        % greatly in the worst cases.
         (
             OldInst = NewInst
         ->
@@ -672,11 +719,11 @@ modecheck_set_var_inst(Var0, NewInst, MaybeUInst, !ModeInfo) :-
             % only if we haven't bound any part of the var.
             \+ inst_matches_binding(Inst, OldInst, Type, ModuleInfo),
 
-            % We've bound part of the var.  If the var was locked,
-            % then we need to report an error...
+            % We have bound part of the var. If the var was locked,
+            % then we need to report an error ...
             mode_info_var_is_locked(!.ModeInfo, Var0, Reason0),
             \+ (
-                % ...unless the goal is a unification and the var was unified
+                % ... unless the goal is a unification and the var was unified
                 % with something no more instantiated than itself. This allows
                 % for the case of `any = free', for example. The call to
                 % inst_matches_binding, above will fail for the var with
@@ -734,8 +781,8 @@ handle_implied_mode(Var0, VarInst0, InitialInst0, Var, !ExtraGoals,
         % If the initial inst of the variable matches_final the initial inst
         % specified in the pred's mode declaration, then it's not a call
         % to an implied mode, it's an exact match with a genuine mode.
-        inst_matches_initial_no_implied_modes(VarInst1, InitialInst,
-            VarType, ModuleInfo0)
+        inst_matches_initial_no_implied_modes_sub(VarInst1, InitialInst,
+            VarType, ModuleInfo0, _ModuleInfo, map.init, _Sub)
     ->
         Var = Var0
     ;
@@ -938,7 +985,7 @@ build_call(CalleeModuleName, CalleePredName, ArgVars, ArgTypes, NonLocals,
     module_info_pred_proc_info(ModuleInfo0, CalleePredId, CalleeProcId,
         CalleePredInfo, CalleeProcInfo),
 
-    % Create a poly_info for the caller.  We have to set the varset and
+    % Create a poly_info for the caller. We have to set the varset and
     % vartypes from the mode_info, not the proc_info, because new vars may
     % have been introduced during mode analysis (e.g., when adding
     % unifications to handle implied modes).
@@ -1013,6 +1060,104 @@ get_live_vars([Var | Vars], [IsLive | IsLives], LiveVars) :-
         LiveVars = LiveVars0
     ),
     get_live_vars(Vars, IsLives, LiveVars0).
+
+%-----------------------------------------------------------------------------%
+
+:- type inst_expansions == set_tree234(inst_name).
+
+get_constrained_inst_vars(ModuleInfo, Modes, Map) :-
+    list.foldl2(get_constrained_insts_in_mode(ModuleInfo), Modes,
+        map.init, Map, set_tree234.init, _Expansions).
+
+:- pred get_constrained_insts_in_mode(module_info::in, mer_mode::in,
+    head_inst_vars::in, head_inst_vars::out,
+    inst_expansions::in, inst_expansions::out) is det.
+
+get_constrained_insts_in_mode(ModuleInfo, Mode, !Map, !Expansions) :-
+    mode_get_insts(ModuleInfo, Mode, InitialInst, FinalInst),
+    get_constrained_insts_in_inst(ModuleInfo, InitialInst, !Map, !Expansions),
+    get_constrained_insts_in_inst(ModuleInfo, FinalInst, !Map, !Expansions).
+
+:- pred get_constrained_insts_in_inst(module_info::in, mer_inst::in,
+    head_inst_vars::in, head_inst_vars::out,
+    inst_expansions::in, inst_expansions::out) is det.
+
+get_constrained_insts_in_inst(ModuleInfo, Inst, !Map, !Expansions) :-
+    (
+        ( Inst = free
+        ; Inst = free(_)
+        ; Inst = not_reached
+        )
+    ;
+        Inst = bound(_, _, BoundInsts),
+        list.foldl2(get_constrained_insts_in_bound_inst(ModuleInfo),
+            BoundInsts, !Map, !Expansions)
+    ;
+        ( Inst = any(_, HOInstInfo)
+        ; Inst = ground(_, HOInstInfo)
+        ),
+        (
+            HOInstInfo = none
+        ;
+            HOInstInfo = higher_order(PredInstInfo),
+            get_constrained_insts_in_ho_inst(ModuleInfo, PredInstInfo,
+                !Map, !Expansions)
+        )
+    ;
+        Inst = constrained_inst_vars(InstVars, _),
+        inst_expand_and_remove_constrained_inst_vars(ModuleInfo,
+            Inst, SubInst),
+        set.fold(add_constrained_inst(SubInst), InstVars, !Map)
+    ;
+        Inst = defined_inst(InstName),
+        ( insert_new(InstName, !Expansions) ->
+            inst_lookup(ModuleInfo, InstName, ExpandedInst),
+            get_constrained_insts_in_inst(ModuleInfo, ExpandedInst,
+                !Map, !Expansions)
+        ;
+            true
+        )
+    ;
+        Inst = inst_var(_),
+        unexpected($module, $pred, "inst_var")
+    ;
+        Inst = abstract_inst(_, _),
+        sorry($module, $pred, "abstract_inst")
+    ).
+
+:- pred get_constrained_insts_in_bound_inst(module_info::in, bound_inst::in,
+    head_inst_vars::in, head_inst_vars::out,
+    inst_expansions::in, inst_expansions::out) is det.
+
+get_constrained_insts_in_bound_inst(ModuleInfo, BoundInst, !Map, !Expansions)
+        :-
+    BoundInst = bound_functor(_ConsId, Insts),
+    list.foldl2(get_constrained_insts_in_inst(ModuleInfo), Insts,
+        !Map, !Expansions).
+
+:- pred get_constrained_insts_in_ho_inst(module_info::in, pred_inst_info::in,
+    head_inst_vars::in, head_inst_vars::out,
+    inst_expansions::in, inst_expansions::out) is det.
+
+get_constrained_insts_in_ho_inst(ModuleInfo, PredInstInfo, !Map, !Expansions)
+        :-
+    PredInstInfo = pred_inst_info(_, Modes, _, _),
+    list.foldl2(get_constrained_insts_in_mode(ModuleInfo), Modes,
+        !Map, !Expansions).
+
+:- pred add_constrained_inst(mer_inst::in, inst_var::in,
+    head_inst_vars::in, head_inst_vars::out) is det.
+
+add_constrained_inst(SubInst, InstVar, !Map) :-
+    ( map.search(!.Map, InstVar, SubInst0) ->
+        ( SubInst0 = SubInst ->
+            true
+        ;
+            unexpected($module, $pred, "SubInst differs")
+        )
+    ;
+        map.det_insert(InstVar, SubInst, !Map)
+    ).
 
 %-----------------------------------------------------------------------------%
 :- end_module check_hlds.modecheck_util.

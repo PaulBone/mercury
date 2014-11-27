@@ -34,6 +34,7 @@
 :- import_module libs.globals.
 :- import_module transform_hlds.dependency_graph.
 :- import_module mdbcomp.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
 :- import_module parse_tree.prog_data.
 
@@ -67,7 +68,7 @@ runtime_granularity_test_in_proc(SCC, proc(PredId, ProcId), !ModuleInfo) :-
     map.lookup(ProcTable0, ProcId, ProcInfo0),
     proc_info_get_has_parallel_conj(ProcInfo0, HasParallelConj),
     (
-        HasParallelConj = yes,
+        HasParallelConj = has_parallel_conj,
         proc_info_get_goal(ProcInfo0, Goal0),
         runtime_granularity_test_in_goal(Goal0, Goal, no, Changed,
             SCC, !.ModuleInfo),
@@ -84,7 +85,7 @@ runtime_granularity_test_in_proc(SCC, proc(PredId, ProcId), !ModuleInfo) :-
             module_info_set_preds(PredTable, !ModuleInfo)
         )
     ;
-        HasParallelConj = no
+        HasParallelConj = has_no_parallel_conj
         % There is no parallelism in this procedure, so there is no granularity
         % to control.
     ).
@@ -148,7 +149,6 @@ runtime_granularity_test_in_goal(Goal0, Goal, !Changed, SCC, ModuleInfo) :-
             ( Target = target_il
             ; Target = target_csharp
             ; Target = target_java
-            ; Target = target_x86_64
             ; Target = target_erlang
             ),
             % This should have caught by mercury_compile.m.

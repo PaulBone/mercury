@@ -25,7 +25,7 @@
 :- interface.
 
 :- import_module libs.globals.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_item.
@@ -129,6 +129,7 @@
 :- implementation.
 
 :- import_module libs.options.
+:- import_module mdbcomp.prim_data.
 :- import_module parse_tree.module_imports.
 :- import_module parse_tree.prog_io_sym_name.
 :- import_module parse_tree.prog_out.
@@ -552,12 +553,12 @@ add_imports(Imports, !Info) :-
     %
 :- pred process_assert(goal::in, list(sym_name)::out, bool::out) is det.
 
+process_assert(Goal, Symbols, Success) :-
     % AAA Some more stuff to do accumulator introduction on, it
     % would be better to rewrite using maybes and then to declare
     % the maybe_and predicate to be associative.
     % NB. accumulator introduction doesn't work on this case yet.
     %
-process_assert(Goal, Symbols, Success) :-
     Goal = GoalExpr - _Context,
     (
         ( GoalExpr = conj_expr(GA, GB)
@@ -588,6 +589,7 @@ process_assert(Goal, Symbols, Success) :-
         ; GoalExpr = promise_equivalent_solution_arbitrary_expr(_, _, _, _, G)
         ; GoalExpr = require_detism_expr(_, G)
         ; GoalExpr = require_complete_switch_expr(_, G)
+        ; GoalExpr = require_switch_arms_detism_expr(_, _, G)
         ; GoalExpr = trace_expr(_, _, _, _, G)
         ),
         process_assert(G, Symbols, Success)
@@ -1275,7 +1277,7 @@ qualify_bound_inst_list([bound_functor(ConsId, Insts0) | BoundInsts0],
         ; ConsId = typeclass_info_const(_)
         ; ConsId = ground_term_const(_, _)
         ; ConsId = tabling_info_const(_)
-        ; ConsId = table_io_decl(_)
+        ; ConsId = table_io_entry_desc(_)
         ; ConsId = deep_profiling_proc_layout(_)
         )
     ),
@@ -2019,7 +2021,7 @@ mq_error_context_to_pieces(mqec_class(Id)) =
 mq_error_context_to_pieces(mqec_instance(Id)) =
     [words("declaration of instance of typeclass"), wrap_id(Id)].
 mq_error_context_to_pieces(mqec_mutable(Name)) =
-    [words("declaration for mutable "), prefix("`"), words(Name), suffix("'")].
+    [words("declaration for mutable "), quote(Name)].
 mq_error_context_to_pieces(mqec_event_spec_attr(EventName, AttrName)) =
     [words("attribute"), quote(AttrName), words("for"), quote(EventName)].
 

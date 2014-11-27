@@ -15,7 +15,7 @@
 %-----------------------------------------------------------------------------%
 %-----------------------------------------------------------------------------%
 
-:- module tcp.
+:- module net.tcp.
 :- interface.
 
 :- import_module io.
@@ -274,7 +274,7 @@ void ML_tcp_init(void)
         } else {
             addr = MR_GC_NEW(struct sockaddr_in);
             MR_memset(addr, 0, sizeof(struct sockaddr_in));
-            MR_memcpy(&(addr->sin_addr), host->h_addr, host->h_length);
+            MR_memcpy(&(addr->sin_addr), host->h_addr_list[0], host->h_length);
             addr->sin_family = host->h_addrtype;
             addr->sin_port = htons(Port);
             /*
@@ -334,7 +334,7 @@ socket_fd(Tcp) = socket_fd_c(Tcp ^ handle).
         } else {
             addr = MR_GC_NEW(struct sockaddr_in);
             MR_memset(addr, 0, sizeof(struct sockaddr_in));
-            MR_memcpy(&(addr->sin_addr), host->h_addr, host->h_length);
+            MR_memcpy(&(addr->sin_addr), host->h_addr_list[0], host->h_length);
             addr->sin_family = host->h_addrtype;
             addr->sin_port = htons(Port);
 
@@ -624,8 +624,11 @@ socket_fd(Tcp) = socket_fd_c(Tcp ^ handle).
     tcp.get_error(Errno::in, Msg::out),
     [will_not_call_mercury, thread_safe, promise_pure],
 "
+    char errbuf[MR_STRERROR_BUF_SIZE];
+
     MR_save_transient_hp();
-    MR_make_aligned_string_copy(Msg, strerror(Errno));
+    MR_make_aligned_string_copy(Msg,
+        MR_strerror(Errno, errbuf, sizeof(errbuf)));
     MR_restore_transient_hp();
 ").
 
@@ -679,9 +682,12 @@ socket_fd(Tcp) = socket_fd_c(Tcp ^ handle).
 
 :- pragma foreign_proc("C",
     error_message(Errno::in) = (Err::out),
-    [promise_pure, will_not_call_mercury],
+    [promise_pure, will_not_call_mercury, thread_safe],
 "
-    MR_make_aligned_string_copy(Err, strerror(Errno));
+    char errbuf[MR_STRERROR_BUF_SIZE];
+
+    MR_make_aligned_string_copy(Err,
+        MR_strerror(Errno, errbuf, sizeof(errbuf)));
 ").
 
 :- pred throw_tcp_exception(string::in) is erroneous.

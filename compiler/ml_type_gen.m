@@ -29,7 +29,7 @@
 :- import_module hlds.hlds_data.
 :- import_module hlds.hlds_module.
 :- import_module libs.globals.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module ml_backend.mlds.
 :- import_module parse_tree.prog_data.
 
@@ -118,6 +118,7 @@
 :- import_module check_hlds.polymorphism.
 :- import_module hlds.hlds_pred.
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
 :- import_module ml_backend.ml_code_util.
 :- import_module ml_backend.ml_util.
 :- import_module parse_tree.prog_data.
@@ -270,7 +271,6 @@ ml_gen_enum_type(Target, TypeCtor, TypeDefn, Ctors, TagValues,
         ( Target = target_c
         ; Target = target_il
         ; Target = target_csharp
-        ; Target = target_x86_64
         ; Target = target_erlang
         ),
         Implements = [],
@@ -324,7 +324,7 @@ ml_gen_enum_constant(Context, TypeCtor, ConsTagValues, MLDS_Type, Ctor)
         ; TagVal = ground_term_const_tag(_, _)
         ; TagVal = tabling_info_tag(_, _)
         ; TagVal = deep_profiling_proc_layout_tag(_, _)
-        ; TagVal = table_io_decl_tag(_, _)
+        ; TagVal = table_io_entry_tag(_, _)
         ; TagVal = single_functor_tag
         ; TagVal = unshared_tag(_)
         ; TagVal = direct_arg_tag(_)
@@ -516,7 +516,6 @@ ml_gen_du_parent_type(ModuleInfo, TypeCtor, TypeDefn, Ctors, TagValues,
         ( Target = target_c
         ; Target = target_il
         ; Target = target_csharp
-        ; Target = target_x86_64
         ; Target = target_erlang
         ),
         Implements = []
@@ -874,7 +873,7 @@ ml_tag_uses_base_class(Tag) = UsesBaseClass :-
         ; Tag = typeclass_info_const_tag(_)
         ; Tag = tabling_info_tag(_, _)
         ; Tag = deep_profiling_proc_layout_tag(_, _)
-        ; Tag = table_io_decl_tag(_, _)
+        ; Tag = table_io_entry_tag(_, _)
         ; Tag = unshared_tag(_)
         ; Tag = direct_arg_tag(_)
         ; Tag = shared_remote_tag(_, _)
@@ -889,8 +888,6 @@ ml_target_uses_constructors(target_c) = no.
 ml_target_uses_constructors(target_il) = yes.
 ml_target_uses_constructors(target_csharp) = yes.
 ml_target_uses_constructors(target_java) = yes.
-ml_target_uses_constructors(target_x86_64) =
-    unexpected($module, $pred, "target_x86_64 and --high-level-code").
 ml_target_uses_constructors(target_erlang) =
     unexpected($module, $pred, "target erlang").
 
@@ -900,8 +897,6 @@ target_uses_empty_base_classes(target_c) = no.
 target_uses_empty_base_classes(target_il) = yes.
 target_uses_empty_base_classes(target_csharp) = no.
 target_uses_empty_base_classes(target_java) = yes.
-target_uses_empty_base_classes(target_x86_64) =
-    unexpected($module, $pred, "target_x86_64 and --high-level-code").
 target_uses_empty_base_classes(target_erlang) =
     unexpected($module, $pred, "target erlang").
 
@@ -919,8 +914,6 @@ target_requires_module_qualified_params(target_c) = no.
 target_requires_module_qualified_params(target_il) = no.
 target_requires_module_qualified_params(target_csharp) = yes.
 target_requires_module_qualified_params(target_java) = yes.
-target_requires_module_qualified_params(target_x86_64) =
-    unexpected($module, $pred, "target_x86_64 with --high-level-code").
 target_requires_module_qualified_params(target_erlang) =
     unexpected($module, $pred, "target erlang").
 
@@ -1254,7 +1247,7 @@ generate_foreign_enum_constant(TypeCtor, Mapping, TagValues, MLDS_Type, Ctor,
         ; TagVal = ground_term_const_tag(_, _)
         ; TagVal = tabling_info_tag(_, _)
         ; TagVal = deep_profiling_proc_layout_tag(_, _)
-        ; TagVal = table_io_decl_tag(_, _)
+        ; TagVal = table_io_entry_tag(_, _)
         ; TagVal = single_functor_tag
         ; TagVal = unshared_tag(_)
         ; TagVal = direct_arg_tag(_)

@@ -17,7 +17,7 @@
 :- import_module hlds.hlds_goal.
 :- import_module hlds.hlds_module.
 :- import_module hlds.hlds_pred.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.equiv_type.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.module_qual.
@@ -96,6 +96,7 @@
 :- implementation.
 
 :- import_module hlds.hlds_data.
+:- import_module hlds.make_goal.
 :- import_module parse_tree.prog_type.
 :- import_module parse_tree.prog_type_subst.
 :- import_module parse_tree.prog_util.
@@ -295,12 +296,12 @@ do_construct_pred_or_func_call(PredId, PredOrFunc, SymName, Args,
         TypeCtor = cons_id_dummy_type_ctor,
         ConsId = cons(SymName, Arity, TypeCtor),
         Context = goal_info_get_context(GoalInfo),
-        RHS = rhs_functor(ConsId, no, FuncArgs),
+        RHS = rhs_functor(ConsId, is_not_exist_constr, FuncArgs),
         create_pure_atomic_complicated_unification(RetArg, RHS,
             Context, umc_explicit, [], hlds_goal(GoalExpr, _)),
         Goal = hlds_goal(GoalExpr, GoalInfo)
     ).
 
 %-----------------------------------------------------------------------------%
-:- end_module qual_info.
+:- end_module hlds.make_hlds.qual_info.
 %-----------------------------------------------------------------------------%

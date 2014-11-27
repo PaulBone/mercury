@@ -136,7 +136,7 @@
 :- import_module hlds.hlds_pred.
 :- import_module libs.globals.
 :- import_module libs.options.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module ml_backend.ml_closure_gen.
 :- import_module ml_backend.ml_code_gen.
 :- import_module ml_backend.ml_code_util.
@@ -408,7 +408,7 @@ ml_gen_construct_tag(Tag, Type, Var, ConsId, Args, ArgModes, TakeAddr,
         ; Tag = base_typeclass_info_tag(_, _, _)
         ; Tag = deep_profiling_proc_layout_tag(_, _)
         ; Tag = tabling_info_tag(_, _)
-        ; Tag = table_io_decl_tag(_, _)
+        ; Tag = table_io_entry_tag(_, _)
         ),
         (
             Args = [],
@@ -491,8 +491,8 @@ ml_gen_constant(Tag, VarType, MLDS_VarType, Rval, !Info) :-
         Tag = deep_profiling_proc_layout_tag(_, _),
         unexpected($module, $pred, "deep_profiling_proc_layout_tag NYI")
     ;
-        Tag = table_io_decl_tag(_, _),
-        unexpected($module, $pred, "table_io_decl_tag NYI")
+        Tag = table_io_entry_tag(_, _),
+        unexpected($module, $pred, "table_io_entry_tag NYI")
     ;
         Tag = reserved_address_tag(ReservedAddr),
         ml_gen_info_get_module_info(!.Info, ModuleInfo),
@@ -1495,7 +1495,7 @@ ml_gen_det_deconstruct_tag(Tag, Type, Var, ConsId, Args, Modes, Context,
         ; Tag = ground_term_const_tag(_, _)
         ; Tag = tabling_info_tag(_, _)
         ; Tag = deep_profiling_proc_layout_tag(_, _)
-        ; Tag = table_io_decl_tag(_, _)
+        ; Tag = table_io_entry_tag(_, _)
         ),
         unexpected($module, $pred, "unexpected tag")
     ;
@@ -1593,7 +1593,7 @@ ml_tag_offset_and_argnum(Tag, TagBits, Offset, ArgNum) :-
         ; Tag = typeclass_info_const_tag(_)
         ; Tag = tabling_info_tag(_, _)
         ; Tag = deep_profiling_proc_layout_tag(_, _)
-        ; Tag = table_io_decl_tag(_, _)
+        ; Tag = table_io_entry_tag(_, _)
         ; Tag = no_tag
         ; Tag = shared_local_tag(_Bits1, _Num1)
         ; Tag = reserved_address_tag(_)
@@ -2099,7 +2099,9 @@ ml_gen_direct_arg_deconstruct(ModuleInfo, Mode, Ptag,
     ->
         ml_gen_box_or_unbox_rval(ModuleInfo, ArgType, VarType,
             native_if_possible, ml_lval(ArgLval), ArgRval),
-        Statement = ml_gen_assign(VarLval, ml_mkword(Ptag, ArgRval), Context),
+        MLDS_Type = mercury_type_to_mlds_type(ModuleInfo, VarType),
+        CastRval = ml_unop(cast(MLDS_Type), ml_mkword(Ptag, ArgRval)),
+        Statement = ml_gen_assign(VarLval, CastRval, Context),
         Statements = [Statement]
     ;
         % Unused - unused: the unification has no effect.
@@ -2215,7 +2217,7 @@ ml_gen_tag_test_rval(Tag, Type, ModuleInfo, Rval) = TagTestRval :-
         ; Tag = ground_term_const_tag(_, _)
         ; Tag = tabling_info_tag(_, _)
         ; Tag = deep_profiling_proc_layout_tag(_, _)
-        ; Tag = table_io_decl_tag(_, _)
+        ; Tag = table_io_entry_tag(_, _)
         ),
         unexpected($module, $pred, "bad tag")
     ;
@@ -2531,7 +2533,7 @@ ml_gen_ground_term_conjunct_tag(ModuleInfo, Target, HighLevelData, VarTypes,
         ; ConsTag = ground_term_const_tag(_, _)
         ; ConsTag = deep_profiling_proc_layout_tag(_, _)
         ; ConsTag = tabling_info_tag(_, _)
-        ; ConsTag = table_io_decl_tag(_, _)
+        ; ConsTag = table_io_entry_tag(_, _)
         ),
         unexpected($module, $pred, "bad constant")
     ;
@@ -2912,7 +2914,7 @@ ml_gen_const_struct_tag(Info, ConstNum, Type, MLDS_Type, ConsId, ConsTag,
         ; ConsTag = ground_term_const_tag(_, _)
         % These tags should never occur in MLDS grades.
         ; ConsTag = deep_profiling_proc_layout_tag(_, _)
-        ; ConsTag = table_io_decl_tag(_, _)
+        ; ConsTag = table_io_entry_tag(_, _)
         ),
         unexpected($module, $pred, "unexpected tag")
     ).
@@ -3127,7 +3129,7 @@ ml_gen_const_struct_arg_tag(ModuleInfo, ConsId, ConsTag, Type, MLDS_Type,
         ; ConsTag = tabling_info_tag(_, _)
         % These tags should never occur in MLDS grades.
         ; ConsTag = deep_profiling_proc_layout_tag(_, _)
-        ; ConsTag = table_io_decl_tag(_, _)
+        ; ConsTag = table_io_entry_tag(_, _)
         ),
         unexpected($module, $pred, "unexpected tag")
     ).

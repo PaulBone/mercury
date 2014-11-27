@@ -30,6 +30,7 @@
 :- import_module mdbcomp.goal_path.
 :- import_module mdbcomp.prim_data.
 :- import_module mdbcomp.program_representation.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_foreign.
 
@@ -94,8 +95,8 @@
                 cfile_proc_var_names        :: list(int),
                 cfile_proc_body_bytecodes   :: list(int),
                 cfile_ts_string_table       :: list(string),
-                cfile_table_io_decls        :: list(table_io_decl_data),
-                cfile_table_io_decl_map     :: map(pred_proc_id,
+                cfile_table_io_entries      :: list(table_io_entry_data),
+                cfile_table_io_entry_map    :: map(pred_proc_id,
                                                 layout_slot_name),
                 cfile_proc_event_layouts    :: list(layout_slot_name),
                 cfile_exec_traces           :: list(proc_layout_exec_trace),
@@ -141,7 +142,7 @@
 :- pred build_typed_rvals(list(rval)::in, list(llds_type)::in,
     list(typed_rval)::out) is det.
 
-:- type common_cell_type 
+:- type common_cell_type
     --->    plain_type(list(llds_type))
             % The type is a structure with one field for each one
             % of the cell's arguments.
@@ -660,7 +661,7 @@
             % conjunct see runtime/mercury_context.{c,h}.
             % The synchronisation term is specified by the given lval.
             % The label gives the address of the code following the parallel
-            % conjunction. 
+            % conjunction.
 
     ;       lc_create_loop_control(int, lval)
             % Create a loop control structure with the given number of slots,
@@ -1042,7 +1043,7 @@
     % as the target of an assignment.
     %
 :- type lval
-    
+
     % Virtual machine registers.
 
     --->    reg(reg_type, int)
@@ -1217,7 +1218,7 @@
             % A constant in the target language.
             % It may be a #defined constant in C which is why
             % it is represented as string.
-            
+
     ;       llconst_float(float)
     ;       llconst_string(string)
     ;       llconst_multi_string(list(string))
@@ -1265,7 +1266,7 @@
             % identified by the layout_slot_id_kind.
 
 :- type layout_slot_id_kind
-    --->    table_io_decl_id.
+    --->    table_io_entry_id.
 
     % There are two kinds of labels: entry labels and internal labels.
     % Entry labels are the entry points of procedures; internal labels are not.

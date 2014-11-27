@@ -58,6 +58,7 @@
 :- import_module hlds.hlds_pred.
 :- import_module hlds.hlds_pred.
 :- import_module hlds.hlds_rtti.
+:- import_module hlds.make_goal.
 :- import_module hlds.make_hlds.add_pred.
 :- import_module hlds.make_hlds.field_access.
 :- import_module hlds.make_hlds.make_hlds_warn.
@@ -66,7 +67,8 @@
 :- import_module hlds.quantification.
 :- import_module libs.globals.
 :- import_module libs.options.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.builtin_modules.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.mercury_to_mercury.
 :- import_module parse_tree.module_qual.
 :- import_module parse_tree.prog_data.
@@ -213,6 +215,15 @@ transform_goal_expr_to_goal(LocKind, Expr, Context, Renaming, Goal,
         goal_info_init(GoalInfo),
         Goal = hlds_goal(GoalExpr, GoalInfo)
     ;
+        Expr = require_switch_arms_detism_expr(Var0, Detism, SubExpr),
+        rename_var(need_not_rename, Renaming, Var0, Var),
+        transform_goal_expr_context_to_goal(LocKind, SubExpr, Renaming,
+            SubGoal, !SVarState, !SVarStore, !VarSet,
+            !ModuleInfo, !QualInfo, !Specs),
+        GoalExpr = scope(require_switch_arms_detism(Var, Detism), SubGoal),
+        goal_info_init(GoalInfo),
+        Goal = hlds_goal(GoalExpr, GoalInfo)
+    ;
         Expr = atomic_expr(Outer0, Inner0, MaybeOutputVars0,
             MainExpr, OrElseExprs),
         (
@@ -356,8 +367,10 @@ transform_goal_expr_to_goal(LocKind, Expr, Context, Renaming, Goal,
                     !VarSet, !ModuleInfo, !QualInfo, !Specs)
             ;
                 MaybeElse0 = yes(_),
-                Pieces = [words("Error: a `try' goal with an `io' parameter"),
-                    words("cannot have an else part."), nl],
+                Pieces = [words("Error: a"), quote("try"),
+                    words("goal with an"), quote("io"),
+                    words("parameter cannot have an"), quote("else"),
+                    words("part."), nl],
                 Msg = simple_msg(Context, [always(Pieces)]),
                 Spec = error_spec(severity_error,
                     phase_parse_tree_to_hlds, [Msg]),
@@ -1256,4 +1269,6 @@ invalid_goal(UpdateStr, Args0, GoalInfo, Goal, !VarSet, !SVarState, !Specs) :-
         not_builtin, MaybeUnifyContext, unqualified(UpdateStr)),
     Goal = hlds_goal(GoalExpr, GoalInfo).
 
+%----------------------------------------------------------------------------%
+:- end_module hlds.make_hlds.goal_expr_to_goal.
 %----------------------------------------------------------------------------%

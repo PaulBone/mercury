@@ -80,6 +80,7 @@
 :- import_module hlds.hlds_rtti.
 :- import_module mdbcomp.goal_path.
 :- import_module mdbcomp.program_representation.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.mercury_to_mercury.
 :- import_module parse_tree.prog_ctgc.
 :- import_module parse_tree.prog_out.
@@ -831,17 +832,17 @@ write_proc(Info, Indent, AppendVarNums, ModuleInfo, PredId, ProcId,
             io.write_string("% address is not taken\n", !IO)
         ),
         (
-            HasParallelConj = yes,
+            HasParallelConj = has_parallel_conj,
             io.write_string("% contains parallel conjunction\n", !IO)
         ;
-            HasParallelConj = no,
+            HasParallelConj = has_no_parallel_conj,
             io.write_string("% does not contain parallel conjunction\n", !IO)
         ),
         (
-            HasUserEvent = yes,
+            HasUserEvent = has_user_event,
             io.write_string("% contains user event\n", !IO)
         ;
-            HasUserEvent = no,
+            HasUserEvent = has_no_user_event,
             io.write_string("% does not contain user event\n", !IO)
         ),
         (
@@ -1088,9 +1089,15 @@ coverage_point_to_string(cp_type_branch_arm) = "branch arm".
     io::di, io::uo) is det.
 
 write_proc_table_io_info(TVarSet, ProcTableIOInfo, !IO) :-
-    ProcTableIOInfo = proc_table_io_info(ArgInfos),
-    io.write_string("% proc table io info: io tabled\n", !IO),
-    write_table_arg_infos(TVarSet, ArgInfos, !IO).
+    ProcTableIOInfo = proc_table_io_info(MaybeArgInfos),
+    (
+        MaybeArgInfos = no,
+        io.write_string("% proc table io info: io tabled, no arg_infos\n", !IO)
+    ;
+        MaybeArgInfos = yes(ArgInfos),
+        io.write_string("% proc table io info: io tabled, arg_infos:\n", !IO),
+        write_table_arg_infos(TVarSet, ArgInfos, !IO)
+    ).
 
 write_table_arg_infos(TVarSet, TableArgInfos, !IO) :-
     TableArgInfos = table_arg_infos(ArgInfos, TVarMap),

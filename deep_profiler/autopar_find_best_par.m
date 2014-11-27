@@ -197,7 +197,7 @@ gg_get_details(gg_multiple(Index, Num, P), Index, Num, P).
             ).
 
 :- pred preprocess_conjunction(list(pard_goal_detail)::in,
-    maybe(goals_for_parallelisation)::out(maybe(goals_for_parallelisation)),
+    maybe(goals_for_parallelisation)::out,
     program_location::in, cord(message)::in, cord(message)::out) is det.
 
 preprocess_conjunction(Goals, MaybeGoalsForParallelisation, Location,
@@ -799,7 +799,7 @@ par_conj_overlap_is_dependent(peo_conjunction(Left, _, VarSet0),
         IsDependent = conjuncts_are_dependent(VarSet)
     ;
         IsDependent0 = conjuncts_are_independent,
-        ( set.empty(VarSet0) ->
+        ( set.is_empty(VarSet0) ->
             IsDependent = conjuncts_are_independent
         ;
             IsDependent = conjuncts_are_dependent(VarSet0)

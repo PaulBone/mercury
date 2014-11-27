@@ -25,6 +25,7 @@
 :- import_module hlds.hlds_rtti.
 :- import_module libs.globals.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module ml_backend.ml_gen_info.
 :- import_module ml_backend.ml_global_data.
 :- import_module ml_backend.mlds.
@@ -550,6 +551,7 @@
 :- import_module check_hlds.type_util.
 :- import_module libs.globals.
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.program_representation.
 :- import_module ml_backend.ml_accurate_gc.
 :- import_module ml_backend.ml_call_gen.
@@ -1361,7 +1363,8 @@ ml_gen_field_name(MaybeFieldName, ArgNum) = FieldName :-
     % If the programmer specified a field name, we use that,
     % otherwise we just use `F' followed by the field number.
     (
-        MaybeFieldName = yes(QualifiedFieldName),
+        MaybeFieldName = yes(ctor_field_name(QualifiedFieldName,
+            _FieldNameCtxt)),
         FieldName = unqualify_name(QualifiedFieldName)
     ;
         MaybeFieldName = no,
@@ -1380,7 +1383,6 @@ ml_must_box_field_type(ModuleInfo, Type, Width) :-
         ( Target = target_c
         ; Target = target_csharp
         ; Target = target_il
-        ; Target = target_x86_64
         ; Target = target_erlang
         ),
         classify_type(ModuleInfo, Type) = Category,
@@ -1443,18 +1445,16 @@ ml_gen_box_const_rval(ModuleInfo, Context, MLDS_Type, DoubleWidth, Rval,
     ->
         BoxedRval = Rval
     ;
-        % For the MLDS->C and MLDS->asm back-ends, we need to handle constant
-        % floats specially. Boxed floats normally get heap allocated, whereas
-        % for other types boxing is just a cast (casts are OK in static
+        % For the MLDS->C back-end, we need to handle constant floats
+        % specially. Boxed floats normally get heap allocated, whereas for
+        % other types boxing is just a cast (casts are OK in static
         % initializers, but calls to malloc() are not).
         ( MLDS_Type = mercury_type(builtin_type(builtin_type_float), _, _)
         ; MLDS_Type = mlds_native_float_type
         ),
         module_info_get_globals(ModuleInfo, Globals),
         globals.get_target(Globals, Target),
-        ( Target = target_c
-        ; Target = target_x86_64
-        )
+        Target = target_c
     ->
         HaveUnboxedFloats = ml_global_data_have_unboxed_floats(!.GlobalData),
         (

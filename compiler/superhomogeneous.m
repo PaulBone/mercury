@@ -23,6 +23,7 @@
 :- import_module hlds.hlds_module.
 :- import_module hlds.make_hlds.qual_info.
 :- import_module hlds.make_hlds.state_var.
+:- import_module mdbcomp.
 :- import_module mdbcomp.prim_data.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
@@ -102,11 +103,13 @@
 :- import_module hlds.goal_util.
 :- import_module hlds.hlds_out.
 :- import_module hlds.hlds_out.hlds_out_goal.
+:- import_module hlds.make_goal.
 :- import_module hlds.make_hlds.add_clause.
 :- import_module hlds.make_hlds.field_access.
 :- import_module hlds.make_hlds.goal_expr_to_goal.
 :- import_module hlds.make_hlds.qual_info.
 :- import_module libs.globals.  % for get_maybe_from_ground_term_threshold
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.module_qual.
 :- import_module parse_tree.prog_io_sym_name.
 :- import_module parse_tree.prog_io_dcg.
@@ -203,7 +206,7 @@ expansion_to_goal_wrap_if_fgti(GoalInfo, Expansion, Goal) :-
         ->
             goal_info_set_nonlocals(set_of_var.make_singleton(TermVar),
                 GoalInfo, MarkedGoalInfo),
-            mark_nonlocals_in_ground_term_construct(Goals, MarkedGoals),
+            mark_nonlocals_in_ground_term_initial(Goals, MarkedGoals),
             ConjGoalExpr = conj(plain_conj, MarkedGoals),
             ConjGoal = hlds_goal(ConjGoalExpr, MarkedGoalInfo),
             Reason = from_ground_term(TermVar, from_ground_term_initial),
@@ -231,7 +234,7 @@ expansion_to_goal_cord_wrap_if_fgti(GoalInfo, Expansion,
         Goals = cord.list(GoalCord),
         goal_info_set_nonlocals(set_of_var.make_singleton(TermVar),
             GoalInfo, MarkedGoalInfo),
-        mark_nonlocals_in_ground_term_construct(Goals, MarkedGoals),
+        mark_nonlocals_in_ground_term_initial(Goals, MarkedGoals),
         ConjGoalExpr = conj(plain_conj, MarkedGoals),
         ConjGoal = hlds_goal(ConjGoalExpr, MarkedGoalInfo),
         Reason = from_ground_term(TermVar, from_ground_term_initial),
@@ -242,11 +245,11 @@ expansion_to_goal_cord_wrap_if_fgti(GoalInfo, Expansion,
         MaybeWrappedGoalCord = GoalCord
     ).
 
-:- pred mark_nonlocals_in_ground_term_construct(
+:- pred mark_nonlocals_in_ground_term_initial(
     list(hlds_goal)::in, list(hlds_goal)::out) is det.
 
-mark_nonlocals_in_ground_term_construct([], []).
-mark_nonlocals_in_ground_term_construct([Goal0 | Goals0], [Goal | Goals]) :-
+mark_nonlocals_in_ground_term_initial([], []).
+mark_nonlocals_in_ground_term_initial([Goal0 | Goals0], [Goal | Goals]) :-
     Goal0 = hlds_goal(GoalExpr, GoalInfo0),
     (
         GoalExpr = unify(LHSVar, RHS, _, _, _),
@@ -258,7 +261,7 @@ mark_nonlocals_in_ground_term_construct([Goal0 | Goals0], [Goal | Goals]) :-
     ;
         unexpected($module, $pred, "wrong shape goal")
     ),
-    mark_nonlocals_in_ground_term_construct(Goals0, Goals).
+    mark_nonlocals_in_ground_term_initial(Goals0, Goals).
 
 %-----------------------------------------------------------------------------%
 
@@ -685,7 +688,8 @@ unravel_var_functor_unification(XVar, YFunctor, YArgTerms0, YFunctorContext,
         % at the top level of MaybeQualifiedYArgTerms.
         (
             MaybeQualifiedYArgTerms = [],
-            make_atomic_unification(XVar, rhs_functor(ConsId, no, []),
+            make_atomic_unification(XVar,
+                rhs_functor(ConsId, is_not_exist_constr, []),
                 YFunctorContext, MainContext, SubContext, Purity, FunctorGoal,
                 !QualInfo),
             goal_set_purity(Purity, FunctorGoal, Goal),
@@ -703,7 +707,8 @@ unravel_var_functor_unification(XVar, YFunctor, YArgTerms0, YFunctorContext,
                     YFunctorContext, ArgContext, deconstruct_top_down, 1,
                     [], YVars, ArgExpansions, !SVarState, !SVarStore, !VarSet,
                     !ModuleInfo, !QualInfo, !Specs),
-                make_atomic_unification(XVar, rhs_functor(ConsId, no, YVars),
+                make_atomic_unification(XVar,
+                    rhs_functor(ConsId, is_not_exist_constr, YVars),
                     YFunctorContext, MainContext, SubContext, Purity,
                     FunctorGoal, !QualInfo),
                 goal_info_init(Context, GoalInfo),
@@ -721,7 +726,8 @@ unravel_var_functor_unification(XVar, YFunctor, YArgTerms0, YFunctorContext,
                     YFunctorContext, ArgContext, construct_bottom_up, 1,
                     [], YVars, ArgExpansions, !SVarState, !SVarStore, !VarSet,
                     !ModuleInfo, !QualInfo, !Specs),
-                make_atomic_unification(XVar, rhs_functor(ConsId, no, YVars),
+                make_atomic_unification(XVar,
+                    rhs_functor(ConsId, is_not_exist_constr, YVars),
                     YFunctorContext, MainContext, SubContext, Purity,
                     FunctorGoal, !QualInfo),
                 goal_info_init(Context, GoalInfo),

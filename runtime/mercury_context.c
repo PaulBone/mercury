@@ -7,6 +7,7 @@ ENDINIT
 */
 /*
 ** Copyright (C) 1995-2007, 2009-2011 The University of Melbourne.
+** Copyright (C) 2014 The Mercury team.
 ** This file may only be copied under the terms of the GNU Library General
 ** Public License - see the file COPYING.LIB in the Mercury distribution.
 */
@@ -44,6 +45,10 @@ ENDINIT
 
 #ifdef MR_WIN32
   #include <sys/timeb.h>    /* for _ftime() */
+#endif
+
+#ifdef MR_WIN32_GETSYSTEMINFO
+  #include "mercury_windows.h"
 #endif
 
 #if defined(MR_LL_PARALLEL_CONJ) && defined(MR_HAVE_HWLOC)
@@ -151,6 +156,13 @@ typedef struct {
 
 static
 engine_sleep_sync *engine_sleep_sync_data;
+
+static engine_sleep_sync *
+get_engine_sleep_sync(MR_EngineId i)
+{
+    MR_assert(i < MR_max_engines);
+    return &engine_sleep_sync_data[i];
+}
 #endif /* MR_LL_PARALLEL_CONJ */
 
 
@@ -193,23 +205,28 @@ static MR_Integer       MR_profile_parallel_regular_context_kept = 0;
 #endif /* MR_PROFILE_PARALLEL_EXECUTION_SUPPORT */
 
 /*
+** Detect number of processors.
+*/
+#ifdef MR_LL_PARALLEL_CONJ
+static unsigned         MR_num_processors;
+  #if defined(MR_HAVE_HWLOC)
+    static hwloc_topology_t MR_hw_topology;
+    static hwloc_cpuset_t   MR_hw_available_pus = NULL;
+  #elif defined(MR_HAVE_SCHED_SETAFFINITY)
+    static cpu_set_t        *MR_available_cpus;
+    /* The number of CPUs that MR_available_cpus can refer to */
+    static unsigned         MR_cpuset_size = 0;
+  #endif
+#endif
+
+/*
 ** Local variables for thread pinning.
 */
 #if defined(MR_LL_PARALLEL_CONJ) && defined(MR_HAVE_THREAD_PINNING)
 MR_bool                 MR_thread_pinning = MR_FALSE;
-
 static MercuryLock      MR_thread_pinning_lock;
 static unsigned         MR_num_threads_left_to_pin;
-static unsigned         MR_num_processors;
 MR_Unsigned             MR_primordial_thread_cpu;
-#ifdef MR_HAVE_HWLOC
-static hwloc_topology_t MR_hw_topology;
-static hwloc_cpuset_t   MR_hw_available_pus = NULL;
-#else /* MR_HAVE_SCHED_SETAFFINITY */
-static cpu_set_t        *MR_available_cpus;
-/* The number of CPUs that MR_available_cpus can refer to */
-static unsigned         MR_cpuset_size = 0;
-#endif
 #endif
 
 #if defined(MR_LL_PARALLEL_CONJ) && \
@@ -242,16 +259,16 @@ static MR_Context       *free_small_context_list = NULL;
 #endif
 
 #ifdef  MR_LL_PARALLEL_CONJ
-MR_Integer volatile         MR_num_idle_engines = 0;
-MR_Unsigned volatile        MR_num_exited_engines = 0;
+MR_Integer volatile         MR_num_idle_ws_engines = 0;
 static MR_Integer volatile  MR_num_outstanding_contexts = 0;
-static sem_t                shutdown_semaphore;
+static sem_t                shutdown_ws_semaphore;
 
-static MercuryLock MR_par_cond_stats_lock;
+static MercuryLock      MR_par_cond_stats_lock;
+
 /*
-** The spark deques are kept in engine id order.
-**
-** This array will contain MR_num_threads pointers to deques.
+** This array will contain MR_max_engines pointers to deques.
+** The slot i points to the spark deque of engine id i.
+** Slots are NULL for unallocated engines.
 */
 MR_SparkDeque           **MR_spark_deques = NULL;
 #endif
@@ -259,6 +276,19 @@ MR_SparkDeque           **MR_spark_deques = NULL;
 /*---------------------------------------------------------------------------*/
 
 #ifdef MR_LL_PARALLEL_CONJ
+/*
+** Reset or initialize the cpuset that tracks which CPUs are available for
+** binding.
+*/
+static void
+MR_reset_available_cpus(void);
+
+static void
+MR_detect_num_processors(void);
+
+static void
+MR_setup_num_threads(void);
+
 /*
 ** Try to wake up a sleeping engine and tell it to do action. The engine is
 ** only woken if it is in the sleeping state.  If the engine is not sleeping
@@ -293,7 +323,7 @@ static void
 MR_write_out_profiling_parallel_execution(void);
 #endif
 
-#if defined(MR_LL_PARALLEL_CONJ)
+#if defined(MR_LL_PARALLEL_CONJ) && defined(MR_HAVE_THREAD_PINNING)
 static void
 MR_setup_thread_pinning(void);
 
@@ -305,13 +335,6 @@ MR_do_pin_thread(int cpu);
 */
 static int
 MR_current_cpu(void);
-
-/*
-** Reset or initialize the cpuset that tracks which CPUs are available for
-** binding.
-*/
-static void
-MR_reset_available_cpus(void);
 
 /*
 ** Mark the given CPU as unavailable for thread pinning.  This may mark other
@@ -342,7 +365,10 @@ MR_init_context_stuff(void)
     #ifdef MR_DEBUG_RUNTIME_GRANULARITY_CONTROL
     pthread_mutex_init(&MR_par_cond_stats_lock, MR_MUTEX_ATTR);
     #endif
-    sem_init(&shutdown_semaphore, 0, 0);
+    if (sem_init(&shutdown_ws_semaphore, 0, 0) == -1) {
+        MR_perror("cannot initialize semaphore");
+        exit(EXIT_FAILURE);
+    }
   #endif
     pthread_mutex_init(&MR_STM_lock, MR_MUTEX_ATTR);
 
@@ -352,38 +378,179 @@ MR_init_context_stuff(void)
   #endif
 
   #ifdef MR_LL_PARALLEL_CONJ
+    MR_detect_num_processors();
+    assert(MR_num_processors > 0);
+
+    MR_setup_num_threads();
+    assert(MR_num_ws_engines > 0);
+
     #if defined(MR_HAVE_THREAD_PINNING)
     MR_setup_thread_pinning();
     #endif
+
     MR_granularity_wsdeque_length =
-        MR_granularity_wsdeque_length_factor * MR_num_threads;
+        MR_granularity_wsdeque_length_factor * MR_num_ws_engines;
 
     MR_spark_deques = MR_GC_NEW_ARRAY_ATTRIB(MR_SparkDeque*,
-        MR_num_threads, MR_ALLOC_SITE_RUNTIME);
-    engine_sleep_sync_data = MR_GC_NEW_ARRAY_ATTRIB(engine_sleep_sync,
-        MR_num_threads, MR_ALLOC_SITE_RUNTIME);
-    for (i = 0; i < MR_num_threads; i++) {
+        MR_max_engines, MR_ALLOC_SITE_RUNTIME);
+    for (i = 0; i < MR_max_engines; i++) {
         MR_spark_deques[i] = NULL;
+    }
 
-        sem_init(&(engine_sleep_sync_data[i].d.es_sleep_semaphore), 0, 0);
-        pthread_mutex_init(&(engine_sleep_sync_data[i].d.es_wake_lock),
-            MR_MUTEX_ATTR);
+    engine_sleep_sync_data = MR_GC_NEW_ARRAY_ATTRIB(engine_sleep_sync,
+        MR_max_engines, MR_ALLOC_SITE_RUNTIME);
+    for (i = 0; i < MR_max_engines; i++) {
+        engine_sleep_sync *esync = get_engine_sleep_sync(i);
+
+        if (sem_init(&esync->d.es_sleep_semaphore, 0, 0) == -1 ) {
+            MR_perror("cannot initialize semaphore");
+            exit(EXIT_FAILURE);
+        };
+        pthread_mutex_init(&esync->d.es_wake_lock, MR_MUTEX_ATTR);
         /*
         ** All engines are initially working (because telling them to wake up
         ** before they are started would be useless).
         */
-        engine_sleep_sync_data[i].d.es_state = ENGINE_STATE_WORKING;
-        engine_sleep_sync_data[i].d.es_action = MR_ENGINE_ACTION_NONE;
+        esync->d.es_state = ENGINE_STATE_WORKING;
+        esync->d.es_action = MR_ENGINE_ACTION_NONE;
     }
   #endif
 #endif /* MR_THREAD_SAFE */
 }
 
 /*
+** Detect number of processors
+*/
+
+#ifdef MR_LL_PARALLEL_CONJ
+static void
+MR_reset_available_cpus(void)
+{
+  #if defined(MR_HAVE_HWLOC)
+    hwloc_cpuset_t  inherited_binding;
+
+    /*
+    ** Gather the cpuset that our parent process bound this process to.
+    **
+    ** (For information about how to deliberately restrict a process and it's
+    ** sub-processors to a set of CPUs on Linux see cpuset(7).
+    */
+    inherited_binding = hwloc_bitmap_alloc();
+    hwloc_get_cpubind(MR_hw_topology, inherited_binding, HWLOC_CPUBIND_PROCESS);
+
+    /*
+    ** Set the available processors to the union of inherited_binding and the
+    ** cpuset we're allowed to use as reported by libhwloc.  In my tests with
+    ** libhwloc_1.0-1 (Debian) hwloc reported that all cpus on the system are
+    ** avaliable, it didn't exclude cpus not in the processor's cpuset(7).
+    */
+    if (MR_hw_available_pus == NULL) {
+        MR_hw_available_pus = hwloc_bitmap_alloc();
+    }
+    hwloc_bitmap_and(MR_hw_available_pus, inherited_binding,
+        hwloc_topology_get_allowed_cpuset(MR_hw_topology));
+
+    hwloc_bitmap_free(inherited_binding);
+  #elif defined(MR_HAVE_SCHED_GETAFFINITY)
+    unsigned cpuset_size;
+    unsigned num_processors;
+
+    if (MR_cpuset_size) {
+        cpuset_size = MR_cpuset_size;
+        num_processors = MR_num_processors;
+    } else {
+      #if defined(MR_HAVE_SYSCONF) && defined(_SC_NPROCESSORS_ONLN)
+        num_processors = sysconf(_SC_NPROCESSORS_ONLN);
+      #else
+        /*
+        ** Make the CPU set at least 32 processors wide.
+        */
+        num_processors = 32;
+      #endif
+        cpuset_size = CPU_ALLOC_SIZE(num_processors);
+        MR_cpuset_size = cpuset_size;
+    }
+
+    if (MR_available_cpus == NULL) {
+        MR_available_cpus = CPU_ALLOC(num_processors);
+    }
+
+    if (-1 == sched_getaffinity(0, cpuset_size, MR_available_cpus)) {
+        MR_perror("Couldn't get CPU affinity");
+        MR_thread_pinning = MR_FALSE;
+        CPU_FREE(MR_available_cpus);
+        MR_available_cpus = NULL;
+    }
+  #endif
+}
+
+static void
+MR_detect_num_processors(void)
+{
+  #ifdef MR_HAVE_HWLOC
+    if (-1 == hwloc_topology_init(&MR_hw_topology)) {
+        MR_fatal_error("Error allocating libhwloc topology object");
+    }
+    if (-1 == hwloc_topology_load(MR_hw_topology)) {
+        MR_fatal_error("Error detecting hardware topology (hwloc)");
+    }
+  #endif
+
+    /*
+    ** Setup num processors
+    */
+    MR_reset_available_cpus();
+  #ifdef MR_HAVE_HWLOC
+    MR_num_processors = hwloc_bitmap_weight(MR_hw_available_pus);
+  #elif defined(MR_HAVE_SCHED_GETAFFINITY)
+    /*
+    ** This looks redundant but its not.  MR_num_processors is a guess that was
+    ** gathered by using sysconf.  But the number of CPUs in the CPU_SET is the
+    ** actual number of CPUs that this process is restricted to.
+    */
+    MR_num_processors = CPU_COUNT_S(MR_cpuset_size, MR_available_cpus);
+  #elif defined(MR_WIN32_GETSYSTEMINFO)
+    {
+        SYSTEM_INFO sysinfo;
+        GetSystemInfo(&sysinfo);
+        MR_num_processors = sysinfo.dwNumberOfProcessors;
+    }
+  #else
+    #warning "Cannot detect MR_num_processors"
+    MR_num_processors = 1;
+  #endif
+}
+
+static void
+MR_setup_num_threads(void)
+{
+    /*
+    ** If MR_num_threads is unset, configure it to match number of processors
+    ** on the system. If we do this, then we prepare to set processor
+    ** affinities later on.
+    */
+    if (MR_num_ws_engines == 0) {
+        MR_num_ws_engines = MR_num_processors;
+    }
+
+  #ifdef MR_DEBUG_THREADS
+    if (MR_debug_threads) {
+        fprintf(stderr, "Detected %d processors, will use %d threads\n",
+            MR_num_processors, MR_num_ws_engines);
+    }
+  #endif
+}
+#endif /* MR_LL_PARALLEL_CONJ */
+
+/*
+** Thread pinning
+*/
+
+#if defined(MR_HAVE_THREAD_PINNING) && defined(MR_LL_PARALLEL_CONJ)
+/*
 ** Pin the primordial thread first to the CPU it is currently using
 ** (if support is available for thread pinning).
 */
-#if defined(MR_HAVE_THREAD_PINNING) && defined(MR_LL_PARALLEL_CONJ)
 static unsigned
 MR_pin_thread_no_locking(void)
 {
@@ -444,47 +611,7 @@ MR_pin_primordial_thread(void)
 
 static void MR_setup_thread_pinning(void)
 {
-    unsigned num_processors;
-
-#ifdef MR_HAVE_HWLOC
-    if (-1 == hwloc_topology_init(&MR_hw_topology)) {
-        MR_fatal_error("Error allocating libhwloc topology object");
-    }
-    if (-1 == hwloc_topology_load(MR_hw_topology)) {
-        MR_fatal_error("Error detecting hardware topology (hwloc)");
-    }
-#endif
-
-    /*
-    ** Setup num processors
-    */
-    MR_reset_available_cpus();
-#ifdef MR_HAVE_HWLOC
-    num_processors = hwloc_bitmap_weight(MR_hw_available_pus);
-#elif defined(MR_HAVE_SCHED_GETAFFINITY)
-    /*
-    ** This looks redundant but its not.  MR_num_processors is a guess that was
-    ** gathered by using sysconf.  But the number of CPUs in the CPU_SET is the
-    ** actual number of CPUs that this process is restricted to.
-    */
-    num_processors = CPU_COUNT_S(MR_cpuset_size, MR_available_cpus);
-#endif
-    MR_num_processors = num_processors;
-
-    /*
-    ** If MR_num_threads is unset, configure it to match number of processors
-    ** on the system. If we do this, then we prepare to set processor
-    ** affinities later on.
-    */
-    if (MR_num_threads == 0) {
-        MR_num_threads = num_processors;
-    }
-    MR_num_threads_left_to_pin = MR_num_threads;
-
-#ifdef MR_DEBUG_THREAD_PINNING
-    fprintf(stderr, "Detected %d available processors, will use %d threads\n",
-        MR_num_processors, MR_num_threads);
-#endif
+    MR_num_threads_left_to_pin = MR_num_ws_engines;
 
     pthread_mutex_init(&MR_thread_pinning_lock, MR_MUTEX_ATTR);
 
@@ -515,7 +642,7 @@ static int MR_current_cpu(void)
         os_cpu = 0;
 
         if (MR_thread_pinning) {
-            perror("Warning: unable to determine the current CPU for "
+            MR_perror("Warning: unable to determine the current CPU for "
                 "this thread: ");
         }
     }
@@ -571,7 +698,7 @@ MR_do_pin_thread(int cpu)
     errno = hwloc_set_cpubind(MR_hw_topology, pu->cpuset,
         HWLOC_CPUBIND_THREAD);
     if (errno != 0) {
-        perror("Warning: Couldn't set CPU affinity: ");
+        MR_perror("Warning: Couldn't set CPU affinity: ");
         MR_thread_pinning = MR_FALSE;
         return MR_FALSE;
     }
@@ -583,7 +710,7 @@ MR_do_pin_thread(int cpu)
     CPU_ZERO_S(MR_cpuset_size, cpus);
     CPU_SET_S(cpu, MR_cpuset_size, cpus);
     if (sched_setaffinity(0, MR_cpuset_size, cpus) == -1) {
-        perror("Warning: Couldn't set CPU affinity: ");
+        MR_perror("Warning: Couldn't set CPU affinity: ");
         /*
         ** If this failed once, it will probably fail again,
         ** so we disable it.
@@ -594,67 +721,6 @@ MR_do_pin_thread(int cpu)
 #endif
 
     return MR_TRUE;
-}
-
-static void MR_reset_available_cpus(void)
-{
-#if defined(MR_HAVE_HWLOC)
-    hwloc_cpuset_t  inherited_binding;
-
-    /*
-    ** Gather the cpuset that our parent process bound this process to.
-    **
-    ** (For information about how to deliberately restrict a process and it's
-    ** sub-processors to a set of CPUs on Linux see cpuset(7).
-    */
-    inherited_binding = hwloc_bitmap_alloc();
-    hwloc_get_cpubind(MR_hw_topology, inherited_binding, HWLOC_CPUBIND_PROCESS);
-
-    /*
-    ** Set the available processors to the union of inherited_binding and the
-    ** cpuset we're allowed to use as reported by libhwloc.  In my tests with
-    ** libhwloc_1.0-1 (Debian) hwloc reported that all cpus on the system are
-    ** avaliable, it didn't exclude cpus not in the processor's cpuset(7).
-    */
-    if (MR_hw_available_pus == NULL) {
-        MR_hw_available_pus = hwloc_bitmap_alloc();
-    }
-    hwloc_bitmap_and(MR_hw_available_pus, inherited_binding,
-        hwloc_topology_get_allowed_cpuset(MR_hw_topology));
-
-    hwloc_bitmap_free(inherited_binding);
-#elif defined(MR_HAVE_SCHED_GETAFFINITY)
-    unsigned cpuset_size;
-    unsigned num_processors;
-
-    if (MR_cpuset_size) {
-        cpuset_size = MR_cpuset_size;
-        num_processors = MR_num_processors;
-    } else {
-  #if defined(MR_HAVE_SYSCONF) && defined(_SC_NPROCESSORS_ONLN)
-        num_processors = sysconf(_SC_NPROCESSORS_ONLN);
-  #else
-        /*
-        ** Make the CPU set at least 32 processors wide.
-        */
-        num_processors = 32;
-  #endif
-        cpuset_size = CPU_ALLOC_SIZE(num_processors);
-        MR_cpuset_size = cpuset_size;
-    }
-
-    if (MR_available_cpus == NULL) {
-        MR_available_cpus = CPU_ALLOC(num_processors);
-    }
-
-    if (-1 == sched_getaffinity(0, cpuset_size, MR_available_cpus))
-    {
-        perror("Couldn't get CPU affinity");
-        MR_thread_pinning = MR_FALSE;
-        CPU_FREE(MR_available_cpus);
-        MR_available_cpus = NULL;
-    }
-#endif
 }
 
 #if defined(MR_HAVE_HWLOC)
@@ -673,7 +739,8 @@ static void MR_make_cpu_unavailable(int cpu)
 }
 
 #if defined(MR_HAVE_HWLOC)
-static MR_bool MR_make_pu_unavailable(const struct hwloc_obj *pu) {
+static MR_bool MR_make_pu_unavailable(const struct hwloc_obj *pu)
+{
     hwloc_obj_t core;
     static int  siblings_to_make_unavailable;
     int         i;
@@ -738,7 +805,7 @@ MR_finalize_context_stuff(void)
     pthread_mutex_destroy(&MR_runqueue_lock);
     pthread_mutex_destroy(&free_context_list_lock);
   #ifdef MR_LL_PARALLEL_CONJ
-    sem_destroy(&shutdown_semaphore);
+    sem_destroy(&shutdown_ws_semaphore);
   #endif
 #endif
 
@@ -825,7 +892,7 @@ MR_write_out_profiling_parallel_execution(void)
     return;
 
 Error:
-    perror(MR_PROFILE_PARALLEL_EXECUTION_FILENAME);
+    MR_perror(MR_PROFILE_PARALLEL_EXECUTION_FILENAME);
     abort();
 }
 
@@ -893,10 +960,11 @@ MR_init_context_maybe_generator(MR_Context *c, const char *id,
     c->MR_ctxt_next = NULL;
     c->MR_ctxt_resume = NULL;
 #ifdef  MR_THREAD_SAFE
-    c->MR_ctxt_resume_owner_engine = 0;
+    c->MR_ctxt_exclusive_engine = MR_ENGINE_ID_NONE;
+    c->MR_ctxt_resume_engine = 0;
     c->MR_ctxt_resume_engine_required = MR_FALSE;
     c->MR_ctxt_resume_c_depth = 0;
-    c->MR_ctxt_saved_owners = NULL;
+    c->MR_ctxt_resume_stack = NULL;
 #endif
 
 #ifndef MR_HIGHLEVEL_CODE
@@ -1161,7 +1229,7 @@ MR_release_context(MR_Context *c)
 #endif
 
 #ifdef MR_THREAD_SAFE
-    MR_assert(c->MR_ctxt_saved_owners == NULL);
+    MR_assert(c->MR_ctxt_resume_stack == NULL);
 #endif
 
     /*
@@ -1169,7 +1237,7 @@ MR_release_context(MR_Context *c)
     ** retrieve one with a matching engine ID, or give each engine a local
     ** cache of spare contexts.
 #ifdef MR_LL_PARALLEL_CONJ
-    c->MR_ctxt_resume_owner_engine = MR_ENGINE(MR_eng_id);
+    c->MR_ctxt_resume_engine = MR_ENGINE(MR_eng_id);
 #endif
     */
 
@@ -1182,11 +1250,13 @@ MR_release_context(MR_Context *c)
         c->MR_ctxt_nondetstack_zone->MR_zone_min);
 #endif /* defined(MR_CONSERVATIVE_GC) && !defined(MR_HIGHLEVEL_CODE) */
 
+    c->MR_ctxt_thread_local_mutables = NULL;
+
 #ifdef MR_LL_PARALLEL_CONJ
     MR_atomic_dec_int(&MR_num_outstanding_contexts);
 #endif
 
-    MR_LOCK(&free_context_list_lock, "destroy_context");
+    MR_LOCK(&free_context_list_lock, "release_context");
     switch (c->MR_ctxt_size) {
         case MR_CONTEXT_SIZE_REGULAR:
             c->MR_ctxt_next = free_context_list;
@@ -1209,7 +1279,7 @@ MR_release_context(MR_Context *c)
             break;
 #endif
     }
-    MR_UNLOCK(&free_context_list_lock, "destroy_context");
+    MR_UNLOCK(&free_context_list_lock, "release_context");
 }
 
 #ifdef MR_PROFILE_PARALLEL_EXECUTION_SUPPORT
@@ -1250,25 +1320,26 @@ MR_find_ready_context(void)
     preferred_context = NULL;
     preferred_context_prev = NULL;
     while (cur != NULL) {
-#ifdef MR_DEBUG_THREADS
+      #ifdef MR_DEBUG_THREADS
         if (MR_debug_threads) {
             fprintf(stderr,
                 "%ld Eng: %d, c_depth: %" MR_INTEGER_LENGTH_MODIFIER
                 "u, Considering context %p\n",
                 MR_SELF_THREAD_ID, engine_id, depth, cur);
         }
-#endif
+      #endif
+
         if (cur->MR_ctxt_resume_engine_required == MR_TRUE) {
-#ifdef MR_DEBUG_THREADS
+          #ifdef MR_DEBUG_THREADS
             if (MR_debug_threads) {
                 fprintf(stderr,
-                    "%ld Context requires engine %d and c_depth %"
+                    "%ld Context %p requires engine %d and c_depth %"
                     MR_INTEGER_LENGTH_MODIFIER "u\n",
-                    MR_SELF_THREAD_ID, cur->MR_ctxt_resume_owner_engine,
+                    MR_SELF_THREAD_ID, cur, cur->MR_ctxt_resume_engine,
                     cur->MR_ctxt_resume_c_depth);
             }
-#endif
-            if ((cur->MR_ctxt_resume_owner_engine == engine_id) &&
+          #endif
+            if ((cur->MR_ctxt_resume_engine == engine_id) &&
                 (cur->MR_ctxt_resume_c_depth == depth))
             {
                 preferred_context = cur;
@@ -1279,14 +1350,30 @@ MR_find_ready_context(void)
                 */
                 break;
             }
+        } else if (cur->MR_ctxt_exclusive_engine != MR_ENGINE_ID_NONE) {
+          #ifdef MR_DEBUG_THREADS
+            if (MR_debug_threads) {
+                fprintf(stderr,
+                    "%ld Context %p requires exclusive engine %d\n",
+                    MR_SELF_THREAD_ID, cur, cur->MR_ctxt_exclusive_engine);
+            }
+          #endif
+            if (cur->MR_ctxt_exclusive_engine == engine_id) {
+                /*
+                ** This context is exclusive to this engine.
+                */
+                preferred_context = cur;
+                preferred_context_prev = prev;
+                break;
+            }
         } else {
-#ifdef MR_DEBUG_THREADS
+          #ifdef MR_DEBUG_THREADS
             if (MR_debug_threads) {
                 fprintf(stderr, "%ld Context prefers engine %d\n",
-                    MR_SELF_THREAD_ID, cur->MR_ctxt_resume_owner_engine);
+                    MR_SELF_THREAD_ID, cur->MR_ctxt_resume_engine);
             }
-#endif
-            if (cur->MR_ctxt_resume_owner_engine == engine_id) {
+          #endif
+            if (cur->MR_ctxt_resume_engine == engine_id) {
                 /*
                 ** This context prefers to be ran on this engine.
                 */
@@ -1315,19 +1402,19 @@ MR_find_ready_context(void)
         if (MR_runqueue_tail == preferred_context) {
             MR_runqueue_tail = preferred_context_prev;
         }
-#ifdef MR_DEBUG_THREADS
+      #ifdef MR_DEBUG_THREADS
         if (MR_debug_threads) {
             fprintf(stderr, "%ld Will run context %p\n",
                 MR_SELF_THREAD_ID, preferred_context);
         }
-#endif
+      #endif
     } else {
-#ifdef MR_DEBUG_THREADS
+      #ifdef MR_DEBUG_THREADS
         if (MR_debug_threads) {
             fprintf(stderr, "%ld No suitable context to run\n",
                 MR_SELF_THREAD_ID);
         }
-#endif
+      #endif
     }
 
     return preferred_context;
@@ -1339,20 +1426,35 @@ MR_attempt_steal_spark(MR_Spark *spark)
     int             i;
     int             offset;
     int             victim_id;
+    int             max_victim_id;
     MR_SparkDeque   *victim;
     int             steal_result;
     MR_bool         result = MR_FALSE;
 
     offset = MR_ENGINE(MR_eng_victim_counter);
 
-    for (i = 0; i < MR_num_threads; i++) {
-        victim_id = (i + offset) % MR_num_threads;
+    /*
+    ** This is the highest victim to attempt stealing from.  We do not
+    ** steal from exclusive engines, numbered from MR_num_ws_engines up.
+    ** To try that out, set max_victim_id to MR_highest_engine_id and
+    ** change the condition in MR_fork_new_child.
+    */
+    max_victim_id = MR_num_ws_engines;
+
+    for (i = 0; i < max_victim_id; i++) {
+        victim_id = (i + offset) % max_victim_id;
         if (victim_id == MR_ENGINE(MR_eng_id)) {
             /*
             ** There's no point in stealing from ourself.
             */
             continue;
         }
+        /*
+        ** The victim engine may be shutting down as we attempt to steal from
+        ** it. However, the spark deque is allocated separately so that it may
+        ** outlive the engine, and since the spark deque must be empty when the
+        ** engine is destroyed, any attempt to steal from it must fail.
+        */
         victim = MR_spark_deques[victim_id];
         if (victim != NULL) {
             steal_result = MR_wsdeque_steal_top(victim, spark);
@@ -1545,9 +1647,10 @@ void
 MR_schedule_context(MR_Context *ctxt)
 {
 #ifdef MR_LL_PARALLEL_CONJ
-    MR_EngineId engine_id;
-    union MR_engine_wake_action_data notify_context_data;
-    engine_sleep_sync *esync;
+    MR_EngineId                         engine_id;
+    MR_bool                             engine_required;
+    union MR_engine_wake_action_data    notify_context_data;
+    engine_sleep_sync                   *esync;
 
     notify_context_data.MR_ewa_context = ctxt;
 
@@ -1558,15 +1661,26 @@ MR_schedule_context(MR_Context *ctxt)
     /*
     ** Try to give this context straight to the engine that would execute it.
     */
-    engine_id = ctxt->MR_ctxt_resume_owner_engine;
-    esync = &(engine_sleep_sync_data[engine_id]);
+    if (ctxt->MR_ctxt_resume_engine_required == MR_TRUE) {
+        engine_id = ctxt->MR_ctxt_resume_engine;
+        engine_required = MR_TRUE;
+    } else if (ctxt->MR_ctxt_exclusive_engine != MR_ENGINE_ID_NONE) {
+        engine_id = ctxt->MR_ctxt_exclusive_engine;
+        engine_required = MR_TRUE;
+    } else {
+        engine_id = ctxt->MR_ctxt_resume_engine;
+        engine_required = MR_FALSE;
+    }
+
+    esync = get_engine_sleep_sync(engine_id);
 #ifdef MR_DEBUG_THREADS
     if (MR_debug_threads) {
-        fprintf(stderr, "%ld Scheduling context %p desired engine: %d\n",
-            MR_SELF_THREAD_ID, ctxt, engine_id);
+        fprintf(stderr,
+            "%ld Scheduling context %p desired engine: %d required: %d\n",
+            MR_SELF_THREAD_ID, ctxt, engine_id, engine_required);
     }
 #endif
-    if (ctxt->MR_ctxt_resume_engine_required == MR_TRUE) {
+    if (engine_required) {
         /*
         ** Only engine_id may execute this context, attempt to wake it.
         **
@@ -1604,8 +1718,8 @@ MR_schedule_context(MR_Context *ctxt)
         */
 #ifdef MR_DEBUG_THREADS
         if (MR_debug_threads) {
-            fprintf(stderr, "%ld Context _must_ run on this engine\n",
-                MR_SELF_THREAD_ID);
+            fprintf(stderr, "%ld Context _must_ run on engine %d\n",
+                MR_SELF_THREAD_ID, engine_id);
         }
 #endif
 
@@ -1628,8 +1742,8 @@ MR_schedule_context(MR_Context *ctxt)
         ** If there is some idle engine, try to wake it up, starting with the
         ** preferred engine.
         */
-        if (MR_num_idle_engines > 0) {
-            if (MR_try_wake_an_engine(engine_id, MR_ENGINE_ACTION_CONTEXT,
+        if (MR_num_idle_ws_engines > 0) {
+            if (MR_try_wake_ws_engine(engine_id, MR_ENGINE_ACTION_CONTEXT,
                 &notify_context_data, NULL))
             {
                 /*
@@ -1653,7 +1767,7 @@ MR_schedule_context(MR_Context *ctxt)
     MR_UNLOCK(&MR_runqueue_lock, "schedule_context");
 
 #ifdef MR_LL_PARALLEL_CONJ
-    if (ctxt->MR_ctxt_resume_engine_required == MR_TRUE) {
+    if (engine_required) {
         /*
         ** The engine is only runnable on a single context, that context was
         ** busy earlier and couldn't be handed the engine.  If that context
@@ -1661,8 +1775,8 @@ MR_schedule_context(MR_Context *ctxt)
         ** (where we just put the context).  Therefore we re-attempt to
         ** notify the engine to ensure that it re-checks the runqueue.
         **
-        ** This is only a problem with only a single engine can execute a
-        ** context, in any other case the current engine will eventually check
+        ** This is only a problem when only a single engine can execute a
+        ** context. In any other case the current engine will eventually check
         ** the runqueue.
         **
         ** The updates to the run queue are guaranteed by the compiler and
@@ -1698,11 +1812,37 @@ MR_schedule_context(MR_Context *ctxt)
 }
 
 #ifdef MR_LL_PARALLEL_CONJ
+void
+MR_verify_initial_engine_sleep_sync(MR_EngineId id)
+{
+    engine_sleep_sync   *esync = get_engine_sleep_sync(id);
+
+    assert(esync->d.es_state == ENGINE_STATE_WORKING);
+    assert(esync->d.es_action == MR_ENGINE_ACTION_NONE);
+}
+
+void
+MR_verify_final_engine_sleep_sync(MR_EngineId id, MR_EngineType engine_type)
+{
+    engine_sleep_sync   *esync = get_engine_sleep_sync(id);
+
+    /*
+    ** Shared engines are shut down by notification.
+    ** Exclusive engines are shut down at the end of the Mercury thread.
+    */
+    if (engine_type == MR_ENGINE_TYPE_SHARED) {
+        assert(esync->d.es_state == ENGINE_STATE_NOTIFIED);
+    } else {
+        assert(esync->d.es_state == ENGINE_STATE_WORKING);
+    }
+    assert(esync->d.es_action == MR_ENGINE_ACTION_NONE);
+}
+
 /*
-** Try to wake an engine, starting at the preferred engine.
+** Try to wake a work-stealing engine, starting at the preferred engine.
 */
 MR_bool
-MR_try_wake_an_engine(MR_EngineId preferred_engine, int action,
+MR_try_wake_ws_engine(MR_EngineId preferred_engine, int action,
     union MR_engine_wake_action_data *action_data, MR_EngineId *target_eng)
 {
     MR_EngineId current_engine;
@@ -1734,15 +1874,15 @@ MR_try_wake_an_engine(MR_EngineId preferred_engine, int action,
     ** Right now this algorithm is naive, it searches from the preferred engine
     ** around the loop until it finds an engine.
     */
-    for (i = 0; i < MR_num_threads; i++) {
-        current_engine = (i + preferred_engine) % MR_num_threads;
+    for (i = 0; i < MR_num_ws_engines; i++) {
+        current_engine = (i + preferred_engine) % MR_num_ws_engines;
         if (current_engine == MR_ENGINE(MR_eng_id)) {
             /*
             ** Don't post superfluous events to ourself.
             */
             continue;
         }
-        state = engine_sleep_sync_data[current_engine].d.es_state;
+        state = get_engine_sleep_sync(current_engine)->d.es_state;
         if (state & valid_states) {
             switch (state) {
                 case ENGINE_STATE_SLEEPING:
@@ -1778,7 +1918,7 @@ try_wake_engine(MR_EngineId engine_id, int action,
     union MR_engine_wake_action_data *action_data)
 {
     MR_bool success = MR_FALSE;
-    engine_sleep_sync *esync = &(engine_sleep_sync_data[engine_id]);
+    engine_sleep_sync *esync = get_engine_sleep_sync(engine_id);
 
 #ifdef MR_DEBUG_THREADS
     if (MR_debug_threads) {
@@ -1794,14 +1934,16 @@ try_wake_engine(MR_EngineId engine_id, int action,
     */
     MR_LOCK(&(esync->d.es_wake_lock), "try_wake_engine, wake_lock");
     if (esync->d.es_state == ENGINE_STATE_SLEEPING) {
-        MR_atomic_dec_int(&MR_num_idle_engines);
+        if (engine_id < MR_num_ws_engines) {
+            MR_atomic_dec_int(&MR_num_idle_ws_engines);
 #ifdef MR_DEBUG_THREADS
-        if (MR_debug_threads) {
-            fprintf(stderr, "%ld Decrement MR_num_idle_engines %"
-                MR_INTEGER_LENGTH_MODIFIER "d\n",
-                MR_SELF_THREAD_ID, MR_num_idle_engines);
-        }
+            if (MR_debug_threads) {
+                fprintf(stderr, "%ld Decrement MR_num_idle_ws_engines %"
+                    MR_INTEGER_LENGTH_MODIFIER "d\n",
+                    MR_SELF_THREAD_ID, MR_num_idle_ws_engines);
+            }
 #endif
+        }
 
         /*
         ** We now KNOW that the engine is in one of the correct states.
@@ -1836,7 +1978,7 @@ MR_bool
 try_notify_engine(MR_EngineId engine_id, int action,
     union MR_engine_wake_action_data *action_data, MR_Unsigned engine_state)
 {
-    engine_sleep_sync   *esync = &(engine_sleep_sync_data[engine_id]);
+    engine_sleep_sync *esync = get_engine_sleep_sync(engine_id);
 
 #ifdef MR_DEBUG_THREADS
     if (MR_debug_threads) {
@@ -1863,12 +2005,13 @@ try_notify_engine(MR_EngineId engine_id, int action,
             ** The engine was idle if it was in the stealing state.
             ** It is not idle anymore so fixup the count.
             */
-            MR_atomic_dec_int(&MR_num_idle_engines);
+            MR_assert(engine_id < MR_num_ws_engines);
+            MR_atomic_dec_int(&MR_num_idle_ws_engines);
 #ifdef MR_DEBUG_THREADS
             if (MR_debug_threads) {
-                fprintf(stderr, "%ld Decrement MR_num_idle_engines %"
+                fprintf(stderr, "%ld Decrement MR_num_idle_ws_engines %"
                     MR_INTEGER_LENGTH_MODIFIER "d\n",
-                    MR_SELF_THREAD_ID, MR_num_idle_engines);
+                    MR_SELF_THREAD_ID, MR_num_idle_ws_engines);
             }
 #endif
         }
@@ -1899,18 +2042,18 @@ try_notify_engine(MR_EngineId engine_id, int action,
 }
 
 void
-MR_shutdown_all_engines(void)
+MR_shutdown_ws_engines(void)
 {
     int i;
     MR_bool result;
 
-    for (i = 0; i < MR_num_threads; i++) {
-        engine_sleep_sync *esync = &(engine_sleep_sync_data[i]);
+    for (i = 0; i < MR_num_ws_engines; i++) {
         if (i == MR_ENGINE(MR_eng_id)) {
             continue;
         }
 
         while (1) {
+            engine_sleep_sync *esync = get_engine_sleep_sync(i);
             MR_Unsigned state = esync->d.es_state;
 
             /*
@@ -1944,8 +2087,8 @@ MR_shutdown_all_engines(void)
         }
     }
 
-    for (i = 0; i < (MR_num_threads - 1); i++) {
-        MR_SEM_WAIT(&shutdown_semaphore, "MR_shutdown_all_engines");
+    for (i = 0; i < (MR_num_ws_engines - 1); i++) {
+        MR_SEM_WAIT(&shutdown_ws_semaphore, "MR_shutdown_ws_engines");
     }
 }
 
@@ -1964,7 +2107,7 @@ MR_shutdown_all_engines(void)
 
 #ifdef MR_THREAD_SAFE
 static void
-action_shutdown_engine(void);
+action_shutdown_ws_engine(void);
 
 static MR_Code*
 action_worksteal(MR_EngineId victim_engine_id);
@@ -2014,19 +2157,6 @@ prepare_engine_for_spark(volatile MR_Spark *spark);
 */
 static void
 prepare_engine_for_context(MR_Context *context);
-
-/*
-** Advertise that the engine is looking for work after being in the
-** working state. (Do not use this call when waking from sleep).
-*/
-static void
-advertise_engine_state_idle(void);
-
-/*
-** Advertise that the engine will begin working.
-*/
-static void
-advertise_engine_state_working(void);
 #endif /* MR_THREAD_SAFE */
 
 MR_BEGIN_MODULE(scheduler_module_idle)
@@ -2037,8 +2167,7 @@ MR_define_entry(MR_do_idle);
 #ifdef MR_THREAD_SAFE
     MR_Code             *jump_target;
     MR_EngineId         engine_id = MR_ENGINE(MR_eng_id);
-    engine_sleep_sync   *esync =
-        &(engine_sleep_sync_data[MR_ENGINE(MR_eng_id)]);
+    engine_sleep_sync   *esync = get_engine_sleep_sync(engine_id);
 
     /*
     ** We can set the idle status without a compare and swap.  There are no
@@ -2071,7 +2200,12 @@ MR_define_entry(MR_do_idle);
     /*
     ** TODO: Use multiple entry points into a single MODULE structure.
     */
-    MR_GOTO(MR_ENTRY(MR_do_idle_worksteal));
+    if (MR_ENGINE(MR_eng_type) == MR_ENGINE_TYPE_SHARED) {
+        MR_GOTO(MR_ENTRY(MR_do_idle_worksteal));
+    } else {
+        MR_GOTO(MR_ENTRY(MR_do_sleep));
+    }
+
 #else /* !MR_THREAD_SAFE */
     /*
     ** When an engine becomes idle in a non parallel grade, it simply picks up
@@ -2105,8 +2239,10 @@ MR_define_entry(MR_do_idle_worksteal);
 {
     MR_Code             *jump_target;
     MR_EngineId         engine_id = MR_ENGINE(MR_eng_id);
-    engine_sleep_sync   *esync =
-        &(engine_sleep_sync_data[engine_id]);
+    engine_sleep_sync   *esync = get_engine_sleep_sync(engine_id);
+
+    /* Only work-stealing engines beyond this point. */
+    MR_assert(MR_ENGINE(MR_eng_type) == MR_ENGINE_TYPE_SHARED);
 
     if (!MR_compare_and_swap_uint(&(esync->d.es_state), ENGINE_STATE_IDLE,
             ENGINE_STATE_STEALING)) {
@@ -2117,9 +2253,9 @@ MR_define_entry(MR_do_idle_worksteal);
         /*
         ** The compare and swap failed, which means there is a notification.
         */
-        switch(esync->d.es_action) {
+        switch (esync->d.es_action) {
             case MR_ENGINE_ACTION_SHUTDOWN:
-                action_shutdown_engine();
+                action_shutdown_ws_engine();
 
             case MR_ENGINE_ACTION_CONTEXT_ADVICE:
                 MR_GOTO(MR_ENTRY(MR_do_idle));
@@ -2151,21 +2287,21 @@ MR_define_entry(MR_do_idle_worksteal);
     ** The compare and swap must be visible before the increment.
     */
     MR_CPU_SFENCE;
-    MR_atomic_inc_int(&MR_num_idle_engines);
+    MR_atomic_inc_int(&MR_num_idle_ws_engines);
 #ifdef MR_DEBUG_THREADS
     if (MR_debug_threads) {
-        fprintf(stderr, "%ld Increment MR_num_idle_engines %d\n",
-            MR_SELF_THREAD_ID, MR_num_idle_engines);
+        fprintf(stderr, "%ld Increment MR_num_idle_ws_engines %d\n",
+            MR_SELF_THREAD_ID, MR_num_idle_ws_engines);
     }
 #endif
 
     jump_target = do_work_steal();
     if (jump_target != NULL) {
-        MR_atomic_dec_int(&MR_num_idle_engines);
+        MR_atomic_dec_int(&MR_num_idle_ws_engines);
 #ifdef MR_DEBUG_THREADS
         if (MR_debug_threads) {
-            fprintf(stderr, "%ld Decrement MR_num_idle_engines %d\n",
-                MR_SELF_THREAD_ID, MR_num_idle_engines);
+            fprintf(stderr, "%ld Decrement MR_num_idle_ws_engines %d\n",
+                MR_SELF_THREAD_ID, MR_num_idle_ws_engines);
         }
 #endif
         MR_CPU_SFENCE;
@@ -2194,9 +2330,9 @@ MR_BEGIN_CODE
 MR_define_entry(MR_do_sleep);
 {
     MR_EngineId         engine_id = MR_ENGINE(MR_eng_id);
-    engine_sleep_sync   *esync =
-        &(engine_sleep_sync_data[MR_ENGINE(MR_eng_id)]);
+    engine_sleep_sync   *esync = get_engine_sleep_sync(engine_id);
 
+    MR_Unsigned     in_state;
     unsigned        action;
     int             result;
     MR_Code         *jump_target;
@@ -2206,7 +2342,15 @@ MR_define_entry(MR_do_sleep);
     struct timeval  tv;
 #endif
 
-    if (MR_compare_and_swap_uint(&(esync->d.es_state), ENGINE_STATE_STEALING,
+    /*
+    ** Shared engines and exclusive engines enter via different states.
+    */
+    if (MR_ENGINE(MR_eng_type) == MR_ENGINE_TYPE_SHARED) {
+        in_state = ENGINE_STATE_STEALING;
+    } else {
+        in_state = ENGINE_STATE_IDLE;
+    }
+    if (MR_compare_and_swap_uint(&(esync->d.es_state), in_state,
             ENGINE_STATE_SLEEPING)) {
         /*
         ** We have permission to sleep, and must commit to sleeping.
@@ -2237,9 +2381,7 @@ retry_sleep:
         }
         ts.tv_sec = tv.tv_sec;
         ts.tv_nsec = tv.tv_usec * 1000;
-        result = sem_timedwait(
-            &(esync->d.es_sleep_semaphore),
-            &ts);
+        result = sem_timedwait(&(esync->d.es_sleep_semaphore), &ts);
 #else
         result = sem_wait(&(esync->d.es_sleep_semaphore));
 #endif
@@ -2255,7 +2397,7 @@ retry_sleep:
                     */
 #ifdef MR_DEBUG_THREADS
                     if (MR_debug_threads) {
-                        fprintf(stderr, "%ld Engine sleep interrupted\n",
+                        fprintf(stderr, "%ld Engine %d sleep interrupted\n",
                             MR_SELF_THREAD_ID, MR_ENGINE(MR_eng_id));
                     }
 #endif
@@ -2266,7 +2408,7 @@ retry_sleep:
                     */
 #ifdef MR_DEBUG_THREADS
                     if (MR_debug_threads) {
-                        fprintf(stderr, "%ld Engine sleep timed out\n",
+                        fprintf(stderr, "%ld Engine %d sleep timed out\n",
                             MR_SELF_THREAD_ID, MR_ENGINE(MR_eng_id));
                     }
 #endif
@@ -2285,13 +2427,18 @@ retry_sleep:
                         */
                         jump_target = NULL;
                     } else {
-                        jump_target = do_work_steal();
+                        if (MR_ENGINE(MR_eng_type) == MR_ENGINE_TYPE_SHARED) {
+                            jump_target = do_work_steal();
+                        } else {
+                            jump_target = NULL;
+                        }
                         if (jump_target != NULL) {
-                            MR_atomic_dec_int(&MR_num_idle_engines);
+                            MR_atomic_dec_int(&MR_num_idle_ws_engines);
 #ifdef MR_DEBUG_THREADS
                             if (MR_debug_threads) {
-                                fprintf(stderr, "%ld Decrement MR_num_idle_engines %d\n",
-                                    MR_SELF_THREAD_ID, MR_num_idle_engines);
+                                fprintf(stderr,
+                                    "%ld Decrement MR_num_idle_ws_engines %d\n",
+                                    MR_SELF_THREAD_ID, MR_num_idle_ws_engines);
                             }
 #endif
                             MR_CPU_SFENCE;
@@ -2304,7 +2451,7 @@ retry_sleep:
                     }
                     goto retry_sleep;
                 default:
-                    perror("sem_timedwait");
+                    MR_perror("sem_timedwait");
                     abort();
             }
         } /* if sem_wait raised an error */
@@ -2335,18 +2482,25 @@ retry_sleep:
     action = esync->d.es_action;
     esync->d.es_action = MR_ENGINE_ACTION_NONE;
 
-    switch(action) {
+    switch (action) {
         case MR_ENGINE_ACTION_SHUTDOWN:
-            action_shutdown_engine();
+            if (MR_ENGINE(MR_eng_type) == MR_ENGINE_TYPE_SHARED) {
+                action_shutdown_ws_engine();
+            } else {
+                fprintf(stderr, "Mercury runtime: Exclusive engine %d "
+                    "received shutdown action\n", MR_ENGINE(MR_eng_id));
+            }
+            break;
 
         case MR_ENGINE_ACTION_WORKSTEAL_ADVICE:
-            jump_target = action_worksteal(
-                esync->d.es_action_data.MR_ewa_worksteal_engine);
-            if (jump_target != NULL) {
-                MR_GOTO(jump_target);
-            } else {
-                MR_GOTO(MR_ENTRY(MR_do_idle));
+            if (MR_ENGINE(MR_eng_type) == MR_ENGINE_TYPE_SHARED) {
+                jump_target = action_worksteal(
+                    esync->d.es_action_data.MR_ewa_worksteal_engine);
+                if (jump_target != NULL) {
+                    MR_GOTO(jump_target);
+                }
             }
+            MR_GOTO(MR_ENTRY(MR_do_idle));
 
         case MR_ENGINE_ACTION_CONTEXT:
             MR_GOTO(action_context(esync->d.es_action_data.MR_ewa_context));
@@ -2357,18 +2511,19 @@ retry_sleep:
         case MR_ENGINE_ACTION_NONE:
         default:
             fprintf(stderr,
-                "Mercury runtime: Engine woken with no action\n");
+                "Mercury runtime: Engine %d woken with no action\n",
+                MR_ENGINE(MR_eng_id));
             break;
     } /* Switch on action */
     /*
-    ** Each case ends with a GOTO, so execution cannot reach here
+    ** Each valid case ends with a GOTO, so execution cannot reach here
     */
     abort();
 }
 MR_END_MODULE
 
 static void
-action_shutdown_engine(void)
+action_shutdown_ws_engine(void)
 {
     MR_EngineId engine_id = MR_ENGINE(MR_eng_id);
 
@@ -2381,10 +2536,12 @@ action_shutdown_engine(void)
     /*
     ** The primordial thread has the responsibility of cleaning
     ** up the Mercury runtime. It cannot exit by this route.
+    ** Exclusive engines also do not exit by this route.
     */
-    MR_assert(engine_id != 0);
-    MR_destroy_thread(MR_cur_engine());
-    MR_SEM_POST(&shutdown_semaphore, "MR_do_sleep shutdown_sem");
+    assert(engine_id != 0);
+    assert(MR_ENGINE(MR_eng_type) == MR_ENGINE_TYPE_SHARED);
+    MR_finalize_thread_engine();
+    MR_SEM_POST(&shutdown_ws_semaphore, "MR_do_sleep shutdown_sem");
     pthread_exit(0);
 }
 
@@ -2394,13 +2551,15 @@ action_worksteal(MR_EngineId victim_engine_id)
     MR_SparkDeque *victim;
     int steal_result;
     MR_Spark spark;
-    engine_sleep_sync *esync =
-        &(engine_sleep_sync_data[MR_ENGINE(MR_eng_id)]);
+    engine_sleep_sync *esync;
+
+    MR_assert(MR_ENGINE(MR_eng_type) == MR_ENGINE_TYPE_SHARED);
+    esync = get_engine_sleep_sync(MR_ENGINE(MR_eng_id));
 
 #ifdef MR_DEBUG_THREADS
     if (MR_debug_threads) {
-        fprintf(stderr, "%ld Engine %d workstealing\n",
-            MR_SELF_THREAD_ID, MR_ENGINE(MR_eng_id));
+        fprintf(stderr, "%ld Engine %d workstealing, victim %d\n",
+            MR_SELF_THREAD_ID, MR_ENGINE(MR_eng_id), victim_engine_id);
     }
 #endif
 
@@ -2447,9 +2606,9 @@ static MR_Code*
 action_context(MR_Context *context)
 {
     MR_Code *resume_point;
-    engine_sleep_sync *esync =
-        &(engine_sleep_sync_data[MR_ENGINE(MR_eng_id)]);
+    engine_sleep_sync *esync;
 
+    esync = get_engine_sleep_sync(MR_ENGINE(MR_eng_id));
     esync->d.es_state = ENGINE_STATE_WORKING;
     prepare_engine_for_context(context);
 
@@ -2508,8 +2667,8 @@ do_get_context(void)
             #endif
             #ifdef MR_DEBUG_THREADS
             if (MR_debug_threads) {
-                fprintf(stderr, "%ld Resuming context %p\n",
-                    MR_SELF_THREAD_ID, ready_context);
+                fprintf(stderr, "%ld Engine %d resuming context %p\n",
+                    MR_SELF_THREAD_ID, MR_ENGINE(MR_eng_id), ready_context);
             }
             #endif
 
@@ -2524,7 +2683,8 @@ do_get_context(void)
 }
 
 static void
-prepare_engine_for_context(MR_Context *context) {
+prepare_engine_for_context(MR_Context *context)
+{
     /*
     ** Discard whatever unused context we may have, and switch to the new one.
     */
@@ -2540,6 +2700,10 @@ prepare_engine_for_context(MR_Context *context) {
         MR_save_context(MR_ENGINE(MR_eng_this_context));
         MR_release_context(MR_ENGINE(MR_eng_this_context));
     }
+
+    MR_assert(context->MR_ctxt_exclusive_engine == MR_ENGINE_ID_NONE
+        || context->MR_ctxt_exclusive_engine == MR_ENGINE(MR_eng_id));
+
     MR_ENGINE(MR_eng_this_context) = context;
     MR_load_context(context);
 #ifdef MR_PARALLEL_PROFILING
@@ -2613,14 +2777,14 @@ do_local_spark(MR_Code *join_label)
     MR_parprof_post_looking_for_local_spark();
 #endif
 
-    spark = MR_wsdeque_pop_bottom(&MR_ENGINE(MR_eng_spark_deque));
+    spark = MR_wsdeque_pop_bottom(MR_ENGINE(MR_eng_spark_deque));
     if (NULL == spark) {
         return NULL;
     }
 
     /*
     ** The current context may be dirty and incompatible with this spark, if
-    ** so we put the spark back ondo the deque.  This test is only
+    ** so we put the spark back onto the deque.  This test is only
     ** applicable when running a local spark.
     **
     ** Our caller will then save the context and look for a different
@@ -2632,7 +2796,7 @@ do_local_spark(MR_Code *join_label)
         (spark->MR_spark_sync_term->MR_st_orig_context != this_context))
     {
         /* The cast discards the volatile qualifier, which is okay */
-        MR_wsdeque_putback_bottom(&MR_ENGINE(MR_eng_spark_deque),
+        MR_wsdeque_putback_bottom(MR_ENGINE(MR_eng_spark_deque),
                 (MR_Spark*) spark);
         return NULL;
     }
@@ -2651,6 +2815,8 @@ do_work_steal(void)
 {
     MR_Spark spark;
 
+    MR_assert(MR_ENGINE(MR_eng_type) == MR_ENGINE_TYPE_SHARED);
+
     #ifdef MR_PARALLEL_PROFILING
     MR_parprof_post_work_stealing();
     #endif
@@ -2659,6 +2825,11 @@ do_work_steal(void)
     ** A context may be created to execute a spark, so only attempt to
     ** steal sparks if doing so would not exceed the limit of outstanding
     ** contexts.
+    **
+    ** This condition is simply a crude way to limit memory consumption by
+    ** parallel execution. It is currently affected by contexts created for
+    ** explicit concurrency, which may be surprising.
+    ** XXX why the non-strict inequality?
     */
     if ((MR_ENGINE(MR_eng_this_context) != NULL) ||
         (MR_num_outstanding_contexts <= MR_max_outstanding_contexts)) {
@@ -2683,13 +2854,14 @@ do_work_steal(void)
 }
 
 static void
-save_dirty_context(MR_Code *join_label) {
+save_dirty_context(MR_Code *join_label)
+{
     MR_Context *this_context = MR_ENGINE(MR_eng_this_context);
 
 #ifdef MR_PARALLEL_PROFILING
     MR_parprof_post_stop_context(MR_PARPROF_STOP_REASON_BLOCKED);
 #endif
-    this_context->MR_ctxt_resume_owner_engine = MR_ENGINE(MR_eng_id);
+    this_context->MR_ctxt_resume_engine = MR_ENGINE(MR_eng_id);
     MR_save_context(this_context);
     /*
     ** Make sure the context gets saved before we set the join label,
@@ -2776,7 +2948,7 @@ MR_do_join_and_continue(MR_SyncTerm *jnc_st, MR_Code *join_label)
 #ifdef MR_PARALLEL_PROFILING
         MR_parprof_post_looking_for_local_spark();
 #endif
-        spark = MR_wsdeque_pop_bottom(&MR_ENGINE(MR_eng_spark_deque));
+        spark = MR_wsdeque_pop_bottom(MR_ENGINE(MR_eng_spark_deque));
         if (spark != NULL) {
             if ((this_context == jnc_st->MR_st_orig_context) &&
                     (spark->MR_spark_sync_term != jnc_st)) {
@@ -2794,7 +2966,7 @@ MR_do_join_and_continue(MR_SyncTerm *jnc_st, MR_Code *join_label)
                     ** There might be a suspended context. We should try
                     ** to execute that.
                     */
-                    MR_wsdeque_putback_bottom(&MR_ENGINE(MR_eng_spark_deque),
+                    MR_wsdeque_putback_bottom(MR_ENGINE(MR_eng_spark_deque),
                         (MR_Spark*) spark);
                     return MR_ENTRY(MR_do_idle);
                 }

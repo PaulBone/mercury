@@ -78,7 +78,6 @@
 
 :- implementation.
 
-:- import_module check_hlds.det_report.
 :- import_module check_hlds.inst_match.
 :- import_module check_hlds.inst_util.
 :- import_module check_hlds.mode_errors.
@@ -157,9 +156,10 @@ modecheck_call_pred(PredId, DeterminismKnown, ProcId0, TheProcId,
         %
         proc_info_get_argmodes(ProcInfo, ProcArgModes0),
         proc_info_get_inst_varset(ProcInfo, ProcInstVarSet),
-        mode_info_get_instvarset(!.ModeInfo, InstVarSet),
-        rename_apart_inst_vars(InstVarSet, ProcInstVarSet,
+        mode_info_get_instvarset(!.ModeInfo, InstVarSet0),
+        rename_apart_inst_vars(InstVarSet0, ProcInstVarSet, InstVarSet,
             ProcArgModes0, ProcArgModes),
+        mode_info_set_instvarset(InstVarSet, !ModeInfo),
         mode_list_get_initial_insts(ModuleInfo, ProcArgModes, InitialInsts),
         modecheck_var_has_inst_list_no_exact_match(ArgVars0, InitialInsts,
             ArgOffset, InstVarSub, !ModeInfo),
@@ -375,9 +375,10 @@ modecheck_find_matching_modes([ProcId | ProcIds], PredId, Procs, ArgVars0,
     map.lookup(Procs, ProcId, ProcInfo),
     proc_info_get_argmodes(ProcInfo, ProcArgModes0),
     proc_info_get_inst_varset(ProcInfo, ProcInstVarSet),
-    mode_info_get_instvarset(!.ModeInfo, InstVarSet),
-    rename_apart_inst_vars(InstVarSet, ProcInstVarSet, ProcArgModes0,
-        ProcArgModes),
+    mode_info_get_instvarset(!.ModeInfo, InstVarSet0),
+    rename_apart_inst_vars(InstVarSet0, ProcInstVarSet, InstVarSet,
+        ProcArgModes0, ProcArgModes),
+    mode_info_set_instvarset(InstVarSet, !ModeInfo),
     mode_info_get_module_info(!.ModeInfo, ModuleInfo),
     proc_info_arglives(ProcInfo, ModuleInfo, ProcArgLives0),
 
@@ -721,10 +722,28 @@ compare_proc(ModeInfo, ProcId, OtherProcId, ArgVars, Procs, Compare) :-
     % Compare the determinisms.
     proc_info_interface_determinism(ProcInfo, Detism),
     proc_info_interface_determinism(OtherProcInfo, OtherDetism),
-    compare_determinisms(Detism, OtherDetism, CompareDet0),
-    ( CompareDet0 = tighter, CompareDet = better
-    ; CompareDet0 = looser, CompareDet = worse
-    ; CompareDet0 = sameas, CompareDet = same
+    determinism_components(Detism, CanFail, SolnCount),
+    determinism_components(OtherDetism, OtherCanFail, OtherSolnCount),
+    compare_solncounts(SolnCount, OtherSolnCount, CompareSolnCounts),
+    (
+        CompareSolnCounts = first_tighter_than,
+        CompareDet = better
+    ;
+        CompareSolnCounts = first_same_as,
+        compare_canfails(CanFail, OtherCanFail, CompareCanFails),
+        (
+            CompareCanFails = first_tighter_than,
+            CompareDet = better
+        ;
+            CompareCanFails = first_same_as,
+            CompareDet = same
+        ;
+            CompareCanFails = first_looser_than,
+            CompareDet = worse
+        )
+    ;
+        CompareSolnCounts = first_looser_than,
+        CompareDet = worse
     ),
 
     % Combine the results, with the insts & lives comparisons

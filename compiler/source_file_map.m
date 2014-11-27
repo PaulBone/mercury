@@ -5,22 +5,22 @@
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %-----------------------------------------------------------------------------%
-% 
+%
 % File: source_file_map.m.
 % Author: stayl.
-% 
+%
 % Maintain a mapping from module name to source file name.
-% 
+%
 % The reason why this module is in the parse_tree package is that discovering
 % what module is stored in a file requires reading the ":- module" declaration
 % in that file.
-% 
+%
 %-----------------------------------------------------------------------------%
 
 :- module parse_tree.source_file_map.
 :- interface.
 
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module libs.file_util.
 :- import_module libs.globals.
 
@@ -54,7 +54,7 @@
 :- implementation.
 
 :- import_module parse_tree.file_names.
-:- import_module parse_tree.prog_io.
+:- import_module parse_tree.prog_io_find.
 :- import_module parse_tree.prog_out.
 
 :- import_module char.
@@ -249,4 +249,6 @@ write_source_file_map_2(Globals, MapStream, FileName,
 
 modules_file_name = "Mercury.modules".
 
+%-----------------------------------------------------------------------------%
+:- end_module parse_tree.source_file_map.
 %-----------------------------------------------------------------------------%

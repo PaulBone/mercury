@@ -24,6 +24,7 @@
 :- import_module hlds.hlds_pred.
 :- import_module mdbcomp.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
@@ -35,7 +36,7 @@
 :- type cons_error
     --->    foreign_type_constructor(type_ctor, hlds_type_defn)
     ;       abstract_imported_type
-    ;       invalid_field_update(ctor_field_name, hlds_ctor_field_defn,
+    ;       invalid_field_update(sym_name, hlds_ctor_field_defn,
                 tvarset, list(tvar))
     ;       new_on_non_existential_type(type_ctor).
 
@@ -77,7 +78,7 @@
 :- func report_error_var(typecheck_info, prog_var, mer_type, type_assign_set)
     = error_spec.
 
-:- func report_error_var_either_type(typecheck_info, prog_var, 
+:- func report_error_var_either_type(typecheck_info, prog_var,
     mer_type, mer_type, type_assign_set) = error_spec.
 
 :- func report_error_arg_var(typecheck_info, prog_var, args_type_assign_set)
@@ -194,7 +195,8 @@ report_error_func_instead_of_pred(Info, PredOrFunc) = Msg :-
         Pieces = [words("(There is a"),
             prefix("*"), p_or_f(PredOrFunc), suffix("*"),
             words("with that name, however."), nl,
-            words("Perhaps you forgot to add"), fixed("` = ...'?)"), nl]
+            words("Perhaps you forgot to add"),
+            quote(" = ..."), suffix("?)"), nl]
     ;
         PredOrFunc = pf_predicate,
         Pieces = [words("(There is a"),
@@ -215,7 +217,8 @@ report_error_undef_pred(Info, SimpleCallId) = Msg :-
         PredName = unqualified("->"),
         ( Arity = 2 ; Arity = 4 )
     ->
-        MainPieces = [words("error: `->' without `;'."), nl],
+        MainPieces = [words("error:"), quote("->"), words("without"),
+            quote(";"), suffix("."), nl],
         MainComponent = always(MainPieces),
         VerbosePieces =
             [words("Note: the else part is not optional."), nl,
@@ -226,22 +229,26 @@ report_error_undef_pred(Info, SimpleCallId) = Msg :-
         PredName = unqualified("else"),
         ( Arity = 2 ; Arity = 4 )
     ->
-        Components = [always([words("error: unmatched `else'."), nl])]
+        Components = [always([words("error: unmatched"), quote("else"),
+            suffix("."), nl])]
     ;
         PredName = unqualified("if"),
         ( Arity = 2 ; Arity = 4 )
     ->
-        Pieces = [words("error: `if' without `then' or `else'."), nl],
+        Pieces = [words("error:"), quote("if"), words("without"),
+            quote("then"), words("or"), quote("else"), suffix("."), nl],
         Components = [always(Pieces)]
     ;
         PredName = unqualified("then"),
         ( Arity = 2 ; Arity = 4 )
     ->
-        MainPieces = [words("error: `then' without `if' or `else'."), nl],
+        MainPieces = [words("error:"), quote("then"), words("without"),
+            quote("if"), words("or"), quote("else"), suffix("."), nl],
         MainComponent = always(MainPieces),
         VerbosePieces =
-            [words("Note: the `else' part is not optional."), nl,
-            words("Every if-then must have an `else'."), nl],
+            [words("Note: the"), quote("else"), words("part is not optional."),
+            nl, words("Every if-then must have an"),
+            quote("else"), suffix("."), nl],
         VerboseComponent = verbose_only(VerbosePieces),
         Components = [MainComponent, VerboseComponent]
     ;
@@ -266,8 +273,8 @@ report_error_undef_pred(Info, SimpleCallId) = Msg :-
         Arity = 2
     ->
         Pieces = [words("syntax error in existential quantification:"),
-            words("first argument of `some' should be a list of variables."),
-            nl],
+            words("first argument of"), quote("some"),
+            words("should be a list of variables."), nl],
         Components = [always(Pieces)]
     ;
         MainPieces = [words("error: undefined"), simple_call(SimpleCallId)],
@@ -286,20 +293,21 @@ report_error_undef_pred(Info, SimpleCallId) = Msg :-
 :- func report_apply_instead_of_pred = list(error_msg_component).
 
 report_apply_instead_of_pred = Components :-
-    MainPieces = [words("error: the language construct `apply'"),
+    MainPieces = [words("error: the language construct"), quote("apply"),
         words("should be used as an expression, not as a goal."), nl],
     MainComponent = always(MainPieces),
     VerbosePieces =
-        [words("Perhaps you forgot to add"), fixed("` = ...'?)"), nl,
+        [words("Perhaps you forgot to add"), quote(" = ..."), suffix("?)"), nl,
         words("If you're trying to invoke a higher-order predicate,"),
-        words("use `call', not `apply'."), nl,
+        words("use"), quote("call"), suffix(","), words("not"),
+            quote("apply"), suffix("."), nl,
         words("If you're trying to curry a higher-order function,"),
         words("use a forwarding function:"), nl,
-        words("e.g. instead of "), fixed("`NewFunc = apply(OldFunc, X)'"),
-        words("use"), fixed("`NewFunc = my_apply(OldFunc, X)'"),
-        words("where `my_apply' is defined"),
+        words("e.g. instead of "), quote("NewFunc = apply(OldFunc, X)"),
+        words("use"), quote("NewFunc = my_apply(OldFunc, X)"),
+        words("where"), quote("my_apply"), words("is defined"),
         words("with the appropriate arity, e.g."),
-        fixed("`my_apply(Func, X, Y) :- apply(Func, X, Y).'")],
+        quote("my_apply(Func, X, Y) :- apply(Func, X, Y).")],
     VerboseComponent = verbose_only(VerbosePieces),
     Components = [MainComponent, VerboseComponent].
 
@@ -314,7 +322,7 @@ report_unknown_event_call_error(Info, EventName) = Spec :-
 
 report_event_args_mismatch(Info, EventName, EventArgTypes, Args) = Spec :-
     Context = Info ^ tc_info_context,
-    Pieces = 
+    Pieces =
         [words("Error:")] ++
         error_num_args_to_pieces(no, length(Args), [length(EventArgTypes)]) ++
         [words("in event"), quote(EventName), suffix(".")],
@@ -556,13 +564,13 @@ describe_cons_type_info_source(ModuleInfo, Source) = Pieces :-
     ;
         Source = source_get_field_access(TypeCtor),
         TypeCtor = type_ctor(SymName, Arity),
-        Pieces = [words("a `get' field access function"),
+        Pieces = [words("a"), quote("get"), words("field access function"),
             words("for the type constructor"),
             sym_name_and_arity(SymName / Arity)]
     ;
         Source = source_set_field_access(TypeCtor),
         TypeCtor = type_ctor(SymName, Arity),
-        Pieces = [words("a `set' field access function"),
+        Pieces = [words("a"), quote("set"), quote("field access function"),
             words("for the type constructor"),
             sym_name_and_arity(SymName / Arity)]
     ;
@@ -973,7 +981,7 @@ report_error_var_either_type(Info, Var, TypeA, TypeB, TypeAssignSet0) = Spec :-
     list.sort_and_remove_dups(ActualExpectedListB0, ActualExpectedListB),
 
     Pieces1 = [words("type error:")],
-    ( 
+    (
         ActualExpectedListA = [ActualExpectedA],
         ActualExpectedListB = [ActualExpectedB]
     ->
@@ -982,7 +990,7 @@ report_error_var_either_type(Info, Var, TypeA, TypeB, TypeAssignSet0) = Spec :-
         Pieces2 = argument_name_to_pieces(VarSet, Var) ++
             [words("has type"), prefix("`")] ++ ActualPieces ++
             [suffix("'"), suffix(","), nl,
-            words("expected type was either"), prefix("`")] ++ 
+            words("expected type was either"), prefix("`")] ++
             ExpectedPiecesA ++ [suffix("'"), words("or"), prefix("`")] ++
             ExpectedPiecesB ++ [suffix("'"), suffix("."), nl]
     ;
@@ -1141,16 +1149,17 @@ language_builtin_functor_components(Name, Arity, Components) :-
         VerboseCallPieces =
             [words("If you are trying to invoke"),
             words("a higher-order function,"),
-            words("you should use `apply', not `call'."), nl,
+            words("you should use"), quote("apply"), suffix(","),
+            words("not"), quote("call"), suffix("."), nl,
             words("If you're trying to curry"),
             words("a higher-order predicate,"),
             words("see the ""Creating higher-order terms"" section of"),
             words("the Mercury Language Reference Manual."), nl,
-            words("If you really are trying to use `call'"),
+            words("If you really are trying to use"), quote("call"),
             words("as an expression and not as an application of"),
             words("the language builtin call/N, make sure that"),
             words("you have the arity correct, and that the functor"),
-            words("`call' is actually defined (if it is defined"),
+            quote("call"), words("is actually defined (if it is defined"),
             words("in a separate module, check that the module is"),
             words("correctly imported)."), nl]
     ;
@@ -1184,47 +1193,56 @@ language_builtin_functor("some", 2).
     list(error_msg_component)::out) is semidet.
 
 syntax_functor_components("else", 2, Components) :-
-    Pieces = [words("error: unmatched `else'."), nl],
+    Pieces = [words("error: unmatched"), quote("else"), suffix("."), nl],
     Components = [always(Pieces)].
 syntax_functor_components("if", 2, Components) :-
-    Pieces = [words("error: `if' without `then' or `else'."), nl],
+    Pieces = [words("error:"), quote("if"), words("without"), quote("then"),
+         words("or"), quote("else"), suffix("."), nl],
     Components = [always(Pieces)].
 syntax_functor_components("then", 2, Components) :-
-    Pieces1 = [words("error: `then' without `if' or `else'."), nl],
-    Pieces2 = [words("Note: the `else' part is not optional."),
-        words("Every if-then must have an `else'."), nl],
+    Pieces1 = [words("error:"), quote("then"), words("without"),
+        quote("if"), words("or"), quote("else"), suffix("."), nl],
+    Pieces2 = [words("Note: the"), quote("else"),
+        words("part is not optional."),
+        words("Every if-then must have an"), quote("else"), suffix("."), nl],
     Components = [always(Pieces1), verbose_only(Pieces2)].
 syntax_functor_components("->", 2, Components) :-
-    Pieces1 = [words("error: `->' without `;'."), nl],
+    Pieces1 = [words("error:"), quote("->"), words("without"),
+        quote(";"), suffix("."), nl],
     Pieces2 = [words("Note: the else part is not optional."),
         words("Every if-then must have an else."), nl],
     Components = [always(Pieces1), verbose_only(Pieces2)].
 syntax_functor_components("^", 2, Components) :-
-    Pieces1 =
-        [words("error: invalid use of field selection operator (`^')."), nl],
+    Pieces1 = [words("error: invalid use of field selection operator"),
+        prefix("("), quote("^"), suffix(")."), nl],
     Pieces2 = [words("This is probably some kind of syntax error."),
         words("The field name must be an atom,"),
         words("not a variable or other term."), nl],
     Components = [always(Pieces1), verbose_only(Pieces2)].
 syntax_functor_components(":=", 2, Components) :-
     Pieces1 = [words("error: invalid use of field update operator"),
-        words("(`:=')."), nl],
+        prefix("("), quote(":="), suffix(")."), nl],
     Pieces2 = [words("This is probably some kind of syntax error."), nl],
     Components = [always(Pieces1), verbose_only(Pieces2)].
 syntax_functor_components(":-", 2, Components) :-
-    Pieces = [words("syntax error in lambda expression (`:-')."), nl],
+    Pieces = [words("syntax error in lambda expression"),
+         prefix("("), quote(":-"), suffix(")."), nl],
     Components = [always(Pieces)].
 syntax_functor_components("-->", 2, Components) :-
-    Pieces = [words("syntax error in DCG lambda expression (`-->')."), nl],
+    Pieces = [words("syntax error in DCG lambda expression"),
+        prefix("("), quote("-->"), suffix(")."), nl],
     Components = [always(Pieces)].
 syntax_functor_components(".", 2, Components) :-
-    Pieces =
-        [words("error: the list constructor is now `[|]/2', not `./2'."), nl],
+    Pieces = [words("error: the list constructor is now"),
+        sym_name_and_arity(unqualified("[|]") / 2),
+        suffix(","), words("not"), quote("./2"),
+        suffix("."), nl],
     Components = [always(Pieces)].
 syntax_functor_components("!", 1, Components) :-
-    Pieces1 =
-        [words("error: invalid use of `!' state variable operator."), nl],
-    Pieces2 = [words("You probably meant to use `!.' or `!:'."), nl],
+    Pieces1 = [words("error: invalid use of"), quote("!"),
+        words("state variable operator."), nl],
+    Pieces2 = [words("You probably meant to use"), quote("!."),
+        words("or"), quote("!:"), suffix("."), nl],
     Components = [always(Pieces1), verbose_only(Pieces2)].
 
 :- func wrong_arity_constructor_to_pieces(sym_name, arity, list(int))
@@ -1244,7 +1262,7 @@ report_cons_error(Context, ConsError) = Msgs :-
         ConsError = foreign_type_constructor(TypeCtor, _),
         TypeCtor = type_ctor(TypeName, TypeArity),
         Pieces = [words("There are"),
-            fixed("`:- pragma foreign_type'"),
+            pragma_decl("foreign_type"),
             words("declarations for type"),
             sym_name_and_arity(TypeName / TypeArity),
             suffix(","),
@@ -1281,13 +1299,13 @@ report_cons_error(Context, ConsError) = Msgs :-
         Pieces3 = [words("in the types of field"), sym_name(FieldName),
             words("and some other field"),
             words("in definition of constructor"),
-            fixed("`" ++ ConsIdStr ++ "'.")],
+            quote(ConsIdStr), suffix(".")],
         Pieces = Pieces1 ++ Pieces2 ++ Pieces3,
         Msgs = [simple_msg(DefnContext, [always(Pieces)])]
     ;
         ConsError = new_on_non_existential_type(TypeCtor),
         TypeCtor = type_ctor(TypeName, TypeArity),
-        Pieces = [words("Invalid use of `new'"),
+        Pieces = [words("Invalid use of"), quote("new"),
             words("on a constructor of type"),
             sym_name_and_arity(TypeName / TypeArity),
             words("which is not existentially typed.")],

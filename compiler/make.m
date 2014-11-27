@@ -26,7 +26,7 @@
 :- import_module libs.globals.
 :- import_module make.options_file.
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.
 :- import_module parse_tree.module_imports.
 
@@ -199,8 +199,7 @@
 :- type compilation_task_type
     --->    process_module(module_compilation_task_type)
 
-            % The `pic' argument is only used for
-            % `--target c' and `--target asm'.
+            % The `pic' argument is only used for `--target c'.
     ;       target_code_to_object_code(pic)
     ;       foreign_code_to_object_code(pic, foreign_language)
     ;       fact_table_code_to_object_code(pic, file_name).
@@ -580,7 +579,6 @@ get_executable_type(Globals) = ExecutableType :-
     (
         ( CompilationTarget = target_c
         ; CompilationTarget = target_il
-        ; CompilationTarget = target_x86_64
         ),
         ExecutableType = executable
     ;

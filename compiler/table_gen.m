@@ -66,12 +66,16 @@
 :- import_module hlds.hlds_pred.
 :- import_module hlds.hlds_rtti.
 :- import_module hlds.instmap.
+:- import_module hlds.make_goal.
 :- import_module hlds.pred_table.
 :- import_module libs.globals.
 :- import_module libs.options.
 :- import_module ll_backend.
 :- import_module ll_backend.continuation_info.
+:- import_module mdbcomp.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_mode.
@@ -156,65 +160,92 @@ table_gen_process_procs(PredId, [ProcId | ProcIds], !ModuleInfo, !GenMap,
 table_gen_process_proc(PredId, ProcId, ProcInfo0, PredInfo0, !ModuleInfo,
         !GenMap, !Specs) :-
     proc_info_get_eval_method(ProcInfo0, EvalMethod),
-    ( eval_method_requires_tabling_transform(EvalMethod) = yes ->
+    RequiresTablingTransform =
+        eval_method_requires_tabling_transform(EvalMethod),
+    (
+        RequiresTablingTransform = yes,
         table_gen_transform_proc_if_possible(EvalMethod, PredId,
             ProcId, ProcInfo0, _, PredInfo0, _, !ModuleInfo, !GenMap, !Specs)
     ;
-        module_info_get_globals(!.ModuleInfo, Globals),
-        globals.lookup_bool_option(Globals, trace_table_io, yes),
-        proc_info_has_io_state_pair(!.ModuleInfo, ProcInfo0,
-            _InArgNum, _OutArgNum)
-    ->
-        CodeModel = proc_info_interface_code_model(ProcInfo0),
+        RequiresTablingTransform = no,
         (
-            CodeModel = model_det
+            module_info_get_globals(!.ModuleInfo, Globals),
+            globals.lookup_bool_option(Globals, trace_table_io, yes),
+            proc_info_has_io_state_pair(!.ModuleInfo, ProcInfo0,
+                _InArgNum, _OutArgNum)
+        ->
+            table_gen_process_io_proc(PredId, ProcId, ProcInfo0, PredInfo0,
+                !ModuleInfo, !GenMap, !Specs)
         ;
-            ( CodeModel = model_semi
-            ; CodeModel = model_non
-            ),
-            pred_id_to_int(PredId, PredIdInt),
-            Msg = string.format("I/O procedure pred id %d not model_det",
-                [i(PredIdInt)]),
-            unexpected($module, $pred, Msg)
-        ),
-        globals.lookup_bool_option(Globals, trace_table_io_all, TransformAll),
-        globals.lookup_bool_option(Globals, trace_table_io_require, Require),
-        proc_info_get_goal(ProcInfo0, BodyGoal),
-        PredModuleName = predicate_module(!.ModuleInfo, PredId),
-        should_io_procedure_be_transformed(TransformAll, Require, BodyGoal,
-            PredModuleName, AnnotationIsMissing, TransformPrimitive),
-        (
-            AnnotationIsMissing = yes,
-            Spec = report_missing_tabled_for_io(PredInfo0, PredId, ProcId,
-                !.ModuleInfo),
-            !:Specs = [Spec | !.Specs]
-        ;
-            AnnotationIsMissing = no
-        ),
-        (
-            TransformPrimitive = no
-        ;
-            TransformPrimitive = yes(Unitize),
-            globals.lookup_bool_option(Globals, trace_table_io_only_retry,
-                TraceTableIoOnlyRetry),
-            (
-                TraceTableIoOnlyRetry = no,
-                Decl = table_io_decl
-            ;
-                TraceTableIoOnlyRetry = yes,
-                Decl = table_io_proc
-            ),
-            TableIoMethod = eval_table_io(Decl, Unitize),
-            proc_info_set_eval_method(TableIoMethod, ProcInfo0, ProcInfo1),
-            table_gen_transform_proc_if_possible(TableIoMethod,
-                PredId, ProcId, ProcInfo1, _, PredInfo0, _, !ModuleInfo,
-                !GenMap, !Specs)
+            true
         )
-    ;
-        true
     ).
 
 %-----------------------------------------------------------------------------%
+
+:- pred table_gen_process_io_proc(pred_id::in, proc_id::in, proc_info::in,
+    pred_info::in, module_info::in, module_info::out,
+    generator_map::in, generator_map::out,
+    list(error_spec)::in, list(error_spec)::out) is det.
+
+table_gen_process_io_proc(PredId, ProcId, ProcInfo0, PredInfo0,
+        !ModuleInfo, !GenMap, !Specs) :-
+    CodeModel = proc_info_interface_code_model(ProcInfo0),
+    (
+        CodeModel = model_det
+    ;
+        ( CodeModel = model_semi
+        ; CodeModel = model_non
+        ),
+        pred_id_to_int(PredId, PredIdInt),
+        Msg = string.format("I/O procedure pred id %d not model_det",
+            [i(PredIdInt)]),
+        unexpected($module, $pred, Msg)
+    ),
+    module_info_get_globals(!.ModuleInfo, Globals),
+    globals.lookup_bool_option(Globals, trace_table_io_all, TransformAll),
+    globals.lookup_bool_option(Globals, trace_table_io_require, Require),
+    proc_info_get_goal(ProcInfo0, BodyGoal),
+    PredModuleName = predicate_module(!.ModuleInfo, PredId),
+    should_io_procedure_be_transformed(TransformAll, Require, BodyGoal,
+        PredModuleName, AnnotationIsMissing, TransformPrimitive),
+    (
+        AnnotationIsMissing = yes,
+        Spec = report_missing_tabled_for_io(PredInfo0, PredId, ProcId,
+            !.ModuleInfo),
+        !:Specs = [Spec | !.Specs]
+    ;
+        AnnotationIsMissing = no
+    ),
+    (
+        TransformPrimitive = no
+    ;
+        TransformPrimitive = yes(Unitize),
+        globals.lookup_bool_option(Globals, trace_table_io_only_retry,
+            TraceTableIoOnlyRetry),
+        (
+            TraceTableIoOnlyRetry = no,
+            pred_info_get_class_context(PredInfo0, TypeClassConstraints),
+            TypeClassConstraints =
+                constraints(UnivConstraints, ExistConstraints),
+            ( if
+                UnivConstraints = [],
+                ExistConstraints = []
+            then
+                EntryKind = entry_stores_procid_inputs_outputs
+            else
+                EntryKind = entry_stores_procid_outputs
+            )
+        ;
+            TraceTableIoOnlyRetry = yes,
+            EntryKind = entry_stores_outputs
+        ),
+        TableIoMethod = eval_table_io(EntryKind, Unitize),
+        proc_info_set_eval_method(TableIoMethod, ProcInfo0, ProcInfo1),
+        table_gen_transform_proc_if_possible(TableIoMethod,
+            PredId, ProcId, ProcInfo1, _, PredInfo0, _, !ModuleInfo,
+            !GenMap, !Specs)
+    ).
 
 :- pred should_io_procedure_be_transformed(bool::in, bool::in, hlds_goal::in,
     sym_name::in, bool::out, maybe(table_io_is_unitize)::out) is det.
@@ -451,7 +482,7 @@ table_gen_transform_proc(EvalMethod, PredId, ProcId, !ProcInfo, !PredInfo,
         MaybeProcTableStructInfo = no
     ;
         EvalMethod = eval_loop_check,
-        create_new_loop_goal(Detism, OrigGoal, Statistics,
+        create_new_loop_goal(OrigGoal, Statistics,
             PredId, ProcId, HeadVars, NumberedInputVars, NumberedOutputVars,
             VarSet0, VarSet, VarTypes0, VarTypes,
             TableInfo0, TableInfo, CallTableTip, Goal, InputSteps),
@@ -562,6 +593,7 @@ table_gen_transform_proc(EvalMethod, PredId, ProcId, !ProcInfo, !PredInfo,
 
     % The transformation doesn't pay attention to the purity of compound goals,
     % so recompute the purity here.
+    % XXX Fix this: generate correct-by-construction purity information.
     repuritycheck_proc(!.ModuleInfo, proc(PredId, ProcId), !PredInfo),
     module_info_get_preds(!.ModuleInfo, PredTable1),
     map.det_update(PredId, !.PredInfo, PredTable1, PredTable),
@@ -653,14 +685,14 @@ table_gen_transform_proc(EvalMethod, PredId, ProcId, !ProcInfo, !PredInfo,
 %       )
 %   ).
 
-:- pred create_new_loop_goal(determinism::in, hlds_goal::in,
+:- pred create_new_loop_goal(hlds_goal::in,
     table_attr_statistics::in, pred_id::in, proc_id::in, list(prog_var)::in,
     list(var_mode_pos_method)::in, list(var_mode_pos_method)::in,
     prog_varset::in, prog_varset::out, vartypes::in, vartypes::out,
     table_info::in, table_info::out, prog_var::out, hlds_goal::out,
     list(table_step_desc)::out) is det.
 
-create_new_loop_goal(Detism, OrigGoal, Statistics, PredId, ProcId,
+create_new_loop_goal(OrigGoal, Statistics, PredId, ProcId,
         HeadVars, NumberedInputVars, NumberedOutputVars, !VarSet, !VarTypes,
         !TableInfo, TableTipVar, Goal, Steps) :-
     % Even if the original goal doesn't use all of the headvars,
@@ -714,6 +746,31 @@ create_new_loop_goal(Detism, OrigGoal, Statistics, PredId, ProcId,
         MarkActiveFailCode, purity_impure, instmap_delta_bind_no_var,
         ModuleInfo, Context, MarkActiveFailGoal),
 
+    % The actual determinism of a predicate can be tighter than its
+    % declared determinism. This can lead to problems, such as mantis bug 361.
+    %
+    % When we add code to the end of the procedure body to mark that the
+    % current subgoal is now inactive, we keep the original procedure body's
+    % determinism. This will cause a code generator abort (unexpected
+    % determinism) if the "mark inactive" goal has a looser determinism
+    % than the original body. This can happen by adding model_non "mark
+    % inactive" code to the end of a model_det or model_semi goal,
+    % or by adding model_semi "mark inactive" code to the end of a
+    % model_det goal.
+    %
+    % We could fix this in one of two ways.
+    %
+    % - We can set the determinism of the compound goal that includes
+    %   both the original body and the "mark inactive" goal based on the
+    %   code model of the "mark inactive goal, which should always be
+    %   the looser code model.
+    %
+    % - We can choose which transformation to apply based on the actual
+    %   determinism of the procedure body, not its declared determinism.
+    %
+    % We implement the second approach.
+
+    Detism = goal_info_get_determinism(OrigGoalInfo),
     determinism_to_code_model(Detism, CodeModel),
     set_of_var.list_to_set([TableTipVar | HeadVars], InactiveNonLocals),
     OutputVars = list.map(project_var, NumberedOutputVars),
@@ -1197,7 +1254,7 @@ create_new_memo_non_goal(Detism, OrigGoal, Statistics, _MaybeSizeLimit,
 % generate will fill in the slots containing this extra information before
 % it executes the original goal.
 
-:- pred create_new_io_goal(hlds_goal::in, table_io_is_decl::in,
+:- pred create_new_io_goal(hlds_goal::in, table_io_entry_kind::in,
     table_io_is_unitize::in, bool::in, pred_id::in, proc_id::in,
     assoc_list(prog_var, mer_mode)::in,
     list(var_mode_pos_method)::in, list(var_mode_pos_method)::in,
@@ -1205,7 +1262,7 @@ create_new_memo_non_goal(Detism, OrigGoal, Statistics, _MaybeSizeLimit,
     table_info::in, table_info::out,
     hlds_goal::out, maybe(proc_table_io_info)::out) is det.
 
-create_new_io_goal(OrigGoal, TableDecl, Unitize, TableIoStates,
+create_new_io_goal(OrigGoal, TableIoEntryKind, Unitize, TableIoStates,
         PredId, ProcId, HeadVarModes, OrigInputVars, OrigOutputVars,
         !VarSet, !VarTypes, !TableInfo, Goal, MaybeProcTableIOInfo) :-
     OrigGoal = hlds_goal(_, OrigGoalInfo),
@@ -1269,15 +1326,15 @@ create_new_io_goal(OrigGoal, TableDecl, Unitize, TableIoStates,
         purity_impure, instmap_delta_bind_no_var, ModuleInfo, Context,
         OccurredGoal),
     (
-        TableDecl = table_io_decl,
+        TableIoEntryKind = entry_stores_procid_inputs_outputs,
         ShroudedPredProcId = shroud_pred_proc_id(proc(PredId, ProcId)),
-        TableIoDeclConsId = table_io_decl(ShroudedPredProcId),
-        make_const_construction_alloc(TableIoDeclConsId, c_pointer_type,
-            yes("TableIoDeclPtr"), TableIoDeclGoal, TableIoDeclPtrVar,
-            !VarSet, !VarTypes),
+        TableIoEntryConsId = table_io_entry_desc(ShroudedPredProcId),
+        make_const_construction_alloc(TableIoEntryConsId, c_pointer_type,
+            yes("TableIoEntryDescPtr"), TableIoEntryDescGoal,
+            TableIoEntryDescPtrVar, !VarSet, !VarTypes),
         allocate_plain_slot_numbers(SavedHeadVars, 1, NumberedSavedHeadVars),
         NumberedSaveVars = [
-            var_mode_pos_method(TableIoDeclPtrVar, in_mode, 0, unit)
+            var_mode_pos_method(TableIoEntryDescPtrVar, in_mode, 0, unit)
             | NumberedSavedHeadVars],
         UnnumberedSavedOutputVars = list.map(project_var, SavedOutputVars),
         list.filter(var_belong_to_list(UnnumberedSavedOutputVars),
@@ -1288,14 +1345,32 @@ create_new_io_goal(OrigGoal, TableDecl, Unitize, TableIoStates,
         continuation_info.generate_table_arg_type_info(ProcInfo0,
             list.map(project_var_pos, NumberedSavedHeadVars),
             TableArgTypeInfo),
-        ProcTableIOInfo = proc_table_io_info(TableArgTypeInfo),
+        ProcTableIOInfo = proc_table_io_info(yes(TableArgTypeInfo)),
         MaybeProcTableIOInfo = yes(ProcTableIOInfo)
     ;
-        TableDecl = table_io_proc,
-        TableIoDeclGoal = true_goal,
+        TableIoEntryKind = entry_stores_procid_outputs,
+        ShroudedPredProcId = shroud_pred_proc_id(proc(PredId, ProcId)),
+        TableIoEntryConsId = table_io_entry_desc(ShroudedPredProcId),
+        make_const_construction_alloc(TableIoEntryConsId, c_pointer_type,
+            yes("TableIoEntryDescPtr"), TableIoEntryDescGoal,
+            TableIoEntryDescPtrVar, !VarSet, !VarTypes),
+
+        NumberedRestoreVars0 =
+            list.map(project_out_arg_method, SavedOutputVars),
+        reallocate_slot_numbers(NumberedRestoreVars0, 1,
+            NumberedRestoreVars),
+        NumberedSaveVars = [
+            var_mode_pos_method(TableIoEntryDescPtrVar, in_mode, 0, unit)
+            | NumberedRestoreVars],
+
+        ProcTableIOInfo = proc_table_io_info(no),
+        MaybeProcTableIOInfo = yes(ProcTableIOInfo)
+    ;
+        TableIoEntryKind = entry_stores_outputs,
+        TableIoEntryDescGoal = true_goal,
         NumberedRestoreVars =
             list.map(project_out_arg_method, SavedOutputVars),
-        NumberedSaveVars = list.map(project_out_arg_method, SavedOutputVars),
+        NumberedSaveVars = NumberedRestoreVars,
         MaybeProcTableIOInfo = no
     ),
     list.length(NumberedSaveVars, BlockSize),
@@ -1345,7 +1420,8 @@ create_new_io_goal(OrigGoal, TableDecl, Unitize, TableIoStates,
         Context, !VarSet, !VarTypes, !TableInfo, SaveAnswerGoals),
     (
         Unitize = table_io_alone,
-        CallSaveAnswerGoalList = [NewGoal, TableIoDeclGoal | SaveAnswerGoals]
+        CallSaveAnswerGoalList =
+            [NewGoal, TableIoEntryDescGoal | SaveAnswerGoals]
     ;
         Unitize = table_io_unitize,
         generate_new_table_var("SavedTraceEnabled", int_type,
@@ -1358,7 +1434,7 @@ create_new_io_goal(OrigGoal, TableDecl, Unitize, TableIoStates,
             [SavedTraceEnabledVar], purity_impure, instmap_delta_bind_no_var,
             ModuleInfo, Context, RightBracketGoal),
         CallSaveAnswerGoalList = [LeftBracketGoal, NewGoal,
-            RightBracketGoal, TableIoDeclGoal | SaveAnswerGoals]
+            RightBracketGoal, TableIoEntryDescGoal | SaveAnswerGoals]
     ),
     CallSaveAnswerGoalExpr = conj(plain_conj, CallSaveAnswerGoalList),
     create_instmap_delta(CallSaveAnswerGoalList, CallSaveAnswerInstMapDelta0),
@@ -1911,10 +1987,12 @@ clone_proc_and_create_call(PredInfo, ProcId, CallExpr, !ModuleInfo) :-
     proc_info_get_inferred_determinism(ProcInfo, ProcDetism),
     proc_info_get_goal(ProcInfo, ProcGoal),
     proc_info_get_rtti_varmaps(ProcInfo, ProcRttiVarMaps),
+    proc_info_get_has_parallel_conj(ProcInfo, HasParallelConj),
     proc_info_get_var_name_remap(ProcInfo, VarNameRemap),
     proc_info_create(ProcContext, ProcVarSet, ProcVarTypes, ProcHeadVars,
         ProcInstVarSet, ProcHeadModes, detism_decl_none, ProcDetism, ProcGoal,
-        ProcRttiVarMaps, address_is_not_taken, VarNameRemap, NewProcInfo),
+        ProcRttiVarMaps, address_is_not_taken, HasParallelConj, VarNameRemap,
+        NewProcInfo),
     ModuleName = pred_info_module(PredInfo),
     OrigPredName = pred_info_name(PredInfo),
     PredOrFunc = pred_info_is_pred_or_func(PredInfo),
@@ -3134,8 +3212,9 @@ generate_error_goal(TableInfo, Context, Msg, !VarSet, !VarTypes, Goal) :-
     Message = Msg ++ " in " ++ PredOrFuncStr ++ " " ++ NameStr
         ++ "/" ++ ArityStr,
 
-    gen_string_construction("Message", Message, !VarSet, !VarTypes,
-        MessageVar, MessageStrGoal),
+    make_string_const_construction_alloc(Message, yes("Message"),
+        MessageStrGoal, MessageVar, !VarSet, !VarTypes),
+
     table_generate_call("table_error", detism_erroneous, [MessageVar],
         purity_pure, instmap_delta_bind_no_var, ModuleInfo, Context, CallGoal),
 
@@ -3219,22 +3298,6 @@ append_fail(Goal, GoalAndThenFail) :-
         purity_impure, Context, ConjGoalInfo),
     GoalAndThenFail =
         hlds_goal(conj(plain_conj, [Goal, fail_goal]), ConjGoalInfo).
-
-:- pred gen_int_construction(string::in, int::in,
-    prog_varset::in, prog_varset::out, vartypes::in, vartypes::out,
-    prog_var::out, hlds_goal::out) is det.
-
-gen_int_construction(VarName, VarValue, !VarSet, !VarTypes, Var, Goal) :-
-    make_int_const_construction_alloc(VarValue, yes(VarName), Goal, Var,
-        !VarSet, !VarTypes).
-
-:- pred gen_string_construction(string::in, string::in,
-    prog_varset::in, prog_varset::out, vartypes::in, vartypes::out,
-    prog_var::out, hlds_goal::out) is det.
-
-gen_string_construction(VarName, VarValue, !VarSet, !VarTypes, Var, Goal) :-
-    make_string_const_construction_alloc(VarValue, yes(VarName), Goal, Var,
-        !VarSet, !VarTypes).
 
 %-----------------------------------------------------------------------------%
 
@@ -3377,38 +3440,44 @@ add_proc_table_struct(PredProcId, ProcTableStructInfo, ProcInfo,
 
 :- type var_mode_method
     --->    var_mode_method(
-                prog_var,   % The head variable.
-                mer_mode,   % The mode of the head variable.
+                % The head variable.
+                prog_var,
+
+                % The mode of the head variable.
+                mer_mode,
+
+                % For input arguments, this is the arg method to use in
+                % looking up the argument in the call table. For output
+                % arguments, this is the arg method to use in looking up
+                % the argument in the answer table (if any).
                 arg_tabling_method
-                            % For input arguments, this is the arg method to
-                            % use in looking up the argument in the call table.
-                            % For output arguments, this is the arg method to
-                            % use in looking up the argument in the answer
-                            % table (if any).
             ).
 
 :- type var_mode_pos_method == var_mode_pos_method(arg_tabling_method).
 
 :- type var_mode_pos_method(T)
     --->    var_mode_pos_method(
-                prog_var,   % The head variable.
-                mer_mode,   % The mode of the head variable.
-                int,        % The position of the head variable in the list of
-                            % inputs or outputs; first element is in the
-                            % position numbered 0.
+                % The head variable.
+                prog_var,
+
+                % The mode of the head variable.
+                mer_mode,
+
+                % The offset of the head variable in the answer block;
+                % the first slot is at offset 0.
+                int,
+
+                % For input arguments, this is the arg method to use in
+                % looking up the argument in the call table. For output
+                % arguments, this is the arg method to use in looking up
+                % the argument in the answer table (if any), which for now
+                % is always arg_value.
+                %
+                % When T is unit, there is no info about how to look up
+                % the variable in a call or return table. This is useful
+                % for recording the structure of answer blocks and sequences
+                % of arguments for I/O tabling.
                 T
-                            % For input arguments, this is the arg method to
-                            % use in looking up the argument in the call table.
-                            % For output arguments, this is the arg method to
-                            % use in looking up the argument in the answer
-                            % table (if any), which for now is always
-                            % arg_value.
-                            %
-                            % When T is unit, there is no info about how to
-                            % look up the variable in a call or return table.
-                            % This is useful for recording the structure of
-                            % answer blocks and sequences of arguments
-                            % for I/O tabling.
             ).
 
 :- func project_var(var_mode_pos_method(T)) = prog_var.
@@ -3966,4 +4035,6 @@ table_info_init(ModuleInfo, PredInfo, ProcInfo, TableInfo) :-
 table_info_extract(TableInfo, ModuleInfo, PredInfo, ProcInfo) :-
     TableInfo = table_info(ModuleInfo, PredInfo, ProcInfo).
 
+%-----------------------------------------------------------------------------%
+:- end_module transform_hlds.table_gen.
 %-----------------------------------------------------------------------------%

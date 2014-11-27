@@ -5,13 +5,13 @@
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %-----------------------------------------------------------------------------%
-% 
+%
 % File: add_special_pred.m.
-% 
+%
 % This submodule of make_hlds handles the creation of unify, compare and
 % (if needed) index and init predicates for the types defined or imported
 % by the module being compiled.
-% 
+%
 %-----------------------------------------------------------------------------%
 
 :- module hlds.make_hlds.add_special_pred.
@@ -20,7 +20,6 @@
 :- import_module hlds.hlds_data.
 :- import_module hlds.hlds_module.
 :- import_module hlds.hlds_pred.
-:- import_module mdbcomp.prim_data.
 :- import_module parse_tree.prog_data.
 
 %-----------------------------------------------------------------------------%
@@ -72,6 +71,7 @@
 :- import_module hlds.special_pred.
 :- import_module libs.globals.
 :- import_module libs.options.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_type.
 
 :- import_module bool.
@@ -232,7 +232,7 @@ add_special_pred(SpecialPredId, TVarSet, Type, TypeCtor, TypeBody, Context,
                 % to generate a good error message in Mercury code than in
                 % C code.
                 TypeBody ^ du_type_usereq = yes(_)
-            ->       
+            ->
                 do_add_special_pred_for_real(SpecialPredId, TVarSet, Type,
                     TypeCtor, TypeBody, Context, Status0, !ModuleInfo)
             ;
@@ -401,10 +401,12 @@ do_add_special_pred_decl_for_real(SpecialPredId, TVarSet, Type, TypeCtor,
         PredInfo0),
     ArgLives = no,
     varset.init(InstVarSet),
-    % Should not be any inst vars here so it's ok to use a fresh inst_varset.
+    % Should not be any inst vars here so it is ok to use a fresh inst_varset.
+    % Before the simplification pass, HasParallelConj is not meaningful.
+    HasParallelConj = has_no_parallel_conj,
     do_add_new_proc(InstVarSet, Arity, ArgModes, yes(ArgModes), ArgLives,
         detism_decl_implicit, yes(Det), Context, address_is_not_taken,
-        PredInfo0, PredInfo, _ProcId),
+        HasParallelConj, PredInfo0, PredInfo, _ProcId),
 
     module_info_get_predicate_table(!.ModuleInfo, PredicateTable0),
     predicate_table_insert(PredInfo, PredId, PredicateTable0, PredicateTable),

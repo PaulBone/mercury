@@ -15,7 +15,7 @@
 :- module parse_tree.file_names.
 :- interface.
 
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module libs.file_util.
 :- import_module libs.globals.
 
@@ -149,7 +149,7 @@
 :- import_module libs.globals.
 :- import_module libs.handle_options.
 :- import_module libs.options.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.java_names.
 :- import_module parse_tree.source_file_map.
 
@@ -475,14 +475,14 @@ make_file_name(Globals, SubDirNames, Search, MkDir, BaseName, Ext, FileName,
         )
     ->
         grade_directory_component(Globals, Grade),
-        globals.lookup_string_option(Globals, fullarch, FullArch),
+        globals.lookup_string_option(Globals, target_arch, TargetArch),
 
         % The extra "Mercury" is needed so we can use `--intermod-directory
-        % Mercury/<grade>/<fullarch>' and `--c-include
-        % Mercury/<grade>/<fullarch>' to find the local `.opt' and `.mih'
+        % Mercury/<grade>/<target_arch>' and `--c-include
+        % Mercury/<grade>/<target_arch>' to find the local `.opt' and `.mih'
         % files without messing up the search for the files for installed
         % libraries.
-        DirComponents = ["Mercury", Grade, FullArch, "Mercury" | SubDirNames]
+        DirComponents = ["Mercury", Grade, TargetArch, "Mercury" | SubDirNames]
     ;
         UseSubdirs = yes
     ->
@@ -599,8 +599,8 @@ get_class_dir_name(Globals, ClassDirName) :-
         UseGradeSubdirs = yes
     ->
         grade_directory_component(Globals, Grade),
-        globals.lookup_string_option(Globals, fullarch, FullArch),
-        ClassDirName = "Mercury" / Grade / FullArch / "Mercury" / "classs"
+        globals.lookup_string_option(Globals, target_arch, TargetArch),
+        ClassDirName = "Mercury" / Grade / TargetArch / "Mercury" / "classs"
     ;
         UseSubdirs = yes
     ->

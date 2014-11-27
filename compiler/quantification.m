@@ -21,10 +21,10 @@
 % existential quantification in the goal_info for each goal. In fact we could
 % (and maybe even should?) even delete any explicit existential quantifiers
 % that were present in the source code, since the information they convey will
-% be stored in the goal_info (we currently don't do that).
+% be stored in the goal_info. We currently don't do that.
 %
 % The important piece of information that later stages of the compiler want to
-% know is "Does this goal bind any of its nonlocal variables?".  So, rather
+% know is "Does this goal bind any of its nonlocal variables?". So, rather
 % than storing a list of the variables which _are_ existentially quantified in
 % the goal_info, we store the set of variables which are _not_ quantified.
 %
@@ -42,6 +42,17 @@
 :- import_module list.
 
 %-----------------------------------------------------------------------------%
+
+    % Quantification can detect some situations (currently just one)
+    % that users deserve warnings about. The reason we return warnings
+    % in the form of quant_warnings, which must be converted to error_specs
+    % by add_quant_warnings in make_hlds_warn.m, is that most invocations
+    % of quantification are AFTER semantic analysis, and as such, they
+    % do not report any warnings. Throwing away cheaply-built quant_warnings
+    % is much less of a waste than throwing away relatively expensively-built
+    % error_specs.
+:- type quant_warning
+    --->    warn_overlap(list(prog_var), prog_context).
 
     % When the compiler performs structure reuse, using the ordinary nonlocals
     % during code generation causes variables taken from the reused cell in
@@ -86,9 +97,6 @@
     % We return a list of warnings back to make_hlds.m.
     % Currently the only thing we warn about is variables with
     % overlapping scopes.
-
-:- type quant_warning
-    --->    warn_overlap(list(prog_var), prog_context).
 
     % free_goal_vars(Goal) = Vars:
     %
@@ -729,6 +737,7 @@ implicitly_quantify_goal_quant_info_scope(Reason0, SubGoal0, GoalExpr,
         ; Reason0 = promise_solutions(_, _)
         ; Reason0 = require_detism(_)
         ; Reason0 = require_complete_switch(_)
+        ; Reason0 = require_switch_arms_detism(_, _)
         ; Reason0 = commit(_)
         ; Reason0 = barrier(_)
         ; Reason0 = loop_control(_, _, _)
@@ -799,6 +808,7 @@ implicitly_quantify_goal_quant_info_scope_rename_vars(Reason0, Reason,
             ; Reason0 = promise_solutions(_, _)
             ; Reason0 = require_detism(_)
             ; Reason0 = require_complete_switch(_)
+            ; Reason0 = require_switch_arms_detism(_, _)
             ; Reason0 = commit(_)
             ; Reason0 = barrier(_)
             ; Reason0 = from_ground_term(_, _)
@@ -1016,7 +1026,7 @@ implicitly_quantify_unify_rhs(ReuseArgs, GoalInfo0, !RHS, !Unification,
         LambdaGoalNonLocals = goal_info_get_nonlocals(LambdaGoalInfo),
         list.filter(set_of_var.contains(LambdaGoalNonLocals),
             LambdaNonLocals0, LambdaNonLocals),
-        
+
         !:RHS = rhs_lambda_goal(Purity, Groundness, PredOrFunc, EvalMethod,
             LambdaNonLocals, LambdaVars, Modes, Det, Goal),
 
@@ -1884,7 +1894,9 @@ goal_expr_vars_maybe_lambda_2(NonLocalsToRecompute, GoalExpr,
                 !:Set, !:LambdaSet),
             set_of_var.insert_list(Vars, !Set)
         ;
-            Reason = require_complete_switch(Var),
+            ( Reason = require_complete_switch(Var)
+            ; Reason = require_switch_arms_detism(Var, _)
+            ),
             goal_vars_both_maybe_lambda(NonLocalsToRecompute, SubGoal,
                 !:Set, !:LambdaSet),
             set_of_var.insert(Var, !Set)
@@ -2057,7 +2069,9 @@ goal_expr_vars_maybe_lambda_and_bi_impl_2(GoalExpr, !Set, !LambdaSet) :-
                 !:Set, !:LambdaSet),
             set_of_var.insert_list(Vars, !Set)
         ;
-            Reason = require_complete_switch(Var),
+            ( Reason = require_complete_switch(Var)
+            ; Reason = require_switch_arms_detism(Var, _)
+            ),
             goal_vars_both_maybe_lambda_and_bi_impl(SubGoal,
                 !:Set, !:LambdaSet),
             set_of_var.insert(Var, !Set)
@@ -2211,7 +2225,9 @@ goal_expr_vars_no_lambda_2(NonLocalsToRecompute, GoalExpr, !Set) :-
             goal_vars_both_no_lambda(NonLocalsToRecompute, SubGoal, !:Set),
             set_of_var.insert_list(Vars, !Set)
         ;
-            Reason = require_complete_switch(Var),
+            ( Reason = require_complete_switch(Var)
+            ; Reason = require_switch_arms_detism(Var, _)
+            ),
             goal_vars_both_no_lambda(NonLocalsToRecompute, SubGoal, !:Set),
             set_of_var.insert(Var, !Set)
         ;

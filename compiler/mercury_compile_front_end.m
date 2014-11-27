@@ -35,7 +35,7 @@
     io::di, io::uo) is det.
 
     % This type indicates what stage of compilation we are running
-    % the simplification pass at. The exact simplifications we run
+    % the simplification pass at. The exact simplifications tasks we run
     % will depend upon this.
     %
 :- type simplify_pass
@@ -84,6 +84,8 @@
 :- import_module check_hlds.post_typecheck.
 :- import_module check_hlds.purity.
 :- import_module check_hlds.simplify.
+:- import_module check_hlds.simplify.simplify_proc.
+:- import_module check_hlds.simplify.simplify_tasks.
 :- import_module check_hlds.stratify.
 :- import_module check_hlds.switch_detection.
 :- import_module check_hlds.try_expand.
@@ -92,6 +94,7 @@
 :- import_module check_hlds.unique_modes.
 :- import_module check_hlds.unused_imports.
 :- import_module hlds.hlds_error_util.
+:- import_module hlds.hlds_pred.
 :- import_module hlds.hlds_statistics.
 :- import_module hlds.make_tags.
 :- import_module libs.file_util.
@@ -99,9 +102,10 @@
 :- import_module libs.options.
 :- import_module mdbcomp.
 :- import_module mdbcomp.prim_data.
-:- import_module parse_tree.prog_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.file_names.
 :- import_module parse_tree.module_cmds.
+:- import_module parse_tree.prog_data.
 :- import_module top_level.mercury_compile_middle_passes.
 :- import_module transform_hlds.dead_proc_elim.
 :- import_module transform_hlds.intermod.
@@ -501,7 +505,7 @@ frontend_pass_by_phases(!HLDS, FoundError, !DumpInfo, !Specs, !IO) :-
 
         check_oisu_pragmas(Verbose, Stats, !HLDS, FoundOISUError,
             !Specs, !IO),
-        maybe_dump_hlds(!.HLDS, 60, "stratification", !DumpInfo, !IO),
+        maybe_dump_hlds(!.HLDS, 61, "oisu", !DumpInfo, !IO),
 
         process_try_goals(Verbose, Stats, !HLDS, FoundTryError, !Specs, !IO),
         maybe_dump_hlds(!.HLDS, 62, "try", !DumpInfo, !IO),
@@ -741,18 +745,11 @@ detect_switches(Verbose, Stats, !HLDS, !IO) :-
     io::di, io::uo) is det.
 
 detect_cse(Verbose, Stats, !HLDS, !IO) :-
-    module_info_get_globals(!.HLDS, Globals),
-    globals.lookup_bool_option(Globals, common_goal, CommonGoal),
-    (
-        CommonGoal = yes,
-        maybe_write_string(Verbose,
-            "% Detecting common deconstructions...\n", !IO),
-        detect_cse_in_module(!HLDS),
-        maybe_write_string(Verbose, "% done.\n", !IO),
-        maybe_report_stats(Stats, !IO)
-    ;
-        CommonGoal = no
-    ).
+    maybe_write_string(Verbose,
+        "% Detecting common deconstructions...\n", !IO),
+    detect_cse_in_module(!HLDS),
+    maybe_write_string(Verbose, "% done.\n", !IO),
+    maybe_report_stats(Stats, !IO).
 
 %-----------------------------------------------------------------------------%
 
@@ -812,13 +809,12 @@ check_stratification(Verbose, Stats, !HLDS, FoundError, !Specs, !IO) :-
     module_info_get_globals(!.HLDS, Globals),
     globals.lookup_bool_option(Globals, warn_non_stratification, Warn),
     (
-        ( \+ set.empty(StratifiedPreds)
+        ( set.is_non_empty(StratifiedPreds)
         ; Warn = yes
         )
     ->
         maybe_write_out_errors(Verbose, Globals, !HLDS, !Specs, !IO),
-        maybe_write_string(Verbose,
-            "% Checking stratification...\n", !IO),
+        maybe_write_string(Verbose, "% Checking stratification...\n", !IO),
         check_module_for_stratification(!HLDS, StratifySpecs),
         !:Specs = StratifySpecs ++ !.Specs,
         FoundError = contains_errors(Globals, StratifySpecs),
@@ -908,28 +904,28 @@ process_try_goals(Verbose, Stats, !HLDS, FoundError, !Specs, !IO) :-
 maybe_simplify(Warn, SimplifyPass, Verbose, Stats, !HLDS, !Specs, !IO) :-
     module_info_get_globals(!.HLDS, Globals),
     some [!SimpList] (
-        simplify.find_simplifications(Warn, Globals, Simplifications0),
-        !:SimpList = simplifications_to_list(Simplifications0),
+        find_simplify_tasks(Warn, Globals, SimplifyTasks0),
+        !:SimpList = simplify_tasks_to_list(SimplifyTasks0),
         (
             SimplifyPass = simplify_pass_frontend,
-            list.cons(simp_after_front_end, !SimpList)
+            list.cons(simptask_after_front_end, !SimpList)
         ;
             SimplifyPass = simplify_pass_post_untuple,
-            list.cons(simp_do_once, !SimpList)
+            list.cons(simptask_mark_code_model_changes, !SimpList)
         ;
             SimplifyPass = simplify_pass_pre_prof_transforms,
 
-            % We run the simplify pass before the profiling transformations,
-            % only if those transformations are being applied - otherwise we
+            % We run the simplify pass before the profiling transformations
+            % only if those transformations are being applied; otherwise we
             % just leave things to the backend simplification passes.
 
             globals.lookup_bool_option(Globals, pre_prof_transforms_simplify,
-                Simplify215),
+                PreProfSimplify),
             (
-                Simplify215 = yes,
-                list.cons(simp_do_once, !SimpList)
+                PreProfSimplify = yes,
+                list.cons(simptask_mark_code_model_changes, !SimpList)
             ;
-                Simplify215 = no,
+                PreProfSimplify = no,
                 !:SimpList = []
             )
         ;
@@ -939,17 +935,17 @@ maybe_simplify(Warn, SimplifyPass, Verbose, Stats, !HLDS, !Specs, !IO) :-
             % implicit parallelism is enabled.
 
             globals.lookup_bool_option(Globals,
-                pre_implicit_parallelism_simplify, SimplifyPrePar),
+                pre_implicit_parallelism_simplify, PreParSimplify),
             (
-                SimplifyPrePar = yes,
-                list.cons(simp_do_once, !SimpList)
+                PreParSimplify = yes,
+                list.cons(simptask_mark_code_model_changes, !SimpList)
             ;
-                SimplifyPrePar = no,
+                PreParSimplify = no,
                 !:SimpList = []
             )
         ;
             SimplifyPass = simplify_pass_ml_backend,
-            list.cons(simp_do_once, !SimpList)
+            list.cons(simptask_mark_code_model_changes, !SimpList)
         ;
             SimplifyPass = simplify_pass_ll_backend,
             % Don't perform constant propagation if one of the
@@ -970,12 +966,12 @@ maybe_simplify(Warn, SimplifyPass, Verbose, Stats, !HLDS, !Specs, !IO) :-
                 TSWProf = no,
                 TSCProf = no
             ->
-                list.cons(simp_constant_prop, !SimpList)
+                list.cons(simptask_constant_prop, !SimpList)
             ;
-                !:SimpList = list.delete_all(!.SimpList, simp_constant_prop)
+                !:SimpList = list.delete_all(!.SimpList, simptask_constant_prop)
             ),
-            list.cons(simp_do_once, !SimpList),
-            list.cons(simp_elim_removable_scopes, !SimpList)
+            list.cons(simptask_mark_code_model_changes, !SimpList),
+            list.cons(simptask_elim_removable_scopes, !SimpList)
         ),
         SimpList = !.SimpList
     ),
@@ -985,9 +981,9 @@ maybe_simplify(Warn, SimplifyPass, Verbose, Stats, !HLDS, !Specs, !IO) :-
         maybe_write_out_errors(Verbose, Globals, !HLDS, !Specs, !IO),
         maybe_write_string(Verbose, "% Simplifying goals...\n", !IO),
         maybe_flush_output(Verbose, !IO),
-        Simplifications = list_to_simplifications(SimpList),
+        SimplifyTasks = list_to_simplify_tasks(SimpList),
         process_all_nonimported_preds_errors(
-            update_pred_error(simplify_pred(Simplifications)),
+            update_pred_error(simplify_pred(SimplifyTasks)),
             !HLDS, [], SimplifySpecs, !IO),
         (
             SimplifyPass = simplify_pass_frontend,
@@ -1005,6 +1001,33 @@ maybe_simplify(Warn, SimplifyPass, Verbose, Stats, !HLDS, !Specs, !IO) :-
         maybe_report_stats(Stats, !IO)
     ;
         SimpList = []
+    ).
+
+:- pred simplify_pred(simplify_tasks::in, pred_id::in,
+    module_info::in, module_info::out, pred_info::in, pred_info::out,
+    list(error_spec)::in, list(error_spec)::out) is det.
+
+simplify_pred(SimplifyTasks0, PredId, !ModuleInfo, !PredInfo, !Specs) :-
+    trace [io(!IO)] (
+        write_pred_progress_message("% Simplifying ", PredId, !.ModuleInfo,
+            !IO)
+    ),
+    ProcIds = pred_info_non_imported_procids(!.PredInfo),
+    % Don't warn for compiler-generated procedures.
+    ( is_unify_or_compare_pred(!.PredInfo) ->
+        SimplifyTasks = SimplifyTasks0 ^ do_warn_simple_code := no
+    ;
+        SimplifyTasks = SimplifyTasks0
+    ),
+    ErrorSpecs0 = init_error_spec_accumulator,
+    simplify_pred_procs(SimplifyTasks, PredId, ProcIds, !ModuleInfo,
+        !PredInfo, ErrorSpecs0, ErrorSpecs),
+    module_info_get_globals(!.ModuleInfo, Globals),
+    SpecsList = error_spec_accumulator_to_list(ErrorSpecs),
+    !:Specs = SpecsList ++ !.Specs,
+    globals.lookup_bool_option(Globals, detailed_statistics, Statistics),
+    trace [io(!IO)] (
+        maybe_report_stats(Statistics, !IO)
     ).
 
 :- pred maybe_proc_statistics(bool::in, bool::in, string::in,

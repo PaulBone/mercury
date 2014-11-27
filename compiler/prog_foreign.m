@@ -30,7 +30,7 @@
 :- import_module libs.
 :- import_module libs.globals.
 :- import_module parse_tree.prog_data.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 
 :- import_module bool.
 :- import_module list.
@@ -326,15 +326,6 @@ prefer_foreign_language(_Globals, target_java, _Lang1, _Lang2) = no.
     % Nothing useful to do here, but when we add Java as a foreign language,
     % we should add it here.
 
-prefer_foreign_language(_Globals, target_x86_64, Lang1, Lang2) =
-    % When compiling to x86_64 assembler, C is always preferred over any
-    % other language.
-    ( Lang2 = lang_c, not Lang1 = lang_c ->
-        yes
-    ;
-        no
-    ).
-
 prefer_foreign_language(_Globals, target_erlang, _Lang1, _Lang2) = no.
     % Nothing useful to do here, but when we add Erlang as a foreign language,
     % we should add it here.
@@ -475,5 +466,5 @@ convert_to_valid_c_identifier_2(String) = Name :-
     ).
 
 %-----------------------------------------------------------------------------%
-:- end_module prog_foreign.
+:- end_module parse_tree.prog_foreign.
 %-----------------------------------------------------------------------------%

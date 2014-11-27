@@ -41,7 +41,7 @@
 :- import_module hlds.hlds_module.
 :- import_module hlds.hlds_pred.
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
@@ -138,11 +138,14 @@
 :- import_module hlds.hlds_error_util.
 :- import_module hlds.hlds_out.
 :- import_module hlds.hlds_out.hlds_out_util.
+:- import_module hlds.make_goal.
 :- import_module hlds.pred_table.
 :- import_module libs.
 :- import_module libs.globals.
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.goal_path.
+:- import_module mdbcomp.prim_data.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.mercury_to_mercury.
 :- import_module parse_tree.prog_type.
@@ -327,7 +330,7 @@ check_var_type_bindings_2([Var - Type | VarTypes], HeadTypeParams,
         type_vars(Type, TVars),
         set.list_to_set(TVars, TVarsSet0),
         set.delete_list(HeadTypeParams, TVarsSet0, TVarsSet1),
-        ( set.empty(TVarsSet1) ->
+        ( set.is_empty(TVarsSet1) ->
             true
         ;
             !:UnresolvedVarsTypes = [Var - Type | !.UnresolvedVarsTypes],
@@ -521,7 +524,8 @@ report_unresolved_type_warning(ModuleInfo, PredId, PredInfo, VarSet, Errs,
         VarTypePieces ++
         [nl_indent_delta(-1), words("The unbound type"),
         words(choose_number(Errs, "variable", "variables")),
-        words("will be implicitly bound to the builtin type `void'."), nl],
+        words("will be implicitly bound to the builtin type"),
+        quote("void"), suffix("."), nl],
     VerbosePieces = [words("The body of the clause contains a call"),
         words("to a polymorphic predicate,"),
         words("but I can't determine which version should be called,"),
@@ -848,7 +852,7 @@ check_type_of_main(PredInfo, !Specs) :-
         ;
             pred_info_get_context(PredInfo, Context),
             Pieces = [words("Error: arguments of main/2"),
-                words("must have type `io.state'."), nl],
+                words("must have type"), quote("io.state"), suffix("."), nl],
             Msg = simple_msg(Context, [always(Pieces)]),
             Spec = error_spec(severity_error, phase_type_check, [Msg]),
             !:Specs = [Spec | !.Specs]
@@ -924,7 +928,7 @@ report_unbound_inst_var_error(ModuleInfo, PredId, ProcId, Procs0, Procs,
         !Specs) :-
     map.lookup(Procs0, ProcId, ProcInfo),
     proc_info_get_context(ProcInfo, Context),
-    Pieces = [words("In mode declaration for")] ++
+    Pieces = [words("In"), decl("mode"), words("declaration for")] ++
         describe_one_pred_name(ModuleInfo, should_not_module_qualify, PredId)
         ++ [suffix(":"), nl,
         words("error: unbound inst variable(s)."), nl,
@@ -1110,7 +1114,7 @@ resolve_unify_functor(X0, ConsId0, ArgVars0, Mode0, Unification0, UnifyContext,
         ProcId = invalid_proc_id,
         ArgVars = ArgVars0 ++ [X0],
         FuncCallUnifyContext = call_unify_context(X0,
-            rhs_functor(ConsId0, no, ArgVars0), UnifyContext),
+            rhs_functor(ConsId0, is_not_exist_constr, ArgVars0), UnifyContext),
         FuncCall = plain_call(PredId, ProcId, ArgVars, not_builtin,
             yes(FuncCallUnifyContext), QualifiedFuncName),
         Goal = hlds_goal(FuncCall, GoalInfo0),
@@ -1155,8 +1159,9 @@ resolve_unify_functor(X0, ConsId0, ArgVars0, Mode0, Unification0, UnifyContext,
             MaybeProcId = yes(ProcId),
             ShroudedPredProcId = shroud_pred_proc_id(proc(PredId, ProcId)),
             ConsId = closure_cons(ShroudedPredProcId, EvalMethod),
-            GoalExpr = unify(X0, rhs_functor(ConsId, no, ArgVars0), Mode0,
-                Unification0, UnifyContext),
+            GoalExpr = unify(X0,
+                rhs_functor(ConsId, is_not_exist_constr, ArgVars0),
+                Mode0, Unification0, UnifyContext),
             Goal = hlds_goal(GoalExpr, GoalInfo0),
             IsPlainUnify = is_not_plain_unify
         ;
@@ -1229,8 +1234,9 @@ resolve_unify_functor(X0, ConsId0, ArgVars0, Mode0, Unification0, UnifyContext,
         ;
             ConsId = ConsId0
         ),
-        GoalExpr = unify(X0, rhs_functor(ConsId, no, ArgVars0), Mode0,
-            Unification0, UnifyContext),
+        GoalExpr = unify(X0,
+            rhs_functor(ConsId, is_not_exist_constr, ArgVars0),
+            Mode0, Unification0, UnifyContext),
         Goal = hlds_goal(GoalExpr, GoalInfo0),
         IsPlainUnify = is_plain_unify
     ).
@@ -1272,8 +1278,7 @@ find_matching_constructor(ModuleInfo, TVarSet, ConsId, Type, ArgTypes) :-
     %
 :- pred finish_field_access_function(module_info::in,
     pred_info::in, pred_info::out, vartypes::in, vartypes::out,
-    prog_varset::in, prog_varset::out,
-    field_access_type::in, ctor_field_name::in,
+    prog_varset::in, prog_varset::out, field_access_type::in, sym_name::in,
     unify_context::in, prog_var::in, list(prog_var)::in,
     hlds_goal_info::in, hlds_goal::out) is det.
 
@@ -1293,10 +1298,9 @@ finish_field_access_function(ModuleInfo, !PredInfo, !VarTypes, !VarSet,
             GoalInfo, GoalExpr)
     ).
 
-:- pred translate_get_function(module_info::in,
-    pred_info::in, pred_info::out, vartypes::in, vartypes::out,
-    prog_varset::in, prog_varset::out, ctor_field_name::in,
-    unify_context::in, prog_var::in, prog_var::in,
+:- pred translate_get_function(module_info::in, pred_info::in, pred_info::out,
+    vartypes::in, vartypes::out, prog_varset::in, prog_varset::out,
+    sym_name::in, unify_context::in, prog_var::in, prog_var::in,
     hlds_goal_info::in, hlds_goal_expr::out) is det.
 
 translate_get_function(ModuleInfo, !PredInfo, !VarTypes, !VarSet, FieldName,
@@ -1341,14 +1345,14 @@ translate_get_function(ModuleInfo, !PredInfo, !VarTypes, !VarSet, FieldName,
 
     RestrictNonLocals = goal_info_get_nonlocals(OldGoalInfo),
     create_pure_atomic_unification_with_nonlocals(TermInputVar,
-        rhs_functor(ConsId, no, ArgVars), OldGoalInfo, RestrictNonLocals,
-        [FieldVar, TermInputVar], UnifyContext, FunctorGoal),
+        rhs_functor(ConsId, is_not_exist_constr, ArgVars),
+        OldGoalInfo, RestrictNonLocals, [FieldVar, TermInputVar],
+        UnifyContext, FunctorGoal),
     FunctorGoal = hlds_goal(GoalExpr, _).
 
 :- pred translate_set_function(module_info::in, pred_info::in, pred_info::out,
     vartypes::in, vartypes::out, prog_varset::in, prog_varset::out,
-    ctor_field_name::in, unify_context::in,
-    prog_var::in, prog_var::in, prog_var::in,
+    sym_name::in, unify_context::in, prog_var::in, prog_var::in, prog_var::in,
     hlds_goal_info::in, hlds_goal_expr::out) is det.
 
 translate_set_function(ModuleInfo, !PredInfo, !VarTypes, !VarSet, FieldName,
@@ -1377,9 +1381,9 @@ translate_set_function(ModuleInfo, !PredInfo, !VarTypes, !VarSet, FieldName,
         DeconstructRestrictNonLocals),
 
     create_pure_atomic_unification_with_nonlocals(TermInputVar,
-        rhs_functor(ConsId0, no, DeconstructArgs), OldGoalInfo,
-        DeconstructRestrictNonLocals, [TermInputVar | DeconstructArgs],
-        UnifyContext, DeconstructGoal),
+        rhs_functor(ConsId0, is_not_exist_constr, DeconstructArgs),
+        OldGoalInfo, DeconstructRestrictNonLocals,
+        [TermInputVar | DeconstructArgs], UnifyContext, DeconstructGoal),
 
     % Build a goal to construct the output.
     ConstructArgs = VarsBeforeField ++ [FieldVar | VarsAfterField],
@@ -1402,7 +1406,7 @@ translate_set_function(ModuleInfo, !PredInfo, !VarTypes, !VarSet, FieldName,
     ),
 
     create_pure_atomic_unification_with_nonlocals(TermOutputVar,
-        rhs_functor(ConsId, no, ConstructArgs), OldGoalInfo,
+        rhs_functor(ConsId, is_not_exist_constr, ConstructArgs), OldGoalInfo,
         ConstructRestrictNonLocals, [TermOutputVar | ConstructArgs],
         UnifyContext, ConstructGoal),
 
@@ -1519,9 +1523,9 @@ split_list_at_index(Index, List, Before, At, After) :-
     % given field name.
     %
 :- pred get_constructor_containing_field(module_info::in, mer_type::in,
-    ctor_field_name::in, cons_id::out, int::out) is det.
+    sym_name::in, cons_id::out, int::out) is det.
 
-get_constructor_containing_field(ModuleInfo, TermType, FieldName,
+get_constructor_containing_field(ModuleInfo, TermType, FieldSymName,
         ConsId, FieldNumber) :-
     type_to_ctor_det(TermType, TermTypeCtor),
     module_info_get_type_table(ModuleInfo, TypeTable),
@@ -1529,6 +1533,7 @@ get_constructor_containing_field(ModuleInfo, TermType, FieldName,
     hlds_data.get_type_defn_body(TermTypeDefn, TermTypeBody),
     (
         TermTypeBody = hlds_du_type(Ctors, _, _, _, _, _, _, _, _),
+        FieldName = unqualify_name(FieldSymName),
         get_constructor_containing_field_2(TermTypeCtor, Ctors, FieldName,
             ConsId, FieldNumber)
     ;
@@ -1541,39 +1546,35 @@ get_constructor_containing_field(ModuleInfo, TermType, FieldName,
     ).
 
 :- pred get_constructor_containing_field_2(type_ctor::in,
-    list(constructor)::in, ctor_field_name::in, cons_id::out, int::out) is det.
+    list(constructor)::in, string::in, cons_id::out, int::out) is det.
 
 get_constructor_containing_field_2(_, [], _, _, _) :-
     unexpected($module, $pred, "can't find field").
-get_constructor_containing_field_2(TypeCtor, [Ctor | Ctors], FieldName,
+get_constructor_containing_field_2(TypeCtor, [Ctor | Ctors], UnqualFieldName,
         ConsId, FieldNumber) :-
     Ctor = ctor(_, _, SymName, CtorArgs, _Ctxt),
-    (
-        get_constructor_containing_field_3(CtorArgs, FieldName,
-            1, FieldNumber0)
-    ->
+    ( search_for_named_field(CtorArgs, UnqualFieldName, 1, FieldNumberPrime) ->
         list.length(CtorArgs, Arity),
         ConsId = cons(SymName, Arity, TypeCtor),
-        FieldNumber = FieldNumber0
+        FieldNumber = FieldNumberPrime
     ;
-        get_constructor_containing_field_2(TypeCtor, Ctors, FieldName,
+        get_constructor_containing_field_2(TypeCtor, Ctors, UnqualFieldName,
             ConsId, FieldNumber)
     ).
 
-:- pred get_constructor_containing_field_3(list(constructor_arg)::in,
-    ctor_field_name::in, int::in, int::out) is semidet.
+:- pred search_for_named_field(list(constructor_arg)::in,
+    string::in, int::in, int::out) is semidet.
 
-get_constructor_containing_field_3([CtorArg | CtorArgs],
-        FieldName, FieldNumber0, FieldNumber) :-
+search_for_named_field([CtorArg | CtorArgs],
+        UnqualFieldName, CurFieldNumber, NamedFieldNumber) :-
     (
-        CtorArg ^ arg_field_name = yes(ArgFieldName),
-        UnqualFieldName = unqualify_name(ArgFieldName),
-        UnqualFieldName = unqualify_name(FieldName)
+        CtorArg ^ arg_field_name = yes(ctor_field_name(ArgFieldName, _)),
+        UnqualFieldName = unqualify_name(ArgFieldName)
     ->
-        FieldNumber = FieldNumber0
+        NamedFieldNumber = CurFieldNumber
     ;
-        get_constructor_containing_field_3(CtorArgs, FieldName,
-            FieldNumber0 + 1, FieldNumber)
+        search_for_named_field(CtorArgs, UnqualFieldName,
+            CurFieldNumber + 1, NamedFieldNumber)
     ).
 
 %-----------------------------------------------------------------------------%

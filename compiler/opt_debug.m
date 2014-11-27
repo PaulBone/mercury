@@ -20,10 +20,10 @@
 :- import_module backend_libs.rtti.
 :- import_module hlds.code_model.
 :- import_module hlds.hlds_llds.
+:- import_module mdbcomp.prim_data.
 :- import_module ll_backend.layout.
 :- import_module ll_backend.livemap.
 :- import_module ll_backend.llds.
-:- import_module mdbcomp.prim_data.
 
 :- import_module assoc_list.
 :- import_module bool.
@@ -149,6 +149,7 @@
 :- import_module hlds.special_pred.
 :- import_module ll_backend.llds_out.
 :- import_module ll_backend.llds_out.llds_out_code_addr.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_foreign.
 
@@ -418,8 +419,8 @@ dump_data_id(vector_common_data_id(type_num(TypeNum), Offset)) =
         ++ int_to_string(Offset) ++ ")".
 dump_data_id(layout_id(LayoutName)) =
     "layout_id(" ++ dump_layout_name(LayoutName) ++ ")".
-dump_data_id(layout_slot_id(table_io_decl_id, PredProcId)) =
-    "table_io_decl_id(" ++ dump_pred_proc_id(PredProcId) ++ ")".
+dump_data_id(layout_slot_id(table_io_entry_id, PredProcId)) =
+    "table_io_entry_id(" ++ dump_pred_proc_id(PredProcId) ++ ")".
 
 :- func dump_pred_proc_id(pred_proc_id) = string.
 
@@ -451,7 +452,7 @@ dump_rtti_name(type_ctor_res_addrs) = "res_addrs".
 dump_rtti_name(type_ctor_res_addr_functors) = "res_addr_functors".
 dump_rtti_name(type_ctor_enum_functor_desc(Ordinal)) =
     "enum_functor_desc_" ++ int_to_string(Ordinal).
-dump_rtti_name(type_ctor_foreign_enum_functor_desc(Ordinal)) = 
+dump_rtti_name(type_ctor_foreign_enum_functor_desc(Ordinal)) =
     "foreign_enum_functor_desc_" ++ int_to_string(Ordinal).
 dump_rtti_name(type_ctor_notag_functor_desc) = "notag_functor_desc_".
 dump_rtti_name(type_ctor_du_functor_desc(Ordinal)) =
@@ -585,8 +586,8 @@ dump_layout_array_name(ArrayName) = Str :-
         ArrayName = proc_body_bytecodes_array,
         Str = "proc_body_bytecodes_array"
     ;
-        ArrayName = proc_table_io_decl_array,
-        Str = "proc_table_io_decl_array"
+        ArrayName = proc_table_io_entry_array,
+        Str = "proc_table_io_entry_array"
     ;
         ArrayName = parprof_string_table_array,
         Str = "parprof_string_table_array"
@@ -936,7 +937,7 @@ dump_instr(MaybeProcLabel, AutoComments, Instr) = Str :-
             Region_str = "no"
         ;
             MaybeRegionRval = yes(RegionRval),
-            Region_str = dump_rval(no, RegionRval) 
+            Region_str = dump_rval(no, RegionRval)
         ),
         (
             MaybeReuse = no_llds_reuse,
@@ -1219,7 +1220,7 @@ dump_component(_, foreign_proc_noop) = "".
 :- func dump_affects_liveness(proc_affects_liveness) = string.
 
 dump_affects_liveness(proc_affects_liveness) = "affects_liveness".
-dump_affects_liveness(proc_does_not_affect_liveness) =  
+dump_affects_liveness(proc_does_not_affect_liveness) =
     "does_not_affect_liveness".
 dump_affects_liveness(proc_default_affects_liveness) =
     "default_affects_liveness".
@@ -1274,3 +1275,7 @@ dump_fullinstrs(_MaybeProcLabel, _AutoComments, []) = "".
 dump_fullinstrs(MaybeProcLabel, AutoComments, [Instr | Instrs]) =
     dump_fullinstr(MaybeProcLabel, AutoComments, Instr)
     ++ dump_fullinstrs(MaybeProcLabel, AutoComments, Instrs).
+
+%-----------------------------------------------------------------------------%
+:- end_module ll_backend.opt_debug.
+%-----------------------------------------------------------------------------%

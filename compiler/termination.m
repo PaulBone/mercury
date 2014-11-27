@@ -64,7 +64,10 @@
 :- import_module libs.file_util.
 :- import_module libs.globals.
 :- import_module libs.options.
+:- import_module mdbcomp.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.file_names.
 :- import_module parse_tree.mercury_to_mercury.
 :- import_module parse_tree.prog_data.
@@ -192,8 +195,9 @@ check_foreign_code_attributes_2([PPId], !ModuleInfo, !Specs) :-
                         should_module_qualify, PPId),
                     Pieces =
                         [words("Warning:") | ProcNamePieces] ++
-                        [words("has a `pragma terminates' declaration"),
-                        words("but also has the `does_not_terminate'"),
+                        [words("has a"), pragma_decl("terminates"),
+                        words("declaration but also has the"),
+                        quote("does_not_terminate"),
                         words("foreign code attribute set.")],
                     Msg = simple_msg(Context, [always(Pieces)]),
                     Spec = error_spec(severity_warning, phase_read_files,
@@ -219,10 +223,10 @@ check_foreign_code_attributes_2([PPId], !ModuleInfo, !Specs) :-
                         should_module_qualify, PPId),
                     Pieces =
                         [words("Warning:") | ProcNamePieces] ++
-                        [words("has a `pragma does_not_terminate'"),
+                        [words("has a"), pragma_decl("does_not_terminate"),
                         words("declaration but also has the"),
-                        words("`terminates' foreign code"),
-                        words("attribute set.")],
+                        quote("terminates"),
+                        words("foreign code attribute set.")],
                     Msg = simple_msg(Context, [always(Pieces)]),
                     Spec = error_spec(severity_warning, phase_read_files,
                         [Msg]),

@@ -60,7 +60,7 @@
 :- import_module libs.globals.
 :- import_module libs.options.
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_type.
 :- import_module transform_hlds.    % for pd_cost, etc.
@@ -306,7 +306,7 @@ higher_order_check_scc([PredProcId | Remaining], WholeScc, HOInfo,
     ->
         HigherOrderInfo = strat_ho_info(HOCalls, _),
         set.intersect(HOCalls, WholeScc, HOLoops),
-        ( set.empty(HOLoops) ->
+        ( set.is_empty(HOLoops) ->
             HighOrderLoops = no
         ;
             HighOrderLoops = yes

@@ -120,6 +120,7 @@
 #include "mercury_string.h"
 #include "mercury_timing.h"
 #include "mercury_trace_base.h"
+#include "mercury_runtime_util.h"
 
 #include "mdb.declarative_debugger.mh"
 #include "mdb.declarative_execution.mh"
@@ -1712,9 +1713,11 @@ MR_trace_start_decl_debug(MR_DeclMode mode, const char *outfile,
     if (mode == MR_DECL_DUMP) {
         out = fopen(outfile, "w");
         if (out == NULL) {
+            char    errbuf[MR_STRERROR_BUF_SIZE];
+
             fflush(MR_mdb_out);
             fprintf(MR_mdb_err, "mdb: cannot open file `%s' for output: %s.\n",
-                outfile, strerror(errno));
+                outfile, MR_strerror(errno, errbuf, sizeof(errbuf)));
             return MR_FALSE;
         } else {
             MR_trace_store_file = out;
@@ -1866,6 +1869,7 @@ MR_trace_start_collecting(MR_Unsigned event, MR_Unsigned seqno,
     */
     cmd->MR_trace_cmd = MR_CMD_STEP;
     cmd->MR_trace_strict = MR_TRUE;
+    cmd->MR_trace_print_level_specified = MR_TRUE;
     cmd->MR_trace_print_level = MR_PRINT_LEVEL_NONE;
     cmd->MR_trace_must_check = MR_FALSE;
 
@@ -2095,6 +2099,7 @@ MR_decl_go_to_selected_event(MR_Unsigned event, MR_TraceCmdInfo *cmd,
 
     cmd->MR_trace_cmd = MR_CMD_GOTO;
     cmd->MR_trace_stop_event = event;
+    cmd->MR_trace_print_level_specified = MR_TRUE;
     cmd->MR_trace_print_level = MR_PRINT_LEVEL_NONE;
     cmd->MR_trace_strict = MR_TRUE;
     cmd->MR_trace_must_check = MR_FALSE;

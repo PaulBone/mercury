@@ -109,8 +109,9 @@
 
 :- implementation.
 
-:- import_module check_hlds.format_call.
 :- import_module check_hlds.modecheck_call.
+:- import_module check_hlds.simplify.
+:- import_module check_hlds.simplify.format_call.
 :- import_module check_hlds.type_util.
 :- import_module hlds.code_model.
 :- import_module hlds.goal_util.
@@ -366,8 +367,8 @@ det_infer_proc(PredId, ProcId, !ModuleInfo, OldDetism, NewDetism, !Specs) :-
             get_exported_proc_context(ExportedProcs, PredId, ProcId,
                 PragmaContext)
         ->
-            ExportPieces = [words("Error: "),
-                fixed("`:- pragma foreign_export' declaration"),
+            ExportPieces = [words("Error:"),
+                pragma_decl("foreign_export"), words("declaration"),
                 words("for a procedure that has a determinism of"),
                 fixed(determinism_to_string(NewDetism) ++ ".")],
             ExportSpec = error_spec(severity_error, phase_detism_check,
@@ -1161,7 +1162,7 @@ det_infer_foreign_proc(Attributes, PredId, ProcId, _PragmaCode,
             WillNotThrowPieces = WillNotThrowProcPieces ++
                 [words("has determinism erroneous but also has"),
                 words("foreign clauses that have a"),
-                fixed("`will_not_throw_exception' attribute."),
+                quote("will_not_throw_exception"), words("attribute."),
                 words("This attribute cannot be applied"),
                 words("to erroneous procedures.")],
             WillNotThrowSpec = error_spec(severity_error, phase_detism_check,
@@ -1211,7 +1212,7 @@ det_infer_foreign_proc(Attributes, PredId, ProcId, _PragmaCode,
         ProcPieces = describe_one_proc_name_mode(ModuleInfo,
             should_not_module_qualify, proc(PredId, ProcId)),
         Pieces = [words("In")] ++ ProcPieces ++ [suffix(":"), nl,
-            words("error: `:- pragma foreign_proc(...)'"),
+            words("error:"), quote(":- pragma foreign_proc(...)"),
             words("for a procedure without a determinism declaration.")],
         Spec = error_spec(severity_error, phase_detism_check,
             [simple_msg(Context, [always(Pieces)])]),
@@ -1569,10 +1570,11 @@ det_infer_scope(Reason, Goal0, Goal, GoalInfo, InstMap0, SolnContext,
                 MaybePromiseEqvSolutionSets0 = yes(PESSInfo),
                 PESSInfo = pess_info(OuterVars, OuterContext),
                 NestedPieces = [words("Error: "),
-                    words("`promise_equivalent_solution_sets' scope"),
-                    words("is nested inside another.")],
+                    quote("promise_equivalent_solution_sets"),
+                    words("scope is nested inside another.")],
                 NestedOuterPieces = [words("This is the outer"),
-                    words("`promise_equivalent_solution_sets' scope.")],
+                    quote("promise_equivalent_solution_sets"),
+                    words("scope.")],
                 NestedSeverity = severity_conditional(warn_simple_code, yes,
                     severity_warning, no),
                 NestedSpec = error_spec(NestedSeverity, phase_detism_check,
@@ -1594,8 +1596,10 @@ det_infer_scope(Reason, Goal0, Goal, GoalInfo, InstMap0, SolnContext,
             (
                 MaybePromiseEqvSolutionSets0 = no,
                 ArbitraryPieces = [words("Error: "),
-                    words("this `arbitrary' scope is not nested inside"),
-                    words("a `promise_equivalent_solution_sets' scope.")],
+                    words("this"), quote("arbitrary"),
+                    words("scope is not nested inside a"),
+                    quote("promise_equivalent_solution_sets"),
+                    words("scope.")],
                 ArbitrarySpec = error_spec(severity_error, phase_detism_check,
                     [simple_msg(Context, [always(ArbitraryPieces)])]),
                 det_info_add_error_spec(ArbitrarySpec, !DetInfo)
@@ -1622,14 +1626,15 @@ det_infer_scope(Reason, Goal0, Goal, GoalInfo, InstMap0, SolnContext,
                         OverlapVarNames = [_, _ | _],
                         OverlapVarStr = "the following variables:"
                     ),
-                    OverlapPieces = [words("Error: "),
-                        words("this `arbitrary' scope and the"),
-                        words("`promise_equivalent_solution_sets' scope"),
-                        words("it is nested inside overlap on"),
+                    OverlapPieces = [words("Error: this"), quote("arbitrary"),
+                        words("scope and the"),
+                        quote("promise_equivalent_solution_sets"),
+                        words("scope it is nested inside overlap on"),
                         words(OverlapVarStr)] ++
                         list_to_pieces(OverlapVarNames) ++ [suffix(".")],
-                    OverlapPromisePieces = [words("This is the outer "),
-                        words("`promise_equivalent_solution_sets' scope.")],
+                    OverlapPromisePieces = [words("This is the outer"),
+                        quote("promise_equivalent_solution_sets"),
+                        words("scope.")],
                     OverlapSpec = error_spec(severity_error,
                         phase_detism_check,
                         [simple_msg(Context, [always(OverlapPieces)]),
@@ -1736,7 +1741,7 @@ det_infer_scope(Reason, Goal0, Goal, GoalInfo, InstMap0, SolnContext,
         (
             % Since the trace goal may not be enabled, it would be incorrect
             % to say that it ALWAYS aborts. That is why we convert a detism
-            % of detism_erroneous inside the scope to detism_det outside the 
+            % of detism_erroneous inside the scope to detism_det outside the
             % scope.
             (
                 Detism0 = detism_det,
@@ -1771,8 +1776,9 @@ det_infer_scope(Reason, Goal0, Goal, GoalInfo, InstMap0, SolnContext,
             RightFailingContexts, MaybePromiseEqvSolutionSets0,
             Detism, GoalFailingContexts, !DetInfo)
     ;
-        ( Reason = require_complete_switch(_)
-        ; Reason = require_detism(_)
+        ( Reason = require_detism(_)
+        ; Reason = require_complete_switch(_)
+        ; Reason = require_switch_arms_detism(_, _)
         ),
         det_info_set_has_req_scope(!DetInfo),
         det_infer_goal(Goal0, Goal, InstMap0, SolnContext,

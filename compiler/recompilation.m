@@ -5,10 +5,10 @@
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %-----------------------------------------------------------------------------%
-% 
+%
 % File: recompilation.m.
 % Main author: stayl.
-% 
+%
 % Type declarations for smart recompilation.
 % Predicates to record program items used by a compilation.
 %
@@ -35,6 +35,7 @@
 
 :- import_module libs.timestamp.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 
 :- import_module io.
@@ -172,7 +173,7 @@
                 predicates      :: Set,
                 functions       :: Set,
                 mutables        :: Set,
-                foreign_procs   :: Set 
+                foreign_procs   :: Set
             ).
 
 :- type item_id_set(T) == item_id_set(T, T, T).
@@ -446,7 +447,7 @@ record_used_item(ItemType, Id, QualifiedId, !Info) :-
     ).
 
 record_expanded_items(Item, ExpandedItems, !Info) :-
-    ( set.empty(ExpandedItems) ->
+    ( set.is_empty(ExpandedItems) ->
         true
     ;
         DepsMap0 = !.Info ^ dependencies,

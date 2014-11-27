@@ -94,9 +94,6 @@ extern	int	mercury_terminate(void);
 #include "mercury_complexity.h"	/* for MR_ComplexityProc */
 
 #ifdef MR_CONSERVATIVE_GC
-  #ifdef MR_MPS_GC
-    #include "mercury_mps.h"	/* for GC_INIT(), GC_stack_bottom */
-  #endif
   #ifdef MR_BOEHM_GC
     #define GC_I_HIDE_POINTERS
     #include "gc.h"		/* for GC_INIT(), GC_stack_bottom */
@@ -123,8 +120,8 @@ extern	int	mercury_terminate(void);
 
 /* in library/io.mh */
 extern	void	mercury_init_io(void);
-extern	void	ML_io_init_state(void);
-extern	void	ML_io_finalize_state(void);
+extern	void	ML_std_library_init(void);
+extern	void	ML_std_library_finalize(void);
 extern	void	ML_io_stderr_stream(MercuryFilePtr *);
 extern	void	ML_io_stdout_stream(MercuryFilePtr *);
 extern	void	ML_io_stdin_stream(MercuryFilePtr *);

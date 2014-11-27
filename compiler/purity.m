@@ -178,7 +178,9 @@
 :- import_module hlds.pred_table.
 :- import_module hlds.quantification.
 :- import_module mdbcomp.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.mercury_to_mercury.
 :- import_module parse_tree.prog_data.
@@ -922,6 +924,7 @@ compute_expr_purity(GoalExpr0, GoalExpr, GoalInfo, Purity, ContainsTrace,
             ( Reason0 = promise_solutions(_, _)
             ; Reason0 = require_detism(_)
             ; Reason0 = require_complete_switch(_)
+            ; Reason0 = require_switch_arms_detism(_, _)
             ; Reason0 = commit(_)
             ; Reason0 = barrier(_)
             ; Reason0 = exist_quant(_)

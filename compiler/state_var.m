@@ -284,6 +284,7 @@
 
 :- implementation.
 
+:- import_module hlds.make_goal.
 :- import_module libs.options.
 :- import_module mdbcomp.goal_path.
 :- import_module parse_tree.prog_util.
@@ -906,7 +907,7 @@ finish_svars_for_scope([SVar | SVars], StatusMapBeforeOutside,
 %   the final prog_var from one of the updated arms to represent the state var
 %   after the disjunction.
 %
-% - Pass two processes the arms to ensure that the picked prog_var represents
+% - Pass 2 processes the arms to ensure that the picked prog_var represents
 %   the final value of the state variable in all the arms. In arms that do not
 %   update the state variable, it introduces unifications to copy the initial
 %   value of the state var to be the final value. In arms that do update the
@@ -1142,7 +1143,7 @@ make_copy_goal(FromVar, ToVar, CopyGoal) :-
     % feels free to schedule them in places where the unique mode analysis pass
     % does not like them; specifically, it can cause a di reference to a
     % variable to appear before a ui reference.
-    % 
+    %
     % The alternative is to add a builtin predicate to the standard library
     % that just does copying, and to make make_copy_goal construct a call to
     % that predicate. That predicate would need to be able to be called in
@@ -2043,4 +2044,6 @@ report_missing_inits_in_disjunct(Context, NextStateVars, !Specs) :-
 
 severity_is_error(error_spec(severity_error, _, _)).
 
+%-----------------------------------------------------------------------------%
+:- end_module hlds.make_hlds.state_var.
 %-----------------------------------------------------------------------------%

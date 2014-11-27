@@ -131,9 +131,12 @@
 :- import_module hlds.hlds_module.
 :- import_module hlds.hlds_pred.
 :- import_module hlds.instmap.
+:- import_module hlds.make_goal.
 :- import_module hlds.pred_table.
 :- import_module mdbcomp.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.prog_data.
@@ -532,6 +535,7 @@ goal_large_flat_constructs(Goal) = LargeFlatConstructs :-
             ; Reason = promise_purity(_)
             ; Reason = require_detism(_)
             ; Reason = require_complete_switch(_)
+            ; Reason = require_switch_arms_detism(_, _)
             ; Reason = commit(_)
             ; Reason = barrier(_)
             ; Reason = trace_goal(_, _, _, _, _)
@@ -609,6 +613,7 @@ set_large_flat_constructs_to_ground_in_goal(LargeFlatConstructs,
             ; Reason = promise_purity(_)
             ; Reason = require_detism(_)
             ; Reason = require_complete_switch(_)
+            ; Reason = require_switch_arms_detism(_, _)
             ; Reason = commit(_)
             ; Reason = barrier(_)
             ; Reason = trace_goal(_, _, _, _, _)
@@ -814,6 +819,7 @@ modecheck_goal_scope(Reason, SubGoal0, GoalInfo0, GoalExpr, !ModeInfo) :-
             ; Reason = promise_solutions(_, _)
             ; Reason = require_detism(_)
             ; Reason = require_complete_switch(_)
+            ; Reason = require_switch_arms_detism(_, _)
             ; Reason = commit(_)
             ; Reason = barrier(_)
             )
@@ -1164,7 +1170,7 @@ all_plain_construct_unifies([]).
 all_plain_construct_unifies([Goal | Goals]) :-
     Goal = hlds_goal(GoalExpr, _),
     GoalExpr = unify(_LHSVar, RHS, _, _, _),
-    RHS = rhs_functor(_ConsId, no, _RHSVars),
+    RHS = rhs_functor(_ConsId, is_not_exist_constr, _RHSVars),
     all_plain_construct_unifies(Goals).
 
 :- pred modecheck_ground_term_construct(prog_var::in, list(hlds_goal)::in,
@@ -1205,7 +1211,7 @@ modecheck_ground_term_construct_goal_loop(VarSet,
     Goal0 = hlds_goal(GoalExpr0, GoalInfo0),
     (
         GoalExpr0 = unify(LHSVar, RHS, _, _, UnifyContext),
-        RHS = rhs_functor(ConsId, no, RHSVars)
+        RHS = rhs_functor(ConsId, is_not_exist_constr, RHSVars)
     ->
         % We could set TermInst to simply to ground, as opposed to the inst
         % we now use which gives information about LHSVar's shape. This would

@@ -74,7 +74,7 @@
 :- import_module check_hlds.type_util.
 :- import_module hlds.hlds_pred.
 :- import_module libs.globals.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_mode.
 :- import_module parse_tree.prog_type.
 
@@ -139,9 +139,9 @@ cons_id_to_tag(ModuleInfo, ConsId) = Tag:-
         proc(PredId, ProcId) = unshroud_pred_proc_id(ShroudedPredProcId),
         Tag = deep_profiling_proc_layout_tag(PredId, ProcId)
     ;
-        ConsId = table_io_decl(ShroudedPredProcId),
+        ConsId = table_io_entry_desc(ShroudedPredProcId),
         proc(PredId, ProcId) = unshroud_pred_proc_id(ShroudedPredProcId),
-        Tag = table_io_decl_tag(PredId, ProcId)
+        Tag = table_io_entry_tag(PredId, ProcId)
     ;
         ConsId = tuple_cons(Arity),
         % Tuples do not need a tag. Note that unary tuples are not treated
@@ -151,9 +151,8 @@ cons_id_to_tag(ModuleInfo, ConsId) = Tag:-
         globals.get_target(Globals, TargetLang),
         (
             ( TargetLang = target_c
-            ; TargetLang = target_x86_64
             ; TargetLang = target_erlang
-            ), 
+            ),
             ( Arity = 0 ->
                 Tag = int_tag(0)
             ;
@@ -516,5 +515,5 @@ merge_common_inst_vars(A, A, A).
 
 
 %----------------------------------------------------------------------------%
-:- end_module hlds_code_util.
+:- end_module hlds.hlds_code_util.
 %----------------------------------------------------------------------------%

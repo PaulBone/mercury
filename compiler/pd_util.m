@@ -18,6 +18,7 @@
 
 :- import_module check_hlds.mode_errors.
 :- import_module check_hlds.simplify.
+:- import_module check_hlds.simplify.simplify_tasks.
 :- import_module hlds.hlds_goal.
 :- import_module hlds.hlds_module.
 :- import_module hlds.hlds_pred.
@@ -44,7 +45,7 @@
 
     % Apply simplify.m to the goal.
     %
-:- pred pd_simplify_goal(simplifications::in, hlds_goal::in,
+:- pred pd_simplify_goal(simplify_tasks::in, hlds_goal::in,
     hlds_goal::out, pd_info::in, pd_info::out) is det.
 
     % Apply unique_modes.m to the goal.
@@ -161,6 +162,8 @@
 :- import_module check_hlds.mode_info.
 :- import_module check_hlds.mode_util.
 :- import_module check_hlds.unique_modes.
+:- import_module check_hlds.simplify.simplify_proc.
+:- import_module hlds.goal_form.
 :- import_module hlds.goal_util.
 :- import_module hlds.instmap.
 :- import_module hlds.quantification.
@@ -225,8 +228,8 @@ propagate_constraints(!Goal, !PDInfo) :-
             pd_requantify_goal(NonLocals, !Goal, !PDInfo),
             pd_recompute_instmap_delta(!Goal, !PDInfo),
             rerun_det_analysis(!Goal, !PDInfo),
-            simplify.find_simplifications(no, Globals, Simplifications),
-            pd_simplify_goal(Simplifications, !Goal, !PDInfo)
+            find_simplify_tasks(no, Globals, SimplifyTasks),
+            pd_simplify_goal(SimplifyTasks, !Goal, !PDInfo)
         ;
             % Use Goal0 rather than the output of propagate_constraints_in_goal
             % because constraint propagation can make the quantification
@@ -241,31 +244,18 @@ propagate_constraints(!Goal, !PDInfo) :-
 
 %-----------------------------------------------------------------------------%
 
-pd_simplify_goal(Simplifications, Goal0, Goal, !PDInfo) :-
-    % Construct a simplify_info.
+pd_simplify_goal(SimplifyTasks, !Goal, !PDInfo) :-
     pd_info_get_module_info(!.PDInfo, ModuleInfo0),
     pd_info_get_pred_proc_id(!.PDInfo, proc(PredId, ProcId)),
     pd_info_get_proc_info(!.PDInfo, ProcInfo0),
     pd_info_get_instmap(!.PDInfo, InstMap0),
-    simplify_info_init(ModuleInfo0, PredId, ProcId, ProcInfo0,
-        InstMap0, Simplifications, SimplifyInfo0),
 
-    simplify_process_clause_body_goal(Goal0, Goal,
-        SimplifyInfo0, SimplifyInfo),
+    simplify_goal_update_vars_in_proc(SimplifyTasks, ModuleInfo0, ModuleInfo,
+        PredId, ProcId, ProcInfo0, ProcInfo, InstMap0, !Goal, CostDelta),
 
-    % Deconstruct the simplify_info.
-    simplify_info_get_module_info(SimplifyInfo, ModuleInfo),
-    simplify_info_get_varset(SimplifyInfo, VarSet),
-    simplify_info_get_var_types(SimplifyInfo, VarTypes),
-    simplify_info_get_cost_delta(SimplifyInfo, CostDelta),
-    simplify_info_get_rtti_varmaps(SimplifyInfo, RttiVarMaps),
-    pd_info_get_proc_info(!.PDInfo, ProcInfo1),
-    proc_info_set_varset(VarSet, ProcInfo1, ProcInfo2),
-    proc_info_set_vartypes(VarTypes, ProcInfo2, ProcInfo3),
-    proc_info_set_rtti_varmaps(RttiVarMaps, ProcInfo3, ProcInfo),
+    pd_info_set_module_info(ModuleInfo, !PDInfo),
     pd_info_set_proc_info(ProcInfo, !PDInfo),
-    pd_info_incr_cost_delta(CostDelta, !PDInfo),
-    pd_info_set_module_info(ModuleInfo, !PDInfo).
+    pd_info_incr_cost_delta(CostDelta, !PDInfo).
 
 %-----------------------------------------------------------------------------%
 
@@ -282,14 +272,16 @@ unique_modecheck_goal_live_vars(LiveVars, Goal0, Goal, Errors, !PDInfo) :-
     term.context_init(Context),
     pd_info_get_pred_info(!.PDInfo, PredInfo0),
     pd_info_get_proc_info(!.PDInfo, ProcInfo0),
+    pd_info_get_head_inst_vars(!.PDInfo, HeadInstVars),
     module_info_set_pred_proc_info(PredId, ProcId, PredInfo0, ProcInfo0,
         ModuleInfo0, ModuleInfo1),
 
     % If we perform generalisation, we shouldn't change any called procedures,
     % since that could cause a less efficient version to be chosen.
     MayChangeCalledProc = may_not_change_called_proc,
-    mode_info_init(ModuleInfo1, PredId, ProcId, Context, LiveVars, InstMap0,
-        check_unique_modes, MayChangeCalledProc, ModeInfo0),
+    mode_info_init(ModuleInfo1, PredId, ProcId, Context, LiveVars,
+        HeadInstVars, InstMap0, check_unique_modes, MayChangeCalledProc,
+        ModeInfo0),
 
     unique_modes_check_goal(Goal0, Goal, ModeInfo0, ModeInfo),
     mode_info_get_module_info(ModeInfo, ModuleInfo),

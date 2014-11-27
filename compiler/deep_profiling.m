@@ -58,13 +58,16 @@
 :- import_module hlds.hlds_out.hlds_out_util.
 :- import_module hlds.hlds_rtti.
 :- import_module hlds.instmap.
+:- import_module hlds.make_goal.
 :- import_module hlds.pred_table.
 :- import_module libs.file_util.
 :- import_module libs.globals.
 :- import_module libs.options.
 :- import_module ll_backend.coverage_profiling.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.goal_path.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.prog_type.
 :- import_module parse_tree.set_of_var.
@@ -1804,7 +1807,7 @@ generate_deep_const_unify(ConsId, Var, Goal) :-
     goal_info_init(NonLocals, InstMapDelta, Determinism, purity_pure,
         GoalInfo1),
     goal_info_set_mdprof_inst(goal_is_mdprof_inst, GoalInfo1, GoalInfo),
-    GoalExpr = unify(Var, rhs_functor(ConsId, no, []),
+    GoalExpr = unify(Var, rhs_functor(ConsId, is_not_exist_constr, []),
         (free -> Ground) - (Ground -> Ground),
         construct(Var, ConsId, [], [], construct_statically,
             cell_is_shared, no_construct_sub_info),
@@ -1823,7 +1826,7 @@ generate_deep_cell_unify(Length, ConsId, Args, Var, Goal) :-
         GoalInfo),
     ArgMode = ((free - Ground) -> (Ground - Ground)),
     list.duplicate(Length, ArgMode, ArgModes),
-    GoalExpr = unify(Var, rhs_functor(ConsId, no, Args),
+    GoalExpr = unify(Var, rhs_functor(ConsId, is_not_exist_constr, Args),
         (free -> Ground) - (Ground -> Ground),
         construct(Var, ConsId, Args, ArgModes,
             construct_statically, cell_is_shared, no_construct_sub_info),

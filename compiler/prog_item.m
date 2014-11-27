@@ -26,6 +26,7 @@
 :- import_module libs.globals.
 :- import_module libs.options.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module recompilation.
 :- import_module parse_tree.prog_data.
 
@@ -485,6 +486,11 @@
     ;       pragma_structure_reuse(pragma_info_structure_reuse)
     ;       pragma_require_feature_set(pragma_info_require_feature_set).
 
+    % Check whether a particular `pragma' declaration is allowed
+    % in the interface section of a module.
+    %
+:- func pragma_allowed_in_interface(pragma_type) = bool.
+
 :- type pragma_info_foreign_decl
     --->    pragma_info_foreign_decl(
                 % A foreign language declaration, such as C header code.
@@ -802,6 +808,11 @@
                 prog_var,
                 goal
             )
+    ;       require_switch_arms_detism_expr(
+                prog_var,
+                determinism,
+                goal
+            )
     ;       trace_expr(
                 texpr_compiletime   :: maybe(trace_expr(trace_compiletime)),
                 texpr_runtime       :: maybe(trace_expr(trace_runtime)),
@@ -1056,6 +1067,61 @@ set_mutable_var_thread_local(ThreadLocal, !Attributes) :-
 
 %-----------------------------------------------------------------------------%
 
+pragma_allowed_in_interface(Pragma) = Allowed :-
+    % XXX This comment is out of date.
+    % pragma `obsolete', `terminates', `does_not_terminate'
+    % `termination_info', `check_termination', `reserve_tag' and
+    % `foreign_enum' pragma declarations are supposed to go in the
+    % interface, but all other pragma declarations are implementation details
+    % only, and should go in the implementation.
+
+    (
+        ( Pragma = pragma_foreign_code(_)
+        ; Pragma = pragma_foreign_decl(_)
+        ; Pragma = pragma_foreign_proc_export(_)
+        ; Pragma = pragma_foreign_export_enum(_)
+        ; Pragma = pragma_foreign_proc(_)
+        ; Pragma = pragma_inline(_)
+        ; Pragma = pragma_no_detism_warning(_)
+        ; Pragma = pragma_no_inline(_)
+        ; Pragma = pragma_fact_table(_)
+        ; Pragma = pragma_tabled(_)
+        ; Pragma = pragma_promise_pure(_)
+        ; Pragma = pragma_promise_semipure(_)
+        ; Pragma = pragma_promise_eqv_clauses(_)
+        ; Pragma = pragma_unused_args(_)
+        ; Pragma = pragma_exceptions(_)
+        ; Pragma = pragma_trailing_info(_)
+        ; Pragma = pragma_mm_tabling_info(_)
+        ; Pragma = pragma_require_feature_set(_)
+        ),
+        Allowed = no
+    ;
+        % Note that the parser will strip out `source_file' pragmas anyway,
+        % and that `reserve_tag' and `direct_arg' must be in the interface iff
+        % the corresponding type definition is in the interface. This is
+        % checked in make_hlds.
+        ( Pragma = pragma_foreign_enum(_)
+        ; Pragma = pragma_foreign_import_module(_)
+        ; Pragma = pragma_obsolete(_)
+        ; Pragma = pragma_source_file(_)
+        ; Pragma = pragma_reserve_tag(_)
+        ; Pragma = pragma_type_spec(_)
+        ; Pragma = pragma_termination_info(_)
+        ; Pragma = pragma_termination2_info(_)
+        ; Pragma = pragma_terminates(_)
+        ; Pragma = pragma_does_not_terminate(_)
+        ; Pragma = pragma_check_termination(_)
+        ; Pragma = pragma_structure_sharing(_)
+        ; Pragma = pragma_structure_reuse(_)
+        ; Pragma = pragma_mode_check_clauses(_)
+        ; Pragma = pragma_oisu(_)
+        ),
+        Allowed = yes
+    ).
+
+%-----------------------------------------------------------------------------%
+
 :- type module_foreign_info
     --->    module_foreign_info(
                 used_foreign_languages      :: set(foreign_language),
@@ -1246,4 +1312,5 @@ do_get_item_foreign_include_file(Lang, LiteralOrInclude, !Info) :-
     ).
 
 %-----------------------------------------------------------------------------%
+:- end_module parse_tree.prog_item.
 %-----------------------------------------------------------------------------%

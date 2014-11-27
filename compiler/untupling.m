@@ -106,8 +106,9 @@
 :- import_module hlds.hlds_data.
 :- import_module hlds.hlds_goal.
 :- import_module hlds.hlds_pred.
+:- import_module hlds.make_goal.
 :- import_module hlds.quantification.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_mode.
 :- import_module parse_tree.prog_type.
@@ -418,6 +419,7 @@ create_aux_pred(PredId, ProcId, PredInfo, ProcInfo, Counter,
     proc_info_get_inst_varset(ProcInfo, InstVarSet),
     pred_info_get_markers(PredInfo, Markers),
     pred_info_get_origin(PredInfo, OrigOrigin),
+    proc_info_get_has_parallel_conj(ProcInfo, HasParallelConj),
     pred_info_get_var_name_remap(PredInfo, VarNameRemap),
 
     PredModule = pred_info_module(PredInfo),
@@ -435,7 +437,8 @@ create_aux_pred(PredId, ProcId, PredInfo, ProcInfo, Counter,
     hlds_pred.define_new_pred(Origin, Goal, CallAux, AuxHeadVars, _ExtraArgs,
         InitialAuxInstMap, AuxPredSymName, TVarSet, VarTypes, ClassContext,
         RttiVarMaps, VarSet, InstVarSet, Markers, address_is_not_taken,
-        VarNameRemap, !ModuleInfo, proc(AuxPredId, AuxProcId)),
+        HasParallelConj, VarNameRemap, !ModuleInfo, AuxPredProcId),
+    AuxPredProcId = proc(AuxPredId, AuxProcId),
 
     module_info_pred_proc_info(!.ModuleInfo, AuxPredId, AuxProcId,
         AuxPredInfo, AuxProcInfo).

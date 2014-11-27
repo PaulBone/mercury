@@ -52,8 +52,8 @@
 :- implementation.
 
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data.
 :- import_module mdbcomp.rtti_access.
+:- import_module mdbcomp.sym_name.
 
 :- import_module char.
 :- import_module cord.
@@ -207,7 +207,7 @@ find_number_suffix(String, BeforeNum, Num) :-
     int::in, int::out, list(char)::out) is semidet.
 
 rev_find_number_suffix([RevHead | RevTail], !Num, !Scale, RevRest) :-
-    ( char.digit_to_int(RevHead, Digit) ->
+    ( char.decimal_digit_to_int(RevHead, Digit) ->
         !:Num = !.Num + (!.Scale * Digit),
         !:Scale = !.Scale * 10,
         rev_find_number_suffix(RevTail, !Num, !Scale, RevRest)

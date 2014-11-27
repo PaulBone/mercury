@@ -74,6 +74,7 @@
 :- import_module backend_libs.builtin_ops.
 :- import_module backend_libs.proc_label.
 :- import_module hlds.code_model.
+:- import_module hlds.goal_form.
 :- import_module hlds.goal_path.
 :- import_module hlds.goal_util.
 :- import_module hlds.hlds_clauses.
@@ -98,6 +99,7 @@
 :- import_module ll_backend.unify_gen.
 :- import_module mdbcomp.prim_data.
 :- import_module mdbcomp.program_representation.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_out.
 :- import_module parse_tree.set_of_var.
@@ -335,10 +337,18 @@ generate_proc_code(ModuleInfo0, ConstStructMap, PredId, PredInfo,
         (
             given_trace_level_is_none(TraceLevel) = no
         ;
-            HasParConj = yes,
-            Parallel = yes
+            HasParConj = has_parallel_conj
         )
     ->
+        (
+            HasParConj = has_parallel_conj,
+            % In sequential grades, any parallel conjunctions should have been
+            % converted to sequential conjunctions by parallel_to_plain_conj.m.
+            expect(unify(Parallel, yes), $module, $pred,
+                "found parallel conjunction in non-parallel grade")
+        ;
+            HasParConj = has_no_parallel_conj
+        ),
         fill_goal_id_slots_in_proc(ModuleInfo, ContainingGoalMap,
             ProcInfo1, ProcInfo),
         MaybeContainingGoalMap = yes(ContainingGoalMap)
@@ -418,8 +428,8 @@ generate_proc_code(ModuleInfo0, ConstStructMap, PredId, PredInfo,
         % reserved a stack slot for storing the value of maxfr; if we didn't,
         % a retry command in the debugger from a point in the middle of this
         % procedure will do the wrong thing.
-        proc_info_get_need_maxfr_slot(ProcInfo, HaveMaxfrSlot),
-        expect(unify(HaveMaxfrSlot, yes), $module, $pred,
+        proc_info_get_needs_maxfr_slot(ProcInfo, NeedsMaxfrSlot),
+        expect(unify(NeedsMaxfrSlot, needs_maxfr_slot), $module, $pred,
             "should have reserved a slot for maxfr, but didn't")
     ;
         true
@@ -492,7 +502,7 @@ generate_proc_code(ModuleInfo0, ConstStructMap, PredId, PredInfo,
             ( map.search(TableStructMap, PredProcId, _TableStructInfo) ->
                 unexpected($module, $pred, "conflicting kinds of tabling")
             ;
-                MaybeTableInfo = yes(proc_table_io_decl(TableIOInfo))
+                MaybeTableInfo = yes(proc_table_io_entry(TableIOInfo))
             )
         ),
         proc_info_get_oisu_kind_fors(ProcInfo, OISUKindFors),

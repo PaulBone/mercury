@@ -55,7 +55,9 @@
 :- import_module hlds.hlds_data.
 :- import_module hlds.hlds_rtti.
 :- import_module libs.globals.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module ml_backend.ml_closure_gen.
 :- import_module ml_backend.ml_code_util.
 :- import_module ml_backend.ml_gen_info.
@@ -476,7 +478,7 @@ gen_type_info_defn(ModuleInfo, RttiTypeInfo, Name, RttiId, !GlobalData) :-
                 % as well as the code for handling pseudo type-infos below.
                 %
                 InitializerArgs = [InitRttiName, InitCastRttiDatasArray]
-            ; 
+            ;
                 InitializerArgs = [
                     InitRttiName,
                     gen_init_int(list.length(ArgTypes)),
@@ -552,7 +554,7 @@ gen_pseudo_type_info_defn(ModuleInfo, RttiPseudoTypeInfo, Name, RttiId,
             module_info_get_name(ModuleInfo, ModuleName),
             module_info_get_globals(ModuleInfo, Globals),
             globals.get_target(Globals, TargetLang),
-            
+
             InitRttiName = gen_init_rtti_name(ModuleName, RttiTypeCtor,
                 type_ctor_type_ctor_info),
             InitCastRttiDatasArray = gen_init_cast_rtti_datas_array(
@@ -571,7 +573,7 @@ gen_pseudo_type_info_defn(ModuleInfo, RttiPseudoTypeInfo, Name, RttiId,
                     InitCastRttiDatasArray
                 ]
             ),
-            Initializer = init_struct(mlds_rtti_type(item_type(RttiId)), 
+            Initializer = init_struct(mlds_rtti_type(item_type(RttiId)),
                 InitializerArgs),
             rtti_entity_name_and_init_to_defn(Name, RttiId, Initializer,
                 !GlobalData),

@@ -19,8 +19,8 @@
 % should never explicitly import this module. The interface for this module
 % does not get included in the Mercury library reference manual.
 %
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module par_builtin.
 :- interface.
@@ -108,7 +108,7 @@
     %
 :- impure pred lc_default_num_contexts(int::out) is det.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 % The following predicates are intended to be used as conditions to decide
 % whether the conjuncts of a conjunction should be executed in parallel or
@@ -124,15 +124,6 @@
     %
 :- impure pred evaluate_parallelism_condition is semidet.
 
-    % num_os_threads(Num)
-    %
-    % Num is the number of OS threads the runtime is configured to use, which
-    % the runtime records in the variable MR_num_threads. This is the value
-    % given by the user as the argument of the -P option in the MERCURY_OPTIONS
-    % environment variable.
-    %
-:- pred num_os_threads(int::out) is det.
-
     % Close the file that was used to log the parallel condition decisions.
     %
     % The parallel condition stats file is opened the first time it is
@@ -144,8 +135,8 @@
     %
 :- pred par_cond_close_stats_file(io::di, io::uo) is det.
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
@@ -158,7 +149,7 @@
 :- pragma foreign_type("C#", future(T), "object").
 :- pragma foreign_type("Java", future(T), "java.lang.Object").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma foreign_proc("C",
     new_future(Name::in, Future::uo),
@@ -204,7 +195,7 @@
     MR_fatal_error(""evaluate_parallelism_condition called"");
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % `wait_resume' is the piece of code we jump to when a thread suspended
     % on a future resumes after the future is signalled.
@@ -275,7 +266,7 @@ INIT mercury_sys_init_par_builtin_modules
     #endif
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma foreign_type("C", loop_control, "MR_LoopControl *",
     [can_pass_as_mercury_type]).
@@ -504,20 +495,7 @@ mercury_sys_init_lc_write_out_proc_statics(FILE *deep_fp,
     NumContexts = MR_num_contexts_per_loop_control;
 ").
 
-%-----------------------------------------------------------------------------%
-
-:- pragma foreign_proc("C",
-    num_os_threads(NThreads::out),
-    [will_not_call_mercury, will_not_throw_exception, thread_safe,
-        promise_pure],
-"
-    /*
-    ** MR_num_threads is available in all grades. Although it won't make sense
-    ** for non-parallel grades, it will still reflect the value configured by
-    ** the user.
-    */
-    NThreads = MR_num_threads
-").
+%---------------------------------------------------------------------------%
 
 :- pragma foreign_proc("C",
     par_cond_close_stats_file(_IO0::di, _IO::uo),
@@ -531,7 +509,7 @@ mercury_sys_init_lc_write_out_proc_statics(FILE *deep_fp,
 #endif
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma foreign_code("Erlang",
 "
@@ -542,5 +520,5 @@ lc_wait_free_slot_2_p_0(_) ->
     throw(""lc_wait_free_slot is unavailable in this grade"").
 ").
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

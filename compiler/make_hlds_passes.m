@@ -12,7 +12,7 @@
 :- import_module hlds.hlds_module.
 :- import_module hlds.hlds_pred.
 :- import_module hlds.make_hlds.qual_info.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.equiv_type.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.module_qual.
@@ -118,6 +118,7 @@
 :- import_module libs.file_util.
 :- import_module libs.globals.
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
 :- import_module parse_tree.builtin_lib_types.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_mode.
@@ -786,9 +787,7 @@ add_pass_1_mutable(Item, Status, !ModuleInfo, !Specs) :-
             WantLockDecls = no,
             WantUnsafeAccessDecls = no
         ;
-            ( CompilationTarget = target_il
-            ; CompilationTarget = target_x86_64
-            ),
+            CompilationTarget = target_il,
             % Not supported yet.
             WantPreInitDecl = yes,
             WantLockDecls = yes,
@@ -1045,7 +1044,8 @@ add_pass_2_initialise(ItemInitialise, Status, !ModuleInfo, !Specs) :-
     ( ImportStatus = status_exported ->
         (
             Origin = user,
-            error_is_exported(Context, "`initialise' declaration", !Specs)
+            error_is_exported(Context,
+                [decl("initialise"), words("declaration")], !Specs)
         ;
             Origin = compiler(Details),
             (
@@ -1079,7 +1079,8 @@ add_pass_2_finalise(ItemFinalise, Status, !ModuleInfo, !Specs) :-
     ( ImportStatus = status_exported ->
         (
             Origin = user,
-            error_is_exported(Context, "`finalise' declaration", !Specs)
+            error_is_exported(Context,
+                [decl("finalise"), words("declaration")], !Specs)
         ;
             % There are no source-to-source transformations that introduce
             % finalise declarations.
@@ -1099,7 +1100,8 @@ add_pass_2_mutable(ItemMutable, Status, !ModuleInfo, !Specs) :-
         MutAttrs, _MutVarset, Context, _SeqNum),
     Status = item_status(ImportStatus, _),
     ( ImportStatus = status_exported ->
-        error_is_exported(Context, "`mutable' declaration", !Specs)
+        error_is_exported(Context,
+            [decl("mutable"), words("declaration")], !Specs)
     ;
         true
     ),
@@ -1165,9 +1167,7 @@ add_pass_2_mutable(ItemMutable, Status, !ModuleInfo, !Specs) :-
                 IOStateInterface = no
             )
         ;
-            ( CompilationTarget = target_il
-            ; CompilationTarget = target_x86_64
-            ),
+            CompilationTarget = target_il,
             Pieces = [words("Error: foreign_name mutable attribute not yet"),
                 words("implemented for the"),
                 fixed(compilation_target_string(CompilationTarget)),
@@ -1191,7 +1191,8 @@ add_pass_2_mutable(ItemMutable, Status, !ModuleInfo, !Specs) :-
             InvalidInstPieces = [
                 words("Error: the inst"),
                 quote(InstStr),
-                words("is not a valid inst for a mutable declaration.")
+                words("is not a valid inst for a"),
+                decl("mutable"), words("declaration.")
             ],
             % XXX We could provide more information about exactly *why* the
             % inst was not valid here as well.
@@ -1333,7 +1334,8 @@ add_pass_3_clause(ItemClause, Status, !ModuleInfo, !QualInfo, !Specs) :-
             UnqualifiedPredName = unqualify_name(PredName),
             ClauseId = simple_call_id_to_string(PredOrFunc,
                 unqualified(UnqualifiedPredName) / Arity),
-            error_is_exported(Context, "clause for " ++ ClauseId, !Specs)
+            error_is_exported(Context, [words("clause for " ++ ClauseId)],
+                !Specs)
         ;
             Origin = compiler(Details),
             (
@@ -1481,8 +1483,9 @@ add_pass_3_initialise(ItemInitialise, Status, !ModuleInfo, !QualInfo,
     (
         PredIds = [],
         Pieces = [words("Error:"), sym_name_and_arity(SymName/Arity),
-            words("used in initialise declaration"),
-            words("does not have a corresponding pred declaration."), nl],
+            words("used in"), decl("initialise"), words("declaration"),
+            words("does not have a corresponding"),
+            decl("pred"), words("declaration."), nl],
         Msg = simple_msg(Context, [always(Pieces)]),
         Spec = error_spec(severity_error, phase_parse_tree_to_hlds, [Msg]),
         !:Specs = [Spec | !.Specs]
@@ -1599,9 +1602,7 @@ add_pass_3_initialise(ItemInitialise, Status, !ModuleInfo, !QualInfo,
             MaybeExportLang = yes(lang_erlang)
         ;
             % Untested.
-            ( CompilationTarget = target_il
-            ; CompilationTarget = target_x86_64
-            ),
+            CompilationTarget = target_il,
             MaybeExportLang = no
         ),
         (
@@ -1660,8 +1661,9 @@ add_pass_3_finalise(ItemFinalise, Status, !ModuleInfo, !QualInfo, !Specs) :-
     (
         PredIds = [],
         Pieces = [words("Error:"), sym_name_and_arity(SymName/Arity),
-            words("used in finalise declaration"),
-            words("does not have a corresponding pred declaration."), nl],
+            words("used in"), decl("finalise"), words("declaration"),
+            words("does not have a corresponding"),
+            decl("pred"), words("declaration."), nl],
         Msg = simple_msg(Context, [always(Pieces)]),
         Spec = error_spec(severity_error, phase_parse_tree_to_hlds, [Msg]),
         !:Specs = [Spec | !.Specs]
@@ -1731,8 +1733,8 @@ add_pass_3_finalise(ItemFinalise, Status, !ModuleInfo, !QualInfo, !Specs) :-
                     !ModuleInfo, !QualInfo, !Specs)
             ;
                 Pieces = [words("Error:"), sym_name_and_arity(SymName/Arity),
-                    words("used in finalise declaration"),
-                    words("has invalid signature."), nl],
+                    words("used in"), decl("finalise"),
+                    words("declaration has invalid signature."), nl],
                 Msg = simple_msg(Context, [always(Pieces)]),
                 Spec = error_spec(severity_error, phase_parse_tree_to_hlds,
                     [Msg]),
@@ -1741,8 +1743,9 @@ add_pass_3_finalise(ItemFinalise, Status, !ModuleInfo, !QualInfo, !Specs) :-
         ;
             TailPredIds = [_ | _],
             Pieces = [words("Error:"), sym_name_and_arity(SymName/Arity),
-                words("used in finalise declaration"),
-                words("has multiple pred declarations."), nl],
+                words("used in"), decl("finalise"), words("declaration"),
+                words("has multiple"), decl("pred"), words("declarations."),
+                nl],
             Msg = simple_msg(Context, [always(Pieces)]),
             Spec = error_spec(severity_error, phase_parse_tree_to_hlds, [Msg]),
             !:Specs = [Spec | !.Specs]
@@ -1754,9 +1757,7 @@ add_pass_3_finalise(ItemFinalise, Status, !ModuleInfo, !QualInfo, !Specs) :-
 
 target_lang_to_foreign_export_lang(CompilationTarget) = ExportLang :-
     (
-        ( CompilationTarget = target_c
-        ; CompilationTarget = target_x86_64
-        ),
+        CompilationTarget = target_c,
         ExportLang = lang_c
     ;
         CompilationTarget = target_erlang,
@@ -1846,9 +1847,7 @@ add_pass_3_mutable(ItemMutable, Status, !ModuleInfo, !QualInfo, !Specs) :-
             add_erlang_mutable_preds(ItemMutable, TargetMutableName,
                 Status, _, !ModuleInfo, !QualInfo, !Specs)
         ;
-            ( CompilationTarget = target_il
-            ; CompilationTarget = target_x86_64
-            )
+            CompilationTarget = target_il
             % Not supported yet.
         )
     ;
@@ -3117,7 +3116,7 @@ add_stratified_pred(PragmaName, Name, Arity, Context, !ModuleInfo, !Specs) :-
         module_info_set_stratified_preds(StratPredIds, !ModuleInfo)
     ;
         PredIds = [],
-        DescPieces = [quote(":- pragma " ++ PragmaName), words("declaration")],
+        DescPieces = [pragma_decl(PragmaName), words("declaration")],
         undefined_pred_or_func_error(Name, Arity, Context, DescPieces, !Specs)
     ).
 
@@ -3162,7 +3161,7 @@ do_add_pred_marker(PragmaName, Name, Arity, Status, MustBeExported, Context,
         module_info_set_predicate_table(PredTable, !ModuleInfo)
     ;
         PredIds = [],
-        DescPieces = [quote(":- pragma " ++ PragmaName), words("declaration")],
+        DescPieces = [pragma_decl(PragmaName), words("declaration")],
         undefined_pred_or_func_error(Name, Arity, Context, DescPieces, !Specs)
     ).
 
@@ -3193,7 +3192,7 @@ module_mark_as_external(PredName, Arity, Context, !ModuleInfo, !Specs) :-
     ;
         PredIds = [],
         undefined_pred_or_func_error(PredName, Arity, Context,
-            [quote(":- external"), words("declaration")], !Specs)
+            [decl("external"), words("declaration")], !Specs)
     ).
 
 :- pred module_mark_preds_as_external(list(pred_id)::in,
@@ -3282,7 +3281,7 @@ maybe_check_field_access_function(ModuleInfo, FuncName, FuncArity, Status,
     ).
 
 :- pred check_field_access_function(module_info::in, field_access_type::in,
-    ctor_field_name::in, sym_name::in, arity::in, import_status::in,
+    sym_name::in, sym_name::in, arity::in, import_status::in,
     prog_context::in, list(error_spec)::in, list(error_spec)::out) is det.
 
 check_field_access_function(ModuleInfo, _AccessType, FieldName, FuncName,

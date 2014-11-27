@@ -1,10 +1,10 @@
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % vim: ft=mercury ts=4 sw=4 et wm=0 tw=0
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % Copyright (C) 2006-2007 The University of Melbourne.
 % This file may only be copied under the terms of the GNU Library General
 % Public License - see the file COPYING.LIB in the Mercury distribution.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % 
 % File: rtree.m.
 % Main author: gjd.
@@ -21,15 +21,15 @@
 % corresponding to "square" regions in one, two and three dimensional spaces
 % respectively.
 % 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module rtree.
 :- interface.
 
 :- import_module list.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- type rtree(K, V).
 
@@ -72,20 +72,20 @@
     func bounding_region_size(K, K) = float
 ].
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
     
     % Initialize an empty rtree.
     %
-:- func rtree.init = (rtree(K, V)::uo) is det <= region(K).
+:- func init = (rtree(K, V)::uo) is det <= region(K).
 
     % Succeeds iff the given rtree is empty.
     % 
-:- pred rtree.is_empty(rtree(K, V)::in) is semidet.
+:- pred is_empty(rtree(K, V)::in) is semidet.
 
     % Insert a new key and corresponding value into an rtree.
     %
-:- func rtree.insert(K, V, rtree(K, V)) = rtree(K, V) <= region(K).
-:- pred rtree.insert(K::in, V::in, rtree(K, V)::in, rtree(K, V)::out)
+:- func insert(K, V, rtree(K, V)) = rtree(K, V) <= region(K).
+:- pred insert(K::in, V::in, rtree(K, V)::in, rtree(K, V)::out)
     is det <= region(K).
 
     % Delete a key-value pair from an rtree.
@@ -94,16 +94,16 @@
     %
     % Fails if the key-value pair is not in the tree.
     %
-:- pred rtree.delete(K::in, V::in, rtree(K, V)::in, rtree(K, V)::out) 
+:- pred delete(K::in, V::in, rtree(K, V)::in, rtree(K, V)::out) 
     is semidet <= region(K).
 
     % Search for all values with keys that intersect the query key.
     % 
-:- func rtree.search_intersects(rtree(K, V), K) = list(V) <= region(K).
+:- func search_intersects(rtree(K, V), K) = list(V) <= region(K).
 
     % Search for all values with keys that contain the query key.
     %
-:- func rtree.search_contains(rtree(K, V), K) = list(V) <= region(K).
+:- func search_contains(rtree(K, V), K) = list(V) <= region(K).
 
     % search_general(KTest, VTest, T) = V.
     %
@@ -120,7 +120,7 @@
     %   search_contains(T, K, Vs)
     %       <=> search_general(contains(K), true, T, Vs)
     %
-:- func rtree.search_general(pred(K)::in(pred(in) is semidet),
+:- func search_general(pred(K)::in(pred(in) is semidet),
     pred(V)::in(pred(in) is semidet), rtree(K, V)::in) = (list(V)::out)
     is det.
 
@@ -138,8 +138,8 @@
     % If there exist multiple key-value pairs that satisfy the above 
     % conditions, then one of the candidates is chosen arbitrarily. 
     % 
-:- pred rtree.search_first(pred(K, L), pred(V, L), rtree(K, V), L, V, L).
-:- mode rtree.search_first(pred(in, out) is semidet, 
+:- pred search_first(pred(K, L), pred(V, L), rtree(K, V), L, V, L).
+:- mode search_first(pred(in, out) is semidet, 
     pred(in, out) is semidet, in, in, out, out) is semidet.
 
     % search_general_fold(KTest, VPred, T, !A).
@@ -148,27 +148,27 @@
     % KTest(K).  The same assumptions for KTest from search_general apply
     % here.
     %
-:- pred rtree.search_general_fold(pred(K), pred(K, V, A, A), rtree(K, V), 
+:- pred search_general_fold(pred(K), pred(K, V, A, A), rtree(K, V), 
     A, A).
-:- mode rtree.search_general_fold(pred(in) is semidet, 
+:- mode search_general_fold(pred(in) is semidet, 
     pred(in, in, in, out) is det, in, in, out) is det.
-:- mode rtree.search_general_fold(pred(in) is semidet,
+:- mode search_general_fold(pred(in) is semidet,
     pred(in, in, di, uo) is det, in, di, uo) is det.
 
     % Perform a traversal of the rtree, applying an accumulator predicate
     % for each key-value pair.
     % 
-:- pred rtree.fold(pred(K, V, A, A), rtree(K, V), A, A).
-:- mode rtree.fold(pred(in, in, in, out) is det, in, in, out) is det.
-:- mode rtree.fold(pred(in, in, di, uo) is det, in, di, uo) is det.
-:- mode rtree.fold(pred(in, in, in, out) is semidet, in, in, out)
+:- pred fold(pred(K, V, A, A), rtree(K, V), A, A).
+:- mode fold(pred(in, in, in, out) is det, in, in, out) is det.
+:- mode fold(pred(in, in, di, uo) is det, in, di, uo) is det.
+:- mode fold(pred(in, in, in, out) is semidet, in, in, out)
     is semidet.
 
     % Apply a transformation predicate to all the values in an rtree.
     %
-:- pred rtree.map_values(pred(K, V, W), rtree(K, V), rtree(K, W)).
-:- mode rtree.map_values(pred(in, in, out) is det, in, out) is det.
-:- mode rtree.map_values(pred(in, in, out) is semidet, in, out)
+:- pred map_values(pred(K, V, W), rtree(K, V), rtree(K, W)).
+:- mode map_values(pred(in, in, out) is det, in, out) is det.
+:- mode map_values(pred(in, in, out) is semidet, in, out)
     is semidet.
 
 %---------------------------------------------------------------------------%
@@ -262,22 +262,22 @@
     ;       min4_third 
     ;       min4_fourth.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Creation
 %
 
 rtree.init = empty.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Test for emptiness
 %
 
 rtree.is_empty(empty).
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Insertion
 %
@@ -326,7 +326,7 @@ insert_2(Node, K, V, T) :-
     split_4_node(Node, K0, T0, K1, T1), 
     insert_2(two(K0, T0, K1, T1), K, V, T).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Choosing what subtree to insert a new node into
 %
@@ -415,7 +415,7 @@ include_min(D1, D2, A1, A2, R1, R2, R3) :-
         R3 = R2
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
     
     % Split the child (if a 4 node) and insert into T0.
     %
@@ -490,7 +490,7 @@ insert_and_split_child3(K0, T0, K1, T1, K2, T2, K, V, T) :-
         )
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Node splitting
 %
@@ -544,8 +544,8 @@ split_4_node(Four, K4, T4, K5, T5) :-
         T5 = two(K1, T1, K2, T2)
     ).
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Deletion
 %    
@@ -662,7 +662,7 @@ delete_2(four(K0, T0, K1, T1, K2, T2, K3, T3), K, V, Depth, DK, DT, Info) :-
             Info)
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pred try_deletion2(K::in, rtree_2(K, V)::in, K::in, rtree_2(K, V)::in,
     K::in, V::in, int::in, K::out, rtree_2(K, V)::out, delete_info(K, V)::out)
@@ -726,7 +726,7 @@ try_deletion4(K0, T0, K1, T1, K2, T2, K3, T3, K, V, D, DK, DT, DI) :-
         DK  = bounding_region(TK, K23)
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
     
     % Given a list of deleted trees (with their bounding regions), 
     % (re)insert the trees back into the main tree at the specified depth.
@@ -859,7 +859,7 @@ insert_tree_and_split_child3(K0, T0, K1, T1, K2, T2, K, S, D0, D, T) :-
         )
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % search_intersects
 %
@@ -1387,7 +1387,7 @@ search_general_fold_subtree(K, T, KTest, VPred, !Acc) :-
         true
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Fold
 %
@@ -1436,7 +1436,7 @@ fold_subtree(P, K, T, !Acc) :-
         fold_2(P, T, !Acc)
     ).
 
-%----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % map_values
 %
@@ -1532,13 +1532,13 @@ minimum_of_four(A, B, C, D) = Min :-
         Min = min4_fourth
     ).
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % Pre-defined regions
 %
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- instance region(box3d) where [
     pred(intersects/2) is box3d_intersects, 
@@ -1548,7 +1548,7 @@ minimum_of_four(A, B, C, D) = Min :-
     func(bounding_region_size/2) is box3d_bounding_region_volume
 ].
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pred box3d_intersects(box3d::in, box3d::in) is semidet.
 
@@ -1585,14 +1585,14 @@ box3d_contains(A, B) :-
     AZMin >= BZMin, 
     AZMax =< BZMax.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- func box3d_volume(box3d) = float.
 
 box3d_volume(Box) = (XMax - XMin) * (YMax - YMin) * (ZMax - ZMin) :-
     Box = box3d(XMin, XMax, YMin, YMax, ZMin, ZMax).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- func box3d_bounding_region(box3d, box3d) = box3d.
 
@@ -1607,7 +1607,7 @@ box3d_bounding_region(A, B) = C :-
     CZMax = max(AZMax, BZMax), 
     C = box3d(CXMin, CXMax, CYMin, CYMax, CZMin, CZMax).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- func box3d_bounding_region_volume(box3d, box3d) = float.
 
@@ -1622,7 +1622,7 @@ box3d_bounding_region_volume(A, B) = Volume :-
     ZMax = max(AZMax, BZMax), 
     Volume = (XMax - XMin) * (YMax - YMin) * (ZMax - ZMin).
     
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- instance region(box) where [
     pred(intersects/2) is box_intersects, 
@@ -1632,7 +1632,7 @@ box3d_bounding_region_volume(A, B) = Volume :-
     func(bounding_region_size/2) is box_bounding_region_area
 ].
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pred box_intersects(box::in, box::in) is semidet.
 
@@ -1693,7 +1693,7 @@ box_bounding_region_area(A, B) = (XMax - XMin) * (YMax - YMin) :-
     YMin = min(AYMin, BYMin), 
     YMax = max(AYMax, BYMax).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- instance region(interval) where [
     pred(intersects/2) is interval_intersects, 
@@ -1703,7 +1703,7 @@ box_bounding_region_area(A, B) = (XMax - XMin) * (YMax - YMin) :-
     func(bounding_region_size/2) is interval_bounding_region_length
 ].
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pred interval_intersects(interval::in, interval::in) is semidet.
 
@@ -1726,13 +1726,13 @@ interval_contains(A, B) :-
     AMin >= BMin, 
     AMax =< BMax.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- func interval_length(interval) = float.
 
 interval_length(interval(Max, Min)) = Max - Min.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- func interval_bounding_region(interval, interval) = interval.
 
@@ -1740,7 +1740,7 @@ interval_bounding_region(A, B) = interval(min(AMin, BMin), max(AMax, BMax)) :-
     A = interval(AMin, AMax),
     B = interval(BMin, BMax).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- func interval_bounding_region_length(interval, interval) = float.
 
@@ -1748,6 +1748,6 @@ interval_bounding_region_length(A, B) = max(AMax, BMax) - min(AMin, BMin) :-
     A = interval(AMin, AMax), 
     B = interval(BMin, BMax).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 :- end_module rtree.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

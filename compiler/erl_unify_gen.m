@@ -83,7 +83,7 @@
 :- import_module erl_backend.erl_call_gen.
 :- import_module hlds.hlds_module.
 :- import_module hlds.hlds_pred.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 
 :- import_module int.
@@ -334,7 +334,7 @@ cons_id_to_expr(ConsId, Args, DummyVarReplacement, Expr, !Info) :-
     ;
         ( ConsId = tabling_info_const(_)
         ; ConsId = deep_profiling_proc_layout(_)
-        ; ConsId = table_io_decl(_)
+        ; ConsId = table_io_entry_desc(_)
         ),
         sorry($module, $pred,
             "tabling and deep profiling not supported on Erlang backend")

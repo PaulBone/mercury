@@ -1,10 +1,10 @@
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % vim: ts=4 sw=4 et ft=mercury
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % Copyright (C) 2007, 2009 The University of Melbourne
 % This file may only be copied under the terms of the GNU Library General
 % Public License - see the file COPYING.LIB in the Mercury distribution.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % File: bit_buffer.m.
 % Main author: stayl.
 % Stability: low.
@@ -20,8 +20,8 @@
 % a small burden on the programmer to ensure the correctness of his
 % code that would otherwise be assured by the compiler.)
 %
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module bit_buffer.
 :- interface.
@@ -48,7 +48,7 @@
 :- instance stream.output(error_stream, error_state).
 :- instance stream.writer(error_stream, bitmap.slice, error_state).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
@@ -171,7 +171,7 @@ new_buffer_2(BM, Pos, Size, UseStream, Stream, State, ReadStatus) =
 :- pragma foreign_proc("C",
     new_buffer_2(BM::in, Pos::in, Size::in, UseStream::in,
         Stream::in, State::in, ReadStatus::in) = (Buffer::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "{
     MR_incr_hp_type_msg(Buffer, ML_BitBuffer, MR_ALLOC_ID,
         ""bit_buffer.bit_buffer/3"");
@@ -209,56 +209,56 @@ Buffer ^ read_status = Buffer ^ mer_read_status.
 
 :- pragma foreign_proc("C",
     bitmap(Buffer::bit_buffer_ui) = (BM::bitmap_uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     BM = Buffer->ML_bit_buffer_bitmap;
 ").
 
 :- pragma foreign_proc("C",
     pos(Buffer::bit_buffer_ui) = (Pos::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Pos = Buffer->ML_bit_buffer_pos;
 ").
 
 :- pragma foreign_proc("C",
     size(Buffer::bit_buffer_ui) = (Size::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Size = Buffer->ML_bit_buffer_size;
 ").
 
 :- pragma foreign_proc("C",
     use_stream(Buffer::bit_buffer_ui) = (UseStream::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     UseStream = Buffer->ML_bit_buffer_use_stream;
 ").
 
 :- pragma foreign_proc("C",
     stream(Buffer::bit_buffer_ui) = (Stream::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Stream = Buffer->ML_bit_buffer_stream;
 ").
 
 :- pragma foreign_proc("C",
     state(Buffer::bit_buffer_ui) = (State::uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     State = Buffer->ML_bit_buffer_state;
 ").
 
 :- pragma foreign_proc("C",
     filled_bitmaps(Buffer::bit_buffer_ui) = (FilledBMs::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     FilledBMs = Buffer->ML_bit_buffer_filled_bitmaps;
 ").
 
 :- pragma foreign_proc("C",
     read_status(Buffer::bit_buffer_ui) = (ReadStatus::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     ReadStatus = Buffer->ML_bit_buffer_read_status;
 ").
@@ -277,7 +277,7 @@ set_all(BM, Pos, Size, State, FilledBMs, !Buffer) :-
 :- pragma foreign_proc("C",
     set_all(BM::bitmap_di, Pos::in, Size::in, State::di, FilledBMs::in,
         Buffer0::bit_buffer_di, Buffer::bit_buffer_uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Buffer = Buffer0;
     Buffer->ML_bit_buffer_bitmap = BM;
@@ -298,7 +298,7 @@ set_bitmap(BM, Pos, !Buffer) :-
 :- pragma foreign_proc("C",
     set_bitmap(BM::bitmap_di, Pos::in,
         Buffer0::bit_buffer_di, Buffer::bit_buffer_uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Buffer = Buffer0;
     Buffer->ML_bit_buffer_bitmap = BM;
@@ -314,7 +314,7 @@ set_state(State, !Buffer) :-
 
 :- pragma foreign_proc("C",
     set_state(State::di, Buffer0::bit_buffer_di, Buffer::bit_buffer_uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Buffer = Buffer0;
     Buffer->ML_bit_buffer_state = State;
@@ -330,7 +330,7 @@ set_use_stream(UseStream, !Buffer) :-
 :- pragma foreign_proc("C",
     set_use_stream(UseStream::in,
         Buffer0::bit_buffer_di, Buffer::bit_buffer_uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Buffer = Buffer0;
     Buffer->ML_bit_buffer_use_stream = UseStream;
@@ -346,11 +346,11 @@ set_read_status(ReadStatus, !Buffer) :-
 :- pragma foreign_proc("C",
     set_read_status(ReadStatus::in,
         Buffer0::bit_buffer_di, Buffer::bit_buffer_uo),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Buffer = Buffer0;
     Buffer->ML_bit_buffer_read_status = ReadStatus;
 ").
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

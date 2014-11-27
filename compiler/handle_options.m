@@ -257,7 +257,6 @@ check_option_values(!OptionTable, Target, GC_Method, TagsMethod,
         Target = TargetPrime
     ;
         Target = target_c,     % dummy
-        % XXX When the x86_64 backend is documented modify the line below.
         add_error("Invalid target option " ++
             "(must be `c', `il', `java', 'csharp', or `erlang')",
             !Errors)
@@ -272,7 +271,7 @@ check_option_values(!OptionTable, Target, GC_Method, TagsMethod,
     ;
         GC_Method = gc_none,   % dummy
         add_error("Invalid GC option (must be `none', " ++
-            "`conservative', `boehm', `hgc', `mps', `accurate', " ++
+            "`conservative', `boehm', `hgc', `accurate', " ++
             "or `automatic')",
             !Errors)
     ),
@@ -375,7 +374,7 @@ check_option_values(!OptionTable, Target, GC_Method, TagsMethod,
     ;
         map.lookup(!.OptionTable, ssdb_trace_level, SSTrace),
         map.lookup(!.OptionTable, source_to_source_debug, SSDB),
-        ( 
+        (
             SSTrace = string(SSTraceStr),
             SSDB = bool(IsInSSDebugGrade),
             convert_ssdb_trace_level(SSTraceStr, IsInSSDebugGrade, SSTL)
@@ -485,7 +484,7 @@ check_option_values(!OptionTable, Target, GC_Method, TagsMethod,
     ;
         C_CompilerType = cc_unknown,   % dummy
         add_error("Invalid argument to option `--c-compiler-type'\n" ++
-            "\t(must be `gcc', `lcc', `clang', 'msvc', or `unknown').",
+            "\t(must be `gcc', `clang', 'msvc', or `unknown').",
             !Errors)
     ),
 
@@ -582,8 +581,8 @@ check_option_values(!OptionTable, Target, GC_Method, TagsMethod,
         SystemEnvType0 = string(SystemEnvTypeStr),
         ( if SystemEnvTypeStr = "" then
             SystemEnvTypePrime = HostEnvType
-        else 
-            convert_env_type(SystemEnvTypeStr, SystemEnvTypePrime) 
+        else
+            convert_env_type(SystemEnvTypeStr, SystemEnvTypePrime)
         )
     ->
         SystemEnvType = SystemEnvTypePrime
@@ -888,7 +887,6 @@ convert_options_to_globals(OptionTable0, Target, GC_Method, TagsMethod0,
         ( Target = target_c
         ; Target = target_csharp
         ; Target = target_java
-        ; Target = target_x86_64
         ; Target = target_erlang
         )
     ),
@@ -979,7 +977,6 @@ convert_options_to_globals(OptionTable0, Target, GC_Method, TagsMethod0,
     ;
         ( Target = target_c
         ; Target = target_il
-        ; Target = target_x86_64
         ; Target = target_erlang
         )
     ),
@@ -1030,7 +1027,6 @@ convert_options_to_globals(OptionTable0, Target, GC_Method, TagsMethod0,
     ;
         ( Target = target_c
         ; Target = target_il
-        ; Target = target_x86_64
         ; Target = target_java
         ; Target = target_csharp
         )
@@ -1044,19 +1040,6 @@ convert_options_to_globals(OptionTable0, Target, GC_Method, TagsMethod0,
             !Globals)
     ;
         true
-    ),
-
-    % Generating x86_64 assembler implies '--no-use-local-vars'
-    (
-        Target = target_x86_64,
-        globals.set_option(use_local_vars, bool(no), !Globals)
-    ;
-        ( Target = target_c
-        ; Target = target_il
-        ; Target = target_csharp
-        ; Target = target_java
-        ; Target = target_erlang
-        )
     ),
 
     % Using trail segments implies the use of the trail.
@@ -1455,7 +1438,6 @@ convert_options_to_globals(OptionTable0, Target, GC_Method, TagsMethod0,
     ;
         ( Target = target_csharp
         ; Target = target_java
-        ; Target = target_x86_64
         ; Target = target_il
         ; Target = target_erlang
         ),
@@ -1487,8 +1469,7 @@ convert_options_to_globals(OptionTable0, Target, GC_Method, TagsMethod0,
         ; Target = target_java
         )
     ;
-        ( Target = target_x86_64
-        ; Target = target_il
+        ( Target = target_il
         ; Target = target_erlang
         ),
         globals.set_option(allow_multi_arm_switches, bool(no), !Globals)
@@ -1628,7 +1609,6 @@ convert_options_to_globals(OptionTable0, Target, GC_Method, TagsMethod0,
                 ( Target = target_c
                 ; Target = target_csharp
                 ; Target = target_java
-                ; Target = target_x86_64
                 ; Target = target_erlang
                 )
             )
@@ -1863,7 +1843,6 @@ convert_options_to_globals(OptionTable0, Target, GC_Method, TagsMethod0,
         ; GC_Method = gc_boehm
         ; GC_Method = gc_boehm_debug
         ; GC_Method = gc_hgc
-        ; GC_Method = gc_mps
         )
     ),
 
@@ -2038,7 +2017,7 @@ convert_options_to_globals(OptionTable0, Target, GC_Method, TagsMethod0,
     option_implies(generate_source_file_mapping, warn_wrong_module_name,
         bool(no), !Globals),
 
-    globals.lookup_string_option(!.Globals, fullarch, FullArch),
+    globals.lookup_string_option(!.Globals, target_arch, TargetArch),
 
     % Add the standard library directory.
     globals.lookup_maybe_string_option(!.Globals,
@@ -2175,18 +2154,18 @@ convert_options_to_globals(OptionTable0, Target, GC_Method, TagsMethod0,
         search_library_files_directories, SearchLibFilesDirs),
     globals.lookup_accumulating_option(!.Globals,
         intermod_directories, IntermodDirs2),
-    ToGradeSubdir = (func(Dir) = Dir/"Mercury"/GradeString/FullArch),
+    ToGradeSubdir = (func(Dir) = Dir/"Mercury"/GradeString/TargetArch),
     (
         UseGradeSubdirs = yes,
         % With `--use-grade-subdirs', `.opt', `.trans_opt' and
         % `.mih' files are placed in a directory named
-        % `Mercury/<grade>/<fullarch>/Mercury/<ext>s'.
+        % `Mercury/<grade>/<target_arch>/Mercury/<ext>s'.
         % When searching for a `.opt' file, module_name_to_file_name
         % produces `Mercury/<ext>/<module>.ext' so that searches
         % for installed files work, so we need to add
-        % `--intermod-directory Mercury/<grade>/<fullarch>'
+        % `--intermod-directory Mercury/<grade>/<target_arch>'
         % to find the `.opt' files in the current directory.
-        GradeSubdir = "Mercury"/GradeString/FullArch,
+        GradeSubdir = "Mercury"/GradeString/TargetArch,
 
         % Directories listed with --search-library-files-directories need
         % to be treated in the same way as the current directory.
@@ -2208,8 +2187,8 @@ convert_options_to_globals(OptionTable0, Target, GC_Method, TagsMethod0,
     (
         UseGradeSubdirs = yes,
         % With --use-grade-subdirs we need to search in
-        % `Mercury/<grade>/<fullarch>/Mercury/lib' for libraries and
-        % `Mercury/<grade>/<fullarch>/Mercury/inits' for init files,
+        % `Mercury/<grade>/<target_arch>/Mercury/lib' for libraries and
+        % `Mercury/<grade>/<target_arch>/Mercury/inits' for init files,
         % for each directory listed with --search-library-files-directory.
         ToGradeLibDir = (func(Dir) = ToGradeSubdir(Dir)/"Mercury"/"lib"),
         SearchGradeLibDirs = list.map(ToGradeLibDir, SearchLibFilesDirs),
@@ -2310,9 +2289,6 @@ convert_options_to_globals(OptionTable0, Target, GC_Method, TagsMethod0,
     ;
         Target = target_java,
         BackendForeignLanguages = ["java"]
-    ;
-        Target = target_x86_64,
-        BackendForeignLanguages = ["c"]
     ;
         Target = target_erlang,
         BackendForeignLanguages = ["erlang"],
@@ -2965,7 +2941,7 @@ grade_component_table("hl", comp_gcc_ext, [
         highlevel_code          - bool(yes),
         gcc_nested_functions    - bool(no),
         highlevel_data          - bool(yes)],
-        yes([string("c"), string("asm")]), yes).
+        yes([string("c")]), yes).
 grade_component_table("hlc", comp_gcc_ext, [
         asm_labels              - bool(no),
         gcc_non_local_gotos     - bool(no),
@@ -2973,7 +2949,7 @@ grade_component_table("hlc", comp_gcc_ext, [
         highlevel_code          - bool(yes),
         gcc_nested_functions    - bool(no),
         highlevel_data          - bool(no)],
-        yes([string("c"), string("asm")]), yes).
+        yes([string("c")]), yes).
 grade_component_table("hl_nest", comp_gcc_ext, [
         asm_labels              - bool(no),
         gcc_non_local_gotos     - bool(no),
@@ -2981,7 +2957,7 @@ grade_component_table("hl_nest", comp_gcc_ext, [
         highlevel_code          - bool(yes),
         gcc_nested_functions    - bool(yes),
         highlevel_data          - bool(yes)],
-        yes([string("c"), string("asm")]), yes).
+        yes([string("c")]), yes).
 grade_component_table("hlc_nest", comp_gcc_ext, [
         asm_labels              - bool(no),
         gcc_non_local_gotos     - bool(no),
@@ -2989,7 +2965,7 @@ grade_component_table("hlc_nest", comp_gcc_ext, [
         highlevel_code          - bool(yes),
         gcc_nested_functions    - bool(yes),
         highlevel_data          - bool(no)],
-        yes([string("c"), string("asm")]), yes).
+        yes([string("c")]), yes).
 grade_component_table("il", comp_gcc_ext, [
         asm_labels              - bool(no),
         gcc_non_local_gotos     - bool(no),
@@ -3042,7 +3018,6 @@ grade_component_table("threadscope", comp_par_threadscope,
 grade_component_table("gc", comp_gc, [gc - string("boehm")], no, yes).
 grade_component_table("gcd", comp_gc, [gc - string("boehm_debug")], no, yes).
 grade_component_table("hgc", comp_gc, [gc - string("hgc")], no, yes).
-grade_component_table("mps", comp_gc, [gc - string("mps")], no, yes).
 grade_component_table("agc", comp_gc, [gc - string("accurate")], no, yes).
 
     % Profiling components.
@@ -3262,5 +3237,5 @@ convert_dump_alias("lco", "agiuvzD").
 convert_dump_alias("poly", "vxX").
 
 %-----------------------------------------------------------------------------%
-:- end_module handle_options.
+:- end_module libs.handle_options.
 %-----------------------------------------------------------------------------%

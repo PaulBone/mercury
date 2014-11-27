@@ -1,10 +1,10 @@
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % vim: ft=mercury ts=4 sw=4 et wm=0 tw=0
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % Copyright (C) 1993-1999, 2003, 2005-2006, 2010-2011 The University of Melbourne.
 % This file may only be copied under the terms of the GNU Library General
 % Public License - see the file COPYING.LIB in the Mercury distribution.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % File: require.m.
 % Main author: fjh.
@@ -12,8 +12,8 @@
 %
 % This module provides features similar to <assert.h> in C.
 %
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module require.
 :- interface.
@@ -32,7 +32,16 @@
     %
 :- func func_error(string) = _ is erroneous.
 
-%-----------------------------------------------------------------------------%
+    % error(Pred, Message):
+    % func_error(Pred, Message):
+    %
+    % Equivalent to invoking error or func_error on the string
+    % Pred ++ ": " ++ Message.
+    %
+:- pred error(string::in, string::in) is erroneous.
+:- func func_error(string, string) = _ is erroneous.
+
+%---------------------------------------------------------------------------%
 
     % sorry(Module, What):
     %
@@ -76,7 +85,7 @@
 :- func unexpected(string, string, string) = _ is erroneous.
 :- pred unexpected(string::in, string::in, string::in) is erroneous.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % require(Goal, Message):
     %
@@ -114,7 +123,7 @@
 :- pred expect_not((pred)::((pred) is semidet), string::in, string::in,
     string::in) is det.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % report_lookup_error(Message, Key):
     %
@@ -133,8 +142,8 @@
     %
 :- pred report_lookup_error(string::in, K::in, V::unused) is erroneous.
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
@@ -144,25 +153,34 @@
 :- import_module string.
 :- import_module type_desc.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
-% Hopefully error/1 won't be called often (!), so no point inlining it.
+% Hopefully error won't be called often (!), so no point inlining it.
 :- pragma no_inline(error/1).
+:- pragma no_inline(error/2).
+:- pragma no_inline(func_error/1).
+:- pragma no_inline(func_error/2).
 
-% We declare error/1 to be terminating so that all of the standard library
+% We declare error to be terminating so that all of the standard library
 % will treat it as terminating.
 :- pragma terminates(error/1).
+:- pragma terminates(error/2).
+:- pragma terminates(func_error/1).
+:- pragma terminates(func_error/2).
 
 error(Message) :-
     throw(software_error(Message)).
 
-% Hopefully func_error/1 won't be called often (!), so no point inlining it.
-:- pragma no_inline(func_error/1).
+error(Pred, Message) :-
+    error(Pred ++ ": " ++ Message).
 
 func_error(Message) = _ :-
     error(Message).
 
-%-----------------------------------------------------------------------------%
+func_error(Pred, Message) = _ :-
+    error(Pred, Message).
+
+%---------------------------------------------------------------------------%
 
 sorry(Module, What) = _ :-
     sorry(Module, What).
@@ -191,7 +209,7 @@ unexpected(Module, Proc, What) :-
         ErrorMessage),
     error(ErrorMessage).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 require(Goal, Message) :-
     ( call(Goal) ->
@@ -228,7 +246,7 @@ expect_not(Goal, Module, Proc, Message) :-
         true
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 report_lookup_error(Msg, K) :-
     KeyType = type_name(type_of(K)),
@@ -257,6 +275,6 @@ report_lookup_error(Msg, K, V) :-
         ErrorString),
     error(ErrorString).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 :- end_module require.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

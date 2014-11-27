@@ -451,8 +451,8 @@ static const char mercury_funcs2[] =
     "#ifdef MR_CONSERVATIVE_GC\n"
     "   MR_address_of_init_gc = init_gc;\n"
     "#endif\n"
-    "   MR_library_initializer = ML_io_init_state;\n"
-    "   MR_library_finalizer = ML_io_finalize_state;\n"
+    "   MR_library_initializer = ML_std_library_init;\n"
+    "   MR_library_finalizer = ML_std_library_finalize;\n"
     "   MR_io_stdin_stream = ML_io_stdin_stream;\n"
     "   MR_io_stdout_stream = ML_io_stdout_stream;\n"
     "   MR_io_stderr_stream = ML_io_stderr_stream;\n"
@@ -537,7 +537,7 @@ static const char mercury_main_func[] =
     "#endif\n"
         /*
         ** Note that the address we use for the stack base
-        ** needs to be word-aligned (the MPS GC requires this).
+        ** needs to be word-aligned.
         ** That's why we give dummy the type `void *' rather than
         ** e.g. `char'.
         */

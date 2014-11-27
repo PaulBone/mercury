@@ -1,5 +1,5 @@
 %---------------------------------------------------------------------------%
-% vim: ft=mercury ts=4 sw=4 et wm=0 tw=0
+% vim: ts=4 sw=4 et ft=mercury
 %---------------------------------------------------------------------------%
 % Copyright (C) 1993-2007, 2009-2014 The University of Melbourne.
 % This file may only be copied under the terms of the GNU Library General
@@ -11,8 +11,8 @@
 % It is used as a way for the Makefiles to know which library interface
 % files, objects, etc., need to be installed.
 %
-%----------------------------------------------------------------------------%
-%----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module library.
 :- interface.
@@ -37,11 +37,27 @@
 
 :- implementation.
 
-% Note: if you add a new module to this list, you must also a new clause to
-% mercury_std_library_module/1. Conversely, this should list all the modules
-% named by mercury_std_library_module, except library itself.
+% NOTE: If you add a new module to the library, you also need to do the
+% following.
 %
-% Please keep both parts of this list in alphabetical order.
+% - Unless the new module is a private submodule of an existing library module,
+%   import the new module in one of the two lists below: the list of modules
+%   intended for application programmers, or the list of modules intended
+%   only for Mercury system implementors.
+%
+% - Add the module name to the definition of mercury_std_library_module below.
+%   This is regardless of whether the module is for implementors or not,
+%   and whether it is a private submodule or not. The
+%   mercury_std_library_module predicate should list all the modules
+%   in a Mercury source file in the library directory.
+%
+% - Add the file name either to MODULES_DOC (if it is intended for application
+%   programmers, and should therefore be included in the automatically
+%   generated user-facing documentation), or to MODULES_UNDOC (if it is
+%   intended only for Mercury system implementors, in which case it should
+%   not be included in that documentation).
+%
+% Please keep all these lists in alphabetical order.
 
 % The modules intended for application programmers.
 
@@ -118,6 +134,8 @@
 :- import_module stream.string_writer.
 :- import_module string.
 :- import_module string.builder.
+:- import_module string.format.
+:- import_module string.parse_util.
 :- import_module table_statistics.
 :- import_module term.
 :- import_module term_io.
@@ -137,7 +155,8 @@
 :- import_module version_store.
 
 % The modules intended for Mercury system implementors.
-% NOTE: changes to this list may need to be reflected in mdbcomp/prim_data.m.
+% NOTE: changes to this list may need to be reflected
+% in mdbcomp/builtin_modules.m.
 %
 :- import_module erlang_builtin.
 :- import_module erlang_rtti_implementation.
@@ -169,7 +188,7 @@
 
 :- pragma foreign_proc("C",
     library.version(Version::out, Fullarch::out),
-    [will_not_call_mercury, promise_pure, will_not_modify_trail],
+    [will_not_call_mercury, promise_pure, thread_safe, will_not_modify_trail],
 "
     MR_ConstString version_string = MR_VERSION;
     MR_ConstString fullarch_string = MR_FULLARCH;
@@ -183,7 +202,7 @@
 
 :- pragma foreign_proc("C#",
     library.version(Version::out, Fullarch::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Version = runtime.Constants.MR_VERSION;
     Fullarch = runtime.Constants.MR_FULLARCH;
@@ -191,7 +210,7 @@
 
 :- pragma foreign_proc("Java",
     library.version(Version::out, Fullarch::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, thread_safe],
 "
     Version = jmercury.runtime.Constants.MR_VERSION;
     Fullarch = jmercury.runtime.Constants.MR_FULLARCH;
@@ -290,6 +309,10 @@ mercury_std_library_module("stream").
 mercury_std_library_module("stream.string_writer").
 mercury_std_library_module("string").
 mercury_std_library_module("string.builder").
+mercury_std_library_module("string.format").
+mercury_std_library_module("string.parse_runtime").
+mercury_std_library_module("string.parse_util").
+mercury_std_library_module("string.to_string").
 mercury_std_library_module("table_builtin").
 mercury_std_library_module("table_statistics").
 mercury_std_library_module("term").
@@ -301,6 +324,7 @@ mercury_std_library_module("time").
 mercury_std_library_module("thread").
 mercury_std_library_module("thread.barrier").
 mercury_std_library_module("thread.channel").
+mercury_std_library_module("thread.future").
 mercury_std_library_module("thread.mvar").
 mercury_std_library_module("thread.semaphore").
 mercury_std_library_module("tree234").
@@ -314,6 +338,36 @@ mercury_std_library_module("version_array2d").
 mercury_std_library_module("version_bitmap").
 mercury_std_library_module("version_hash_table").
 mercury_std_library_module("version_store").
+
+%---------------------------------------------------------------------------%
+
+    % Overall library initializer called before any user code,
+    % including module local initializers.
+    %
+:- pred std_library_init(io::di, io::uo) is det.
+
+:- pragma foreign_export("C", std_library_init(di, uo),
+    "ML_std_library_init").
+:- pragma foreign_export("Erlang", std_library_init(di, uo),
+    "ML_std_library_init").
+
+std_library_init(!IO) :-
+    promise_pure (
+        impure builtin.init_runtime_hooks,
+        io.init_state(!IO)
+    ).
+
+    % Overall library finalizer.
+    %
+:- pred std_library_finalize(io::di, io::uo) is det.
+
+:- pragma foreign_export("C", std_library_finalize(di, uo),
+    "ML_std_library_finalize").
+:- pragma foreign_export("Erlang", std_library_finalize(di, uo),
+    "ML_std_library_finalize").
+
+std_library_finalize(!IO) :-
+    io.finalize_state(!IO).
 
 %---------------------------------------------------------------------------%
 %---------------------------------------------------------------------------%

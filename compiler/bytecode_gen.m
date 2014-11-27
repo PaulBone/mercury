@@ -62,6 +62,7 @@
 :- import_module ll_backend.call_gen.  % XXX for arg passing convention
 :- import_module mdbcomp.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_type.
@@ -430,25 +431,20 @@ gen_builtin(PredId, ProcId, Args, ByteInfo, Code) :-
     get_module_info(ByteInfo, ModuleInfo),
     ModuleName = predicate_module(ModuleInfo, PredId),
     PredName = predicate_name(ModuleInfo, PredId),
+    builtin_ops.translate_builtin(ModuleName, PredName, ProcId, Args,
+        SimpleCode),
     (
-        builtin_ops.translate_builtin(ModuleName, PredName, ProcId,
-            Args, SimpleCode)
-    ->
-        (
-            SimpleCode = test(Test),
-            map_test(ByteInfo, Test, Code)
-        ;
-            SimpleCode = assign(Var, Expr),
-            map_assign(ByteInfo, Var, Expr, Code)
-        ;
-            SimpleCode = ref_assign(_Var, _Expr),
-            unexpected($module, $pred, "ref_assign")
-        ;
-            SimpleCode = noop(_DefinedVars),
-            Code = empty
-        )
+        SimpleCode = test(Test),
+        map_test(ByteInfo, Test, Code)
     ;
-        unexpected($module, $pred, "unknown builtin predicate " ++ PredName)
+        SimpleCode = assign(Var, Expr),
+        map_assign(ByteInfo, Var, Expr, Code)
+    ;
+        SimpleCode = ref_assign(_Var, _Expr),
+        unexpected($module, $pred, "ref_assign")
+    ;
+        SimpleCode = noop(_DefinedVars),
+        Code = empty
     ).
 
 :- pred map_test(byte_info::in, simple_expr(prog_var)::in(simple_test_expr),
@@ -789,8 +785,8 @@ map_cons_id(ByteInfo, ConsId, ByteConsId) :-
         ConsId = tabling_info_const(_),
         sorry($module, $pred, "bytecode cannot implement tabling")
     ;
-        ConsId = table_io_decl(_),
-        sorry($module, $pred, "bytecode cannot implement table io decl")
+        ConsId = table_io_entry_desc(_),
+        sorry($module, $pred, "bytecode cannot implement table io entry desc")
     ;
         ConsId = deep_profiling_proc_layout(_),
         sorry($module, $pred, "bytecode cannot implement deep profiling")
@@ -842,9 +838,9 @@ map_cons_tag(tabling_info_tag(_, _), _) :-
 map_cons_tag(deep_profiling_proc_layout_tag(_, _), _) :-
     unexpected($module, $pred, "deep_profiling_proc_layout_tag cons tag " ++
         "for non-deep_profiling_proc_static cons id").
-map_cons_tag(table_io_decl_tag(_, _), _) :-
-    unexpected($module, $pred, "table_io_decl_tag cons tag " ++
-        "for non-table_io_decl cons id").
+map_cons_tag(table_io_entry_tag(_, _), _) :-
+    unexpected($module, $pred, "table_io_entry_tag cons tag " ++
+        "for non-table_io_entry_desc cons id").
 map_cons_tag(reserved_address_tag(_), _) :-
     % These should only be generated if the --num-reserved-addresses
     % or --num-reserved-objects options are used.

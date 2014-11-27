@@ -5,18 +5,23 @@
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %-----------------------------------------------------------------------------%
-% 
+%
 % File: timestamp.m.
 % Main author: stayl.
-% 
+%
 % Timestamp representation for smart recompilation.
-% 
+%
 %-----------------------------------------------------------------------------%
 
 :- module libs.timestamp.
 :- interface.
 
 :- import_module time.
+
+    % For use by predicates that do or do not return timestamps, as requested.
+:- type maybe_return_timestamp
+    --->    do_return_timestamp
+    ;       do_not_return_timestamp.
 
     % A `timestamp' is similar to a `time_t' except that timestamps are system
     % independent. A timestamp string (obtained using timestamp_to_string)
@@ -203,3 +208,7 @@ plausible_timestamp_char(Char) :-
     char.to_int(Char, CharInt),
     char.to_int(':', HighestInt),
     CharInt =< HighestInt.
+
+%-----------------------------------------------------------------------------%
+:- end_module libs.timestamp.
+%-----------------------------------------------------------------------------%

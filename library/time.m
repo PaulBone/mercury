@@ -1,13 +1,13 @@
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % vim: ft=mercury ts=4 sw=4 et wm=0 tw=0
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % Originally written in 1999 by Tomas By <T.By@dcs.shef.ac.uk>
 % "Feel free to use this code or parts of it any way you want."
 %
 % Some portions are Copyright (C) 1999-2007,2009-2012 The University of Melbourne.
 % This file may only be copied under the terms of the GNU Library General
 % Public License - see the file COPYING.LIB in the Mercury distribution.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % 
 % File: time.m.
 % Main authors: Tomas By <T.By@dcs.shef.ac.uk>, fjh.
@@ -15,8 +15,8 @@
 % 
 % Time functions.
 % 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module time.
 :- interface.
@@ -24,11 +24,11 @@
 :- import_module io.
 :- import_module maybe.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % The `clock_t' type represents times measured in clock ticks.
     % NOTE: the unit used for a value of this type depends on whether it was
-    % returned by `time.clock' or `time.times'.  See the comments on these
+    % returned by `clock' or `times'.  See the comments on these
     % predicates below.
     %
 :- type clock_t == int.
@@ -79,47 +79,47 @@
 :- type time_error
     --->    time_error(string). % Error message
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
-    % time.clock(Result, !IO):
+    % clock(Result, !IO):
     %
     % Returns the elapsed processor time (number of clock ticks). The base time
     % is arbitrary but doesn't change within a single process. If the time
     % cannot be obtained, this procedure will throw a time_error exception.
-    % To obtain a time in seconds, divide Result by `time.clocks_per_sec'.
+    % To obtain a time in seconds, divide Result by `clocks_per_sec'.
     %
     % On Java the elapsed time for the calling thread is returned.
     %
-:- pred time.clock(clock_t::out, io::di, io::uo) is det.
+:- pred clock(clock_t::out, io::di, io::uo) is det.
 
-    % time.clocks_per_sec:
+    % clocks_per_sec:
     %
     % Returns the number of "clocks" per second as defined by CLOCKS_PER_SEC.
-    % A `clock_t' value returned by `time.clock' can be divided by this value
+    % A `clock_t' value returned by `clock' can be divided by this value
     % to obtain a time in seconds. Note that the value of this function does
     % not necessarily reflect the actual clock precision; it just indicates the
-    % scaling factor for the results of time.clock.
+    % scaling factor for the results of `clock'.
     %
-:- func time.clocks_per_sec = int.
+:- func clocks_per_sec = int.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
-    % time.time(Result, !IO):
+    % time(Result, !IO):
     %
     % Returns the current (simple) calendar time. If the time cannot be
     % obtained, this procedure will throw a time_error exception.
     %
-:- pred time.time(time_t::out, io::di, io::uo) is det.
+:- pred time(time_t::out, io::di, io::uo) is det.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
-    % time.times(ProcessorTime, ElapsedRealTime, !IO):
+    % times(ProcessorTime, ElapsedRealTime, !IO):
     %
     % (POSIX)
     %
     % Returns the processor time information in the `tms' value, and the
     % elapsed real time relative to an arbitrary base in the `clock_t' value.
-    % To obtain a time in seconds, divide the result by `time.clk_tck'.
+    % To obtain a time in seconds, divide the result by `clk_tck'.
     % If the time cannot be obtained, this procedure will throw a time_error
     % exception.
     %
@@ -129,67 +129,67 @@
     % On Java the times for the calling thread are returned.
     % On Win32 and Java the child part of 'tms' is always zero.
     %
-:- pred time.times(tms::out, clock_t::out, io::di, io::uo) is det.
+:- pred times(tms::out, clock_t::out, io::di, io::uo) is det.
 
-    % time.clk_tck:
+    % clk_tck:
     %
     % Returns the number of "clock ticks" per second as defined by
-    % sysconf(_SC_CLK_TCK). A `clock_t' value returned by `time.times'
+    % sysconf(_SC_CLK_TCK). A `clock_t' value returned by `times'
     % can be divided by this value to obtain a time in seconds.
     %
     % On non-POSIX systems that do not support this functionality,
     % this procedure may simply always throw an exception.
     %
-:- func time.clk_tck = int.
+:- func clk_tck = int.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
-    % time.difftime(Time1, Time0) = Diff:
+    % difftime(Time1, Time0) = Diff:
     %
     % Computes the number of seconds elapsed between `Time1' and `Time0'.
     %
-:- func time.difftime(time_t, time_t) = float.
+:- func difftime(time_t, time_t) = float.
 
-    % time.localtime(Time) = TM:
+    % localtime(Time) = TM:
     %
     % Converts the calendar time `Time' to a broken-down representation,
     % expressed relative to the user's specified time zone.
     %
-:- func time.localtime(time_t) = tm.
+:- func localtime(time_t) = tm.
 
-    % time.gmtime(Time) = TM:
+    % gmtime(Time) = TM:
     %
     % Converts the calendar time `Time' to a broken-down representation,
     % expressed as UTC (Universal Coordinated Time).
     %
-:- func time.gmtime(time_t) = tm.
+:- func gmtime(time_t) = tm.
 
-    % time.mktime(TM) = Time:
+    % mktime(TM) = Time:
     %
     % Converts the broken-down local time value to calendar time.
     % It also normalises the value by filling in day of week and day of year
     % based on the other components.
     %
-:- func time.mktime(tm) = time_t.
+:- func mktime(tm) = time_t.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
-    % time.asctime(TM) = String:
+    % asctime(TM) = String:
     %
     % Converts the broken-down time value `TM' to a string in a standard
     % format.
     %
-:- func time.asctime(tm) = string.
+:- func asctime(tm) = string.
 
-    % time.ctime(Time) = String:
+    % ctime(Time) = String:
     %
     % Converts the calendar time value `Time' to a string in a standard format
     % (i.e. same as "asctime (localtime (<time>))").
     %
-:- func time.ctime(time_t) = string.
+:- func ctime(time_t) = string.
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
@@ -250,7 +250,7 @@
 compare_time_t_reps(Result, X, Y) :-
     compare(Result, difftime(time_t(X), time_t(Y)), 0.0).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 time.clock(Result, !IO) :-
     time.c_clock(Ret, !IO),
@@ -293,7 +293,7 @@ time.clock(Result, !IO) :-
     }
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 %:- func time.clocks_per_sec = int.
 
@@ -318,7 +318,7 @@ time.clock(Result, !IO) :-
     Ret = 1000000;
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 time.times(Tms, Result, !IO) :-
     time.c_times(Ret, Ut, St, CUt, CSt, !IO),
@@ -435,7 +435,7 @@ time.times(Tms, Result, !IO) :-
     CSt = 0;
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 time.clk_tck = Ret :-
     Ret0 = time.c_clk_tck,
@@ -477,7 +477,7 @@ time.c_clk_tck = -1.   % default is to throw an exception.
     Ret = 1000;
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 time.time(Result, !IO) :-
     time.c_time(Ret, !IO),
@@ -541,7 +541,7 @@ time.time(Result, !IO) :-
     SUCCESS_INDICATOR = false
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 %:- func time.difftime(time_t, time_t) = float.
 
@@ -579,7 +579,7 @@ time.difftime(time_t(T1), time_t(T0)) = Diff :-
     Diff = float(S1 - S0)
 ").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 time.localtime(time_t(Time)) = TM :-
     time.c_localtime(Time, Yr, Mnt, MD, Hrs, Min, Sec, YD, WD, N),
@@ -591,7 +591,7 @@ time.localtime(time_t(Time)) = TM :-
 :- pragma foreign_proc("C",
     time.c_localtime(Time::in, Yr::out, Mnt::out, MD::out, Hrs::out,
         Min::out, Sec::out, YD::out, WD::out, N::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, not_thread_safe],
 "
     struct tm   *p;
     time_t      t;
@@ -701,7 +701,7 @@ time.gmtime(time_t(Time)) = TM :-
 :- pragma foreign_proc("C",
     time.c_gmtime(Time::in, Yr::out, Mnt::out, MD::out, Hrs::out,
         Min::out, Sec::out, YD::out, WD::out, N::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, not_thread_safe],
 "{
     struct tm   *p;
     time_t      t;
@@ -817,7 +817,7 @@ int_to_maybe_dst(N) = DST :-
         DST = no
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 %:- func time.mktime(tm) = time_t.
 
@@ -826,13 +826,16 @@ time.mktime(TM) = time_t(Time) :-
     time.c_mktime(Yr, Mnt, MD, Hrs, Min, Sec, YD, WD,
         maybe_dst_to_int(DST), Time).
 
+    % NOTE: mktime() modifies tzname so is strictly impure.
+    % We do not expose tzname through a Mercury interface, though.
+    %
 :- pred time.c_mktime(int::in, int::in, int::in, int::in, int::in, int::in,
     int::in, int::in, int::in, time_t_rep::out) is det.
 
 :- pragma foreign_proc("C",
     time.c_mktime(Yr::in, Mnt::in, MD::in, Hrs::in, Min::in, Sec::in,
         YD::in, WD::in, N::in, Time::out),
-    [will_not_call_mercury, promise_pure],
+    [will_not_call_mercury, promise_pure, not_thread_safe],
  "{
     struct tm t;
 
@@ -951,7 +954,7 @@ maybe_dst_to_int(M) = N :-
         N = -1
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 %:- func time.asctime(tm) = string.
 
@@ -1004,11 +1007,11 @@ mon_name(9, "Oct").
 mon_name(10, "Nov").
 mon_name(11, "Dec").
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 time.ctime(Time) = asctime(localtime(Time)).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 % XXX This needs to be in the interface because pragma export doesn't work yet
 % on the .NET backend and io.m needs to access this.
@@ -1031,4 +1034,4 @@ time.ctime(Time) = asctime(localtime(Time)).
 
 construct_time_t(T) = time_t(T).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

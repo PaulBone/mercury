@@ -14,8 +14,8 @@
 % This exports predicates to read and write terms in the
 % nice ground representation provided in term.m.
 % 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module term_io.
 :- interface.
@@ -27,7 +27,7 @@
 :- import_module term.
 :- import_module varset.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- type read_term(T)
     --->    eof
@@ -36,116 +36,116 @@
 
 :- type read_term   == read_term(generic).
 
-    % term_io.read_term(Result, !IO):
+    % read_term(Result, !IO):
     %
     % Read a term from standard input. Similar to NU-Prolog read_term/2,
     % except that resulting term is in the ground representation.
     % Binds Result to either `eof', `term(VarSet, Term)', or
     % `error(Message, LineNumber)'.
     %
-:- pred term_io.read_term(read_term(T)::out, io::di, io::uo) is det.
+:- pred read_term(read_term(T)::out, io::di, io::uo) is det.
 
     % As above, except uses the given operator table instead of
     % the standard Mercury operators.
     %
-:- pred term_io.read_term_with_op_table(Ops::in, read_term(T)::out,
+:- pred read_term_with_op_table(Ops::in, read_term(T)::out,
     io::di, io::uo) is det <= op_table(Ops).
 
     % Writes a term to standard output. Uses the variable names specified
     % by the varset. Writes _N for all unnamed variables, with N starting at 0.
     %
-:- pred term_io.write_term(varset(T)::in, term(T)::in, io::di, io::uo) is det.
+:- pred write_term(varset(T)::in, term(T)::in, io::di, io::uo) is det.
 
     % As above, except uses the given operator table instead of the
     % standard Mercury operators.
     %
-:- pred term_io.write_term_with_op_table(Ops::in, varset(T)::in, term(T)::in,
+:- pred write_term_with_op_table(Ops::in, varset(T)::in, term(T)::in,
     io::di, io::uo) is det <= op_table(Ops).
 
     % As above, except it appends a period and new-line.
     %
-:- pred term_io.write_term_nl(varset(T)::in, term(T)::in, io::di, io::uo)
+:- pred write_term_nl(varset(T)::in, term(T)::in, io::di, io::uo)
     is det.
 
     % As above, except it appends a period and new-line.
     %
-:- pred term_io.write_term_nl_with_op_table(Ops::in, varset(T)::in,
+:- pred write_term_nl_with_op_table(Ops::in, varset(T)::in,
     term(T)::in, io::di, io::uo) is det <= op_table(Ops).
 
     % Writes a constant (integer, float, string, or atom) to stdout.
     %
-:- pred term_io.write_constant(const::in, io::di, io::uo) is det.
+:- pred write_constant(const::in, io::di, io::uo) is det.
 
-    % Like term_io.write_constant, but return the result in a string.
+    % Like write_constant, but return the result in a string.
     %
-:- func term_io.format_constant(const) = string.
+:- func format_constant(const) = string.
 
     % Writes a variable to stdout.
     %
-:- pred term_io.write_variable(var(T)::in, varset(T)::in, io::di, io::uo)
+:- pred write_variable(var(T)::in, varset(T)::in, io::di, io::uo)
     is det.
 
     % As above, except uses the given operator table instead of the
     % standard Mercury operators.
     %
-:- pred term_io.write_variable_with_op_table(Ops::in, var(T)::in,
+:- pred write_variable_with_op_table(Ops::in, var(T)::in,
     varset(T)::in, io::di, io::uo) is det <= op_table(Ops).
 
     % Given a string S, write S in double-quotes, with characters
     % escaped if necessary, to stdout.
     %
-:- pred term_io.quote_string(string::in, io::di, io::uo) is det.
+:- pred quote_string(string::in, io::di, io::uo) is det.
 
-:- pred term_io.quote_string(Stream::in, string::in,
+:- pred quote_string(Stream::in, string::in,
     State::di, State::uo) is det
     <= (stream.writer(Stream, string, State),
     stream.writer(Stream, char, State)).
 
-    % Like term_io.quote_string, but return the result in a string.
+    % Like quote_string, but return the result in a string.
     %
-:- func term_io.quoted_string(string) = string.
+:- func quoted_string(string) = string.
 
     % Given an atom-name A, write A, enclosed in single-quotes if necessary,
     % with characters escaped if necessary, to stdout.
     %
-:- pred term_io.quote_atom(string::in, io::di, io::uo) is det.
+:- pred quote_atom(string::in, io::di, io::uo) is det.
 
-:- pred term_io.quote_atom(Stream::in, string::in,
+:- pred quote_atom(Stream::in, string::in,
     State::di, State::uo) is det
     <= (stream.writer(Stream, string, State),
     stream.writer(Stream, char, State)).
 
-    % Like term_io.quote_atom, but return the result in a string.
+    % Like quote_atom, but return the result in a string.
     %
-:- func term_io.quoted_atom(string) = string.
+:- func quoted_atom(string) = string.
 
     % Given a character C, write C in single-quotes,
     % escaped if necessary, to stdout.
     %
-:- pred term_io.quote_char(char::in, io::di, io::uo) is det.
+:- pred quote_char(char::in, io::di, io::uo) is det.
 
-:- pred term_io.quote_char(Stream::in, char::in,
+:- pred quote_char(Stream::in, char::in,
     State::di, State::uo) is det
     <= (stream.writer(Stream, string, State),
     stream.writer(Stream, char, State)).
 
-    % Like term_io.quote_char, but return the result in a string.
+    % Like quote_char, but return the result in a string.
     %
-:- func term_io.quoted_char(char) = string.
+:- func quoted_char(char) = string.
 
     % Given a character C, write C, escaped if necessary, to stdout.
     % The character is not enclosed in quotes.
     %
-:- pred term_io.write_escaped_char(char::in, io::di, io::uo) is det.
+:- pred write_escaped_char(char::in, io::di, io::uo) is det.
 
-:- pred term_io.write_escaped_char(Stream::in, char::in,
+:- pred write_escaped_char(Stream::in, char::in,
     State::di, State::uo) is det
     <= (stream.writer(Stream, string, State),
     stream.writer(Stream, char, State)).
 
-    % Like term_io.write_escaped_char, but return the result in a string.
+    % Like write_escaped_char, but return the result in a string.
     %
-:- func term_io.escaped_char(char) = string.
+:- func escaped_char(char) = string.
 
     % A reversible version of escaped_char.
     %
@@ -156,26 +156,26 @@
     % Given a string S, write S, with characters escaped if necessary,
     % to stdout. The string is not enclosed in quotes.
     %
-:- pred term_io.write_escaped_string(string::in, io::di, io::uo) is det.
+:- pred write_escaped_string(string::in, io::di, io::uo) is det.
 
-:- pred term_io.write_escaped_string(Stream::in, string::in,
+:- pred write_escaped_string(Stream::in, string::in,
     State::di, State::uo) is det
     <= (stream.writer(Stream, string, State),
     stream.writer(Stream, char, State)).
 
-    % Like term_io.write_escaped_char, but return the result in a string.
+    % Like write_escaped_char, but return the result in a string.
     %
-:- func term_io.escaped_string(string) = string.
+:- func escaped_string(string) = string.
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
 % Everything below here is not intended to be part of the public interface,
 % and will not be included in the Mercury library reference manual.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- interface.
 
@@ -213,15 +213,15 @@
     --->    maybe_adjacent_to_graphic_token
     ;       not_adjacent_to_graphic_token.
 
-:- pred term_io.quote_atom_agt(string::in, adjacent_to_graphic_token::in,
+:- pred quote_atom_agt(string::in, adjacent_to_graphic_token::in,
     io::di, io::uo) is det.
 
-:- pred term_io.quote_atom_agt(Stream::in, string::in,
+:- pred quote_atom_agt(Stream::in, string::in,
     adjacent_to_graphic_token::in, State::di, State::uo) is det
     <= (stream.writer(Stream, string, State),
     stream.writer(Stream, char, State)).
 
-:- func term_io.quoted_atom_agt(string, adjacent_to_graphic_token) = string.
+:- func quoted_atom_agt(string, adjacent_to_graphic_token) = string.
 
 :- pragma type_spec(term_io.quote_string/4,
             (Stream = io.output_stream, State = io.state)).
@@ -236,8 +236,8 @@
 :- pragma type_spec(term_io.quote_atom_agt/5,
             (Stream = io.output_stream, State = io.state)).
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
@@ -250,7 +250,7 @@
 :- import_module string.
 :- import_module stream.string_writer.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 term_io.read_term(Result, !IO) :-
     io.get_op_table(Ops, !IO),
@@ -259,8 +259,8 @@ term_io.read_term(Result, !IO) :-
 term_io.read_term_with_op_table(Ops, Result, !IO) :-
     parser.read_term_with_op_table(Ops, Result, !IO).
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % write a variable to standard output.
     %
@@ -309,7 +309,7 @@ term_io.write_variable_2(Ops, Id, !VarSet, !N, !IO) :-
         io.write_string(VarName, !IO)
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 term_io.write_term(VarSet, Term, !IO) :-
     io.get_op_table(Ops, !IO),
@@ -520,7 +520,7 @@ starts_with_digit(functor(atom(Op), Args, _)) :-
     ),
     starts_with_digit(Arg).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pred term_io.write_term_args(Ops::in, list(term(T))::in,
     varset(T)::in, varset(T)::out, int::in, int::out, io::di, io::uo) is det
@@ -533,7 +533,7 @@ term_io.write_term_args(Ops, [X | Xs], !VarSet, !N, !IO) :-
     term_io.write_arg_term(Ops, X, !VarSet, !N, !IO),
     term_io.write_term_args(Ops, Xs, !VarSet, !N, !IO).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 term_io.write_constant(Const, !IO) :-
     term_io.write_constant(Const, not_adjacent_to_graphic_token, !IO).
@@ -569,7 +569,7 @@ term_io.format_constant_agt(term.string(S), _) =
 term_io.format_constant_agt(term.implementation_defined(N), _) =
     "$" ++ N.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 term_io.quote_char(C, !IO) :-
     io.write_string(term_io.quoted_char(C), !IO).
@@ -810,7 +810,7 @@ is_mercury_punctuation_char('?').
 is_mercury_punctuation_char('\\').
 is_mercury_punctuation_char('|').
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma promise_equivalent_clauses(encode_escaped_char/2).
 
@@ -850,8 +850,8 @@ mercury_escape_special_char('\n', 'n').
 mercury_escape_special_char('\t', 't').
 mercury_escape_special_char('\b', 'b').
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 term_io.write_term_nl(VarSet, Term, !IO) :-
     io.get_op_table(Ops, !IO),
@@ -861,5 +861,5 @@ term_io.write_term_nl_with_op_table(Ops, VarSet, Term, !IO) :-
     term_io.write_term_with_op_table(Ops, VarSet, Term, !IO),
     io.write_string(".\n", !IO).
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

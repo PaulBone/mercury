@@ -641,7 +641,7 @@ abstractly_unify_inst_3(Live, InstA, InstB, Real, Inst, Detism, !ModuleInfo) :-
     ).
 
 % :- pred check_not_clobbered(uniqueness::in, unify_is_real::in) is det.
-% 
+%
 % check_not_clobbered(Uniq, Real) :-
 %     % Sanity check.
 %     ( Real = real_unify, Uniq = clobbered ->
@@ -671,9 +671,6 @@ abstractly_unify_inst_list([InstA | InstsA], [InstB | InstsB], Live, Real,
 
 %-----------------------------------------------------------------------------%
 
-    % This is the abstract unification operation which unifies a variable
-    % (or rather, it's instantiatedness) with a functor.
-    %
 abstractly_unify_inst_functor(Live, InstA0, ConsIdB, ArgInstsB, ArgLives,
         Real, Type, Inst, Detism, !ModuleInfo) :-
     inst_expand(!.ModuleInfo, InstA0, InstA),
@@ -1712,6 +1709,8 @@ inst_merge_2(InstA, InstB, MaybeType, Inst, !ModuleInfo) :-
     inst_expand(!.ModuleInfo, InstB, ExpandedInstB),
     ( ExpandedInstB = not_reached ->
         Inst = ExpandedInstA
+    ; ExpandedInstA = not_reached ->
+        Inst = ExpandedInstB
     ;
         inst_merge_3(ExpandedInstA, ExpandedInstB, MaybeType, Inst,
             !ModuleInfo)
@@ -1725,7 +1724,7 @@ inst_merge_3(InstA, InstB, MaybeType, Inst, !ModuleInfo) :-
         ( InstB = constrained_inst_vars(InstVarsB, SubInstB) ->
             inst_merge(SubInstA, SubInstB, MaybeType, Inst0, !ModuleInfo),
             set.intersect(InstVarsA, InstVarsB, InstVars),
-            ( set.non_empty(InstVars) ->
+            ( set.is_non_empty(InstVars) ->
                 Inst = constrained_inst_vars(InstVars, Inst0)
                 % We can keep the constrained_inst_vars here since
                 % Inst0 = SubInstA `lub` SubInstB and the original constraint
@@ -1737,8 +1736,11 @@ inst_merge_3(InstA, InstB, MaybeType, Inst, !ModuleInfo) :-
         ;
             inst_merge(SubInstA, InstB, MaybeType, Inst, !ModuleInfo)
         )
+    ; InstB = constrained_inst_vars(_InstVarsB, SubInstB) ->
+        % InstA \= constrained_inst_vars(_, _) is equivalent to
+        % constrained_inst_vars(InstVarsA, InstA) where InstVarsA = empty.
+        inst_merge(InstA, SubInstB, MaybeType, Inst, !ModuleInfo)
     ;
-        % XXX Why don't we look for InstB = constrained_inst_vars/2 here?
         inst_merge_4(InstA, InstB, MaybeType, Inst, !ModuleInfo)
     ).
 
@@ -1797,14 +1799,14 @@ inst_merge_4(InstA, InstB, MaybeType, Inst, !ModuleInfo) :-
         Inst = any(Uniq, none)
     ;
         InstA = free,
-        InstB = any(Uniq, HOInstInfo), 
+        InstB = any(Uniq, HOInstInfo),
         % We do not yet allow merge of any with free, except for
         % clobbered anys.
         ( Uniq = clobbered ; Uniq = mostly_clobbered ),
         Inst = any(Uniq, HOInstInfo)
     ;
         InstA = bound(UniqA, _InstResultsA, BoundInstsA),
-        InstB = any(UniqB, _), 
+        InstB = any(UniqB, _),
         merge_uniq_bound(UniqB, UniqA, BoundInstsA, !.ModuleInfo, Uniq),
         % We do not yet allow merge of any with free, except
         % for clobbered anys.
@@ -1822,7 +1824,7 @@ inst_merge_4(InstA, InstB, MaybeType, Inst, !ModuleInfo) :-
         Inst = any(Uniq, HOInstInfo)
     ;
         InstA = abstract_inst(_, _),
-        InstB = any(UniqB, _), 
+        InstB = any(UniqB, _),
         merge_uniq(shared, UniqB, Uniq),
         % We do not yet allow merge of any with free, except for
         % clobbered anys.
@@ -1830,7 +1832,7 @@ inst_merge_4(InstA, InstB, MaybeType, Inst, !ModuleInfo) :-
         Inst = any(Uniq, none)
     ;
         InstA = free,
-        InstB = free, 
+        InstB = free,
         Inst = free
     ;
         InstA = bound(UniqA, _InstResultsA, BoundInstsA),
@@ -1863,9 +1865,6 @@ inst_merge_4(InstA, InstB, MaybeType, Inst, !ModuleInfo) :-
         MaybeTypes = list.duplicate(list.length(ArgsA), no),
         inst_list_merge(ArgsA, ArgsB, MaybeTypes, Args, !ModuleInfo),
         Inst = abstract_inst(Name, Args)
-    ;
-        InstA = not_reached,
-        Inst = InstB
     ).
 
     % merge_uniq(A, B, C) succeeds if C is minimum of A and B in the ordering

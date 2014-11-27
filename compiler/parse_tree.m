@@ -27,9 +27,12 @@
 :- include_module prog_data.
 
 % The parser.
-:- include_module prog_io. 
+:- include_module prog_io.
    :- include_module prog_io_dcg.
+   :- include_module prog_io_error.
+   :- include_module prog_io_find.
    :- include_module prog_io_goal.
+   :- include_module prog_io_item.
    :- include_module prog_io_mode_defn.
    :- include_module prog_io_mutable.
    :- include_module prog_io_pragma.
@@ -51,6 +54,7 @@
 % Utility routines.
 :- include_module builtin_lib_types.
 :- include_module error_util.
+:- include_module item_util.
 :- include_module prog_event.
 :- include_module prog_foreign.
 :- include_module prog_mode.
@@ -65,12 +69,14 @@
 :- include_module equiv_type.
 :- include_module file_names.
 :- include_module module_cmds.
+:- include_module module_deps_graph.
 :- include_module module_imports.
 :- include_module module_qual.
 :- include_module modules.
 :- include_module read_modules.
 :- include_module source_file_map.
 :- include_module write_deps_file.
+:- include_module write_module_interface_files.
 
 % Java and C# related utilities.
 :- include_module java_names.

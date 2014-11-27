@@ -37,7 +37,9 @@
 :- import_module hlds.hlds_pred.
 :- import_module hlds.pred_table.
 :- import_module mdbcomp.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.file_names.
@@ -415,15 +417,15 @@ constructor_to_xml(C, TVarset,
 :- func constructor_arg_to_xml(comments, tvarset, constructor_arg) = xml.
 
 constructor_arg_to_xml(C, TVarset, CtorArg) = Xml :-
-    CtorArg = ctor_arg(MaybeFieldName, Type, _Width, Context),
+    CtorArg = ctor_arg(MaybeCtorFieldName, Type, _Width, Context),
     XmlType = elem("arg_type", [], [mer_type_to_xml(TVarset, Type)]),
     XmlContext = prog_context_to_xml(Context),
     (
-        MaybeFieldName = yes(FieldName),
+        MaybeCtorFieldName = yes(ctor_field_name(FieldName, _FieldNameCtxt)),
         Id = attr("id", sym_name_to_id("field", FieldName)),
         XmlMaybeFieldName = [elem("field", [Id], [name_to_xml(FieldName)])]
     ;
-        MaybeFieldName = no,
+        MaybeCtorFieldName = no,
         XmlMaybeFieldName = []
     ),
     Xml0 = elem("ctor_arg", [], [XmlType, XmlContext | XmlMaybeFieldName]),
@@ -682,7 +684,7 @@ cons_id_to_xml(type_info_const(_)) = nyi("type_info_const").
 cons_id_to_xml(typeclass_info_const(_)) = nyi("typeclass_info_const").
 cons_id_to_xml(ground_term_const(_, _)) = nyi("ground_term_const").
 cons_id_to_xml(tabling_info_const(_)) = nyi("tabling_info_const").
-cons_id_to_xml(table_io_decl(_)) = nyi("table_io_decl").
+cons_id_to_xml(table_io_entry_desc(_)) = nyi("table_io_entry_desc").
 cons_id_to_xml(deep_profiling_proc_layout(_)) =
     nyi("deep_profiling_proc_layout").
 

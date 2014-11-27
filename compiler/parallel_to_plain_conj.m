@@ -1,5 +1,5 @@
 %-----------------------------------------------------------------------------%
-% vim: ft=mercury ts=8 sw=4 et
+% vim: ft=mercury ts=4 sw=4 et
 %-----------------------------------------------------------------------------%
 % Copyright (C) 2008, 2010-2012 The University of Melbourne.
 % This file may only be copied under the terms of the GNU General
@@ -24,8 +24,8 @@
     % Transform all parallel conjunctions in the procedure into sequential
     % conjunctions.
     %
-:- pred parallel_to_plain_conjs(module_info::in, proc_info::in, proc_info::out)
-    is det.
+:- pred parallel_to_plain_conjs(module_info::in, pred_proc_id::in,
+    proc_info::in, proc_info::out) is det.
 
 %-----------------------------------------------------------------------------%
 %-----------------------------------------------------------------------------%
@@ -35,20 +35,38 @@
 :- import_module hlds.hlds_goal.
 
 :- import_module bool.
+:- import_module io.
 :- import_module list.
 :- import_module require.
+:- import_module string.
 
 %-----------------------------------------------------------------------------%
 
-parallel_to_plain_conjs(_ModuleInfo, !ProcInfo) :-
+parallel_to_plain_conjs(_ModuleInfo, PredProcId, !ProcInfo) :-
     proc_info_get_has_parallel_conj(!.ProcInfo, HasParallelConj),
+    trace [compiletime(flag("debug_par_to_plain_conj")), io(!IO)] (
+        PredProcId = proc(PredId, ProcId),
+        (
+            HasParallelConj = has_no_parallel_conj,
+            HasParallelConjStr = "no"
+        ;
+            HasParallelConj = has_parallel_conj,
+            HasParallelConjStr = "has"
+        ),
+        io.format("PAR_TO_PLAIN_CONJ: pred %d proc %d: %s par conj\n",
+            [i(pred_id_to_int(PredId)), i(proc_id_to_int(ProcId)),
+            s(HasParallelConjStr)], !IO)
+    ),
     (
-        HasParallelConj = no
+        HasParallelConj = has_no_parallel_conj
     ;
-        HasParallelConj = yes,
+        HasParallelConj = has_parallel_conj,
         proc_info_get_goal(!.ProcInfo, Goal0),
         parallel_to_plain_conjs_goal(Goal0, Goal),
-        proc_info_set_goal(Goal, !ProcInfo)
+        proc_info_set_goal(Goal, !ProcInfo),
+        % The procedure *had* one or more parallel conjunctions,
+        % but we just converted them all to sequential conjunctions.
+        proc_info_set_has_parallel_conj(has_no_parallel_conj, !ProcInfo)
     ).
 
 :- pred parallel_to_plain_conjs_goal(hlds_goal::in, hlds_goal::out) is det.
@@ -86,11 +104,11 @@ parallel_to_plain_conjs_goal(Goal0, Goal) :-
             )
         ->
             % There cannot be parallel conjunctions inside these scopes.
-            SubGoal = SubGoal0
+            GoalExpr = GoalExpr0
         ;
-            parallel_to_plain_conjs_goal(SubGoal0, SubGoal)
-        ),
-        GoalExpr = scope(Reason, SubGoal)
+            parallel_to_plain_conjs_goal(SubGoal0, SubGoal),
+            GoalExpr = scope(Reason, SubGoal)
+        )
     ;
         ( GoalExpr0 = unify(_, _, _, _, _)
         ; GoalExpr0 = plain_call(_, _, _, _, _, _)

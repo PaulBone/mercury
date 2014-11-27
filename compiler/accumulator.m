@@ -64,8 +64,7 @@
 %   update(Current, OutUpdate0, OutUpdate),
 %   assoc(Current, OutAssoc0, OutAssoc).
 %
-% which can be transformed by the algorithm in "State Update
-% Transformation" to
+% which can be transformed by the algorithm in "State Update Transformation" to
 %
 % p(In, OutUpdate, OutAssoc) :-
 %   initialize(AccUpdate),
@@ -81,8 +80,8 @@
 %   p_acc(Rest, OutUpdate, OutAssoc0, AccUpdate),
 %   assoc(Current, OutAssoc0, OutAssoc).
 %
-% we then apply the algorithm from "Making Mercury Programs Tail
-% Recursive" to p_acc to obtain
+% we then apply the algorithm from "Making Mercury Programs Tail Recursive"
+% to p_acc to obtain
 %
 % p_acc(In, OutUpdate, OutAssoc, AccUpdate) :-
 %   minimal(In),
@@ -176,7 +175,7 @@
 :- import_module hlds.quantification.
 :- import_module libs.globals.
 :- import_module libs.options.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_mode.
@@ -288,13 +287,13 @@ accu_transform_proc(proc(PredId, ProcId), PredInfo, !ProcInfo, !ModuleInfo,
             ),
             SuppressPieces =
                 [words("These warnings can be suppressed by"),
-                words("`--inhibit-accumulator-warnings'.")],
+                quote("--inhibit-accumulator-warnings"), suffix(".")],
             EnsureSuppressMsg = simple_msg(Context,
                 [option_is_set(inhibit_accumulator_warnings, no,
                     [always(EnsurePieces), always(SuppressPieces)])]),
 
             VerbosePieces = [words("If a predicate has been declared"),
-                words("associative via a `promise' declaration,"),
+                words("associative via a"), quote("promise"), words("declaration,"),
                 words("the compiler will rearrange the order of"),
                 words("the arguments in calls to that predicate,"),
                 words("if by so doing it makes the containing predicate"),
@@ -302,9 +301,9 @@ accu_transform_proc(proc(PredId, ProcId), PredInfo, !ProcInfo, !ModuleInfo,
                 words("will issue this warning. If this reordering"),
                 words("changes the performance characteristics"),
                 words("of the call to the predicate, use"),
-                words("`--no-accumulator-introduction'"),
+                quote("--no-accumulator-introduction"),
                 words("to turn the optimization off, or "),
-                words("`--inhibit-accumulator-warnings'"),
+                quote("--inhibit-accumulator-warnings"),
                 words("to turn off the warnings.")],
             VerboseMsg = simple_msg(Context, [verbose_only(VerbosePieces)]),
 
@@ -692,18 +691,18 @@ accu_stage1(ModuleInfo, VarTypes, FullyStrict, DoLCO, GoalId, M, GoalStore,
     % Continue the transformation only if the set reject is empty and
     % the set assoc or update contains something that needs to be moved
     % before the recursive call.
-    set.empty(Reject),
+    set.is_empty(Reject),
     (
-        not set.empty(Assoc)
+        not set.is_empty(Assoc)
     ;
-        not set.empty(Update)
+        not set.is_empty(Update)
     ),
     (
         DoLCO = no,
         % If LCMC is not turned on then there must be no construction
         % unifications after the recursive call.
-        set.empty(Construct),
-        set.empty(ConstructAssoc)
+        set.is_empty(Construct),
+        set.is_empty(ConstructAssoc)
     ;
         DoLCO = yes
     ).
@@ -1422,18 +1421,21 @@ accu_related(ModuleInfo, VarTypes, GoalStore, Var, Related) :-
 
 %-----------------------------------------------------------------------------%
 
-:- inst plain_call_goal
-    --->    stored_goal(plain_call, ground).
+:- inst stored_goal_plain_call
+    --->    stored_goal(goal_plain_call, ground).
 
     % Do a goal_store_lookup where the result is known to be a call.
     %
 :- pred lookup_call(accu_goal_store::in, accu_goal_id::in,
-    stored_goal::out(plain_call_goal)) is det.
+    stored_goal::out(stored_goal_plain_call)) is det.
 
 lookup_call(GoalStore, Id, stored_goal(Call, InstMap)) :-
     goal_store_lookup(GoalStore, Id, stored_goal(Goal, InstMap)),
-    ( Goal = hlds_goal(plain_call(_, _, _, _, _, _), _) ->
-        Call = Goal
+    (
+        Goal = hlds_goal(GoalExpr, GoalInfo),
+        GoalExpr = plain_call(_, _, _, _, _, _)
+    ->
+        Call = hlds_goal(GoalExpr, GoalInfo)
     ;
         unexpected($module, $pred, "not a call")
     ).
@@ -1499,6 +1501,7 @@ acc_proc_info(Accs0, VarSet, VarTypes, Substs, OrigProcInfo,
     proc_info_get_context(OrigProcInfo, Context),
     proc_info_get_rtti_varmaps(OrigProcInfo, RttiVarMaps),
     proc_info_get_is_address_taken(OrigProcInfo, IsAddressTaken),
+    proc_info_get_has_parallel_conj(OrigProcInfo, HasParallelConj),
     proc_info_get_var_name_remap(OrigProcInfo, VarNameRemap),
 
     Substs = accu_substs(AccVarSubst, _RecCallSubst, _AssocCallSubst,
@@ -1523,7 +1526,7 @@ acc_proc_info(Accs0, VarSet, VarTypes, Substs, OrigProcInfo,
 
     proc_info_create(Context, VarSet, VarTypes, HeadVars, InstVarSet,
         HeadModes, detism_decl_none, Detism, Goal, RttiVarMaps,
-        IsAddressTaken, VarNameRemap, AccProcInfo).
+        IsAddressTaken, HasParallelConj, VarNameRemap, AccProcInfo).
 
 %-----------------------------------------------------------------------------%
 
@@ -1592,8 +1595,8 @@ accu_create_goal(RecCallId, Accs, AccPredId, AccProcId, AccName, Substs,
     % accumulator version of the call, which can have the substitutions
     % applied to it easily.
     %
-:- func create_acc_call(hlds_goal::in(plain_call), prog_vars::in,
-    pred_id::in, proc_id::in, sym_name::in) = (hlds_goal::out(plain_call))
+:- func create_acc_call(hlds_goal::in(goal_plain_call), prog_vars::in,
+    pred_id::in, proc_id::in, sym_name::in) = (hlds_goal::out(goal_plain_call))
     is det.
 
 create_acc_call(OrigCall, Accs, AccPredId, AccProcId, AccName) = Call :-

@@ -23,7 +23,7 @@
 :- import_module parse_tree.module_imports.
 :- import_module parse_tree.prog_data.
 :- import_module mdbcomp.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 
 :- import_module bool.
 :- import_module io.
@@ -51,11 +51,6 @@
     %
 :- pred do_compile_c_file(io.output_stream::in, pic::in,
     string::in, string::in, globals::in, bool::out, io::di, io::uo) is det.
-
-    % assemble(ErrorStream, PIC, ModuleName, Globals, Succeeded, !IO)
-    %
-:- pred assemble(io.output_stream::in, pic::in, module_name::in,
-    globals::in, bool::out, io::di, io::uo) is det.
 
     % compile_java_files(ErrorStream, JavaFiles, Succeeded, Globals, !IO)
     %
@@ -519,7 +514,6 @@ gather_c_compiler_flags(Globals, PIC, AllCFlags) :-
         ;
             % XXX Check whether we need to do anything for these C compilers?
             ( C_CompilerType = cc_clang(_)
-            ; C_CompilerType = cc_lcc
             ; C_CompilerType = cc_cl(_)
             ),
             C_FnAlignOpt = ""
@@ -580,11 +574,11 @@ gather_c_compiler_flags(Globals, PIC, AllCFlags) :-
     % See the hard_coded/ppc_bug test case for an example
     % program which fails with this optimization.
 
-    globals.lookup_string_option(Globals, fullarch, FullArch),
+    globals.lookup_string_option(Globals, target_arch, TargetArch),
     (
         globals.lookup_bool_option(Globals, highlevel_code, no),
         globals.lookup_bool_option(Globals, gcc_global_registers, yes),
-        string.prefix(FullArch, "powerpc-apple-darwin")
+        string.prefix(TargetArch, "powerpc-apple-darwin")
     ->
         AppleGCCRegWorkaroundOpt = "-fno-loop-optimize "
     ;
@@ -596,7 +590,7 @@ gather_c_compiler_flags(Globals, PIC, AllCFlags) :-
     % (Changes here need to be reflected in scripts/mgnuc.in.)
     (
         globals.lookup_bool_option(Globals, exec_trace, yes),
-        arch_is_apple_darwin(FullArch)
+        arch_is_apple_darwin(TargetArch)
     ->
         OverrideOpts = "-O0"
     ;
@@ -722,9 +716,6 @@ gather_grade_defines(Globals, PIC, GradeDefines) :-
     ;
         GC_Method = gc_hgc,
         GC_Opt = "-DMR_CONSERVATIVE_GC -DMR_HGC "
-    ;
-        GC_Method = gc_mps,
-        GC_Opt = "-DMR_CONSERVATIVE_GC -DMR_MPS_GC "
     ;
         GC_Method = gc_accurate,
         GC_Opt = "-DMR_NATIVE_GC "
@@ -1017,9 +1008,7 @@ gather_compiler_specific_flags(Globals, Flags) :-
         C_CompilerType = cc_cl(_),
         globals.lookup_accumulating_option(Globals, msvc_flags, FlagsList)
     ;
-        ( C_CompilerType = cc_lcc
-        ; C_CompilerType = cc_unknown
-        ),
+        C_CompilerType = cc_unknown,
         FlagsList = []
     ),
     join_string_list(FlagsList, "", "", " ", Flags).
@@ -1099,14 +1088,14 @@ compile_java_files(ErrorStream, JavaFiles, Globals, Succeeded, !IO) :-
 
     globals.lookup_bool_option(Globals, use_subdirs, UseSubdirs),
     globals.lookup_bool_option(Globals, use_grade_subdirs, UseGradeSubdirs),
-    globals.lookup_string_option(Globals, fullarch, FullArch),
+    globals.lookup_string_option(Globals, target_arch, TargetArch),
     (
         UseSubdirs = yes,
         (
             UseGradeSubdirs = yes,
             grade_directory_component(Globals, Grade),
-            SourceDirName = "Mercury"/Grade/FullArch/"Mercury"/"javas",
-            DestDirName = "Mercury"/Grade/FullArch/"Mercury"/"classs"
+            SourceDirName = "Mercury"/Grade/TargetArch/"Mercury"/"javas",
+            DestDirName = "Mercury"/Grade/TargetArch/"Mercury"/"classs"
         ;
             UseGradeSubdirs = no,
             SourceDirName = "Mercury"/"javas",
@@ -1156,50 +1145,6 @@ java_classpath_separator = PathSeparator :-
 
 %-----------------------------------------------------------------------------%
 
-assemble(ErrorStream, PIC, ModuleName, Globals, Succeeded, !IO) :-
-    (
-        PIC = pic,
-        AsmExt = ".pic_s",
-        GCCFLAGS_FOR_ASM = "-x assembler ",
-        GCCFLAGS_FOR_PIC = "-fpic "
-    ;
-        PIC = link_with_pic,
-        % `--target asm' doesn't support any grades for
-        % which `.lpic_o' files are needed.
-        unexpected($module, $pred, "link_with_pic")
-    ;
-        PIC = non_pic,
-        AsmExt = ".s",
-        GCCFLAGS_FOR_ASM = "",
-        GCCFLAGS_FOR_PIC = ""
-    ),
-    module_name_to_file_name(Globals, ModuleName, AsmExt,
-        do_not_create_dirs, AsmFile, !IO),
-    maybe_pic_object_file_extension(Globals, PIC, ObjExt),
-    module_name_to_file_name(Globals, ModuleName, ObjExt,
-        do_create_dirs, ObjFile, !IO),
-
-    globals.lookup_bool_option(Globals, verbose, Verbose),
-    maybe_write_string(Verbose, "% Assembling `", !IO),
-    maybe_write_string(Verbose, AsmFile, !IO),
-    maybe_write_string(Verbose, "':\n", !IO),
-    % XXX should we use new asm_* options rather than
-    % reusing cc, cflags, c_flag_to_name_object_file?
-    globals.lookup_string_option(Globals, cc, CC),
-    globals.lookup_string_option(Globals, c_flag_to_name_object_file,
-        NameObjectFile),
-    globals.lookup_accumulating_option(Globals, cflags, C_Flags_List),
-    join_string_list(C_Flags_List, "", "", " ", CFLAGS),
-    % Be careful with the order here.
-    % Also be careful that each option is separated by spaces.
-    string.append_list([CC, " ", CFLAGS, " ", GCCFLAGS_FOR_PIC,
-        GCCFLAGS_FOR_ASM, "-c ", AsmFile, " ", NameObjectFile, ObjFile],
-        Command),
-    invoke_system_command(Globals, ErrorStream, cmd_verbose_commands, Command,
-        Succeeded, !IO).
-
-%-----------------------------------------------------------------------------%
-
 compile_erlang_file(ErrorStream, ErlangFile, Globals, Succeeded, !IO) :-
     globals.lookup_bool_option(Globals, verbose, Verbose),
     maybe_write_string(Verbose, "% Compiling `", !IO),
@@ -1235,13 +1180,13 @@ compile_erlang_file(ErrorStream, ErlangFile, Globals, Succeeded, !IO) :-
 
     globals.lookup_bool_option(Globals, use_subdirs, UseSubdirs),
     globals.lookup_bool_option(Globals, use_grade_subdirs, UseGradeSubdirs),
-    globals.lookup_string_option(Globals, fullarch, FullArch),
+    globals.lookup_string_option(Globals, target_arch, TargetArch),
     (
         UseSubdirs = yes,
         (
             UseGradeSubdirs = yes,
             grade_directory_component(Globals, Grade),
-            DirName = "Mercury"/Grade/FullArch/"Mercury"/"beams"
+            DirName = "Mercury"/Grade/TargetArch/"Mercury"/"beams"
         ;
             UseGradeSubdirs = no,
             DirName = "Mercury"/"beams"
@@ -2076,15 +2021,19 @@ link_exe_or_shared_lib(Globals, ErrorStream, LinkTargetType, ModuleName,
             % that following link command will call sub-commands itself
             % and thus overflow the command line, so in this case
             % we first create an archive of all of the object files.
-            %
             RestrictedCommandLine = yes,
             io.make_temp(TmpFile, !IO),
             globals.lookup_string_option(Globals, library_extension, LibExt),
             TmpArchive = TmpFile ++ LibExt,
-            create_archive(Globals, ErrorStream, TmpArchive, yes, ObjectsList,
-                ArchiveSucceeded, !IO),
+            % Only include actual object files in the temporary archive,
+            % not other files such as other archives.
+            filter_object_files(Globals, ObjectsList,
+                ProperObjectFiles, NonObjectFiles),
+            create_archive(Globals, ErrorStream, TmpArchive, yes,
+                ProperObjectFiles, ArchiveSucceeded, !IO),
             MaybeDeleteTmpArchive = yes(TmpArchive),
-            Objects = TmpArchive
+            join_quoted_string_list([TmpArchive | NonObjectFiles],
+                "", "", " ", Objects)
         ;
             RestrictedCommandLine = no,
             ArchiveSucceeded = yes,
@@ -2257,10 +2206,6 @@ get_mercury_std_libs(Globals, TargetType, StdLibs) :-
             ),
             link_lib_args(Globals, TargetType, StdLibDir, "", LibExt,
                 GCGrade, StaticGCLibs, SharedGCLibs)
-        ;
-            GCMethod = gc_mps,
-            link_lib_args(Globals, TargetType, StdLibDir, "", LibExt,
-                "mps", StaticGCLibs, SharedGCLibs)
         ;
             GCMethod = gc_accurate,
             StaticGCLibs = "",
@@ -2520,9 +2465,7 @@ get_system_libs(Globals, TargetType, SystemLibs) :-
 :- pred use_thread_libs(globals::in, bool::out) is det.
 
 use_thread_libs(Globals, UseThreadLibs) :-
-    globals.lookup_bool_option(Globals, parallel, Parallel),
-    globals.get_gc_method(Globals, GCMethod),
-    UseThreadLibs = ( ( Parallel = yes ; GCMethod = gc_mps ) -> yes ; no ).
+    globals.lookup_bool_option(Globals, parallel, UseThreadLibs).
 
     % When using --restricted-command-line with Visual C we add all the object
     % files to a temporary archive before linking an executable.
@@ -2558,7 +2501,6 @@ get_restricted_command_line_link_opts(Globals, LinkTargetType,
             ;
                 ( C_CompilerType = cc_gcc(_, _, _)
                 ; C_CompilerType = cc_clang(_)
-                ; C_CompilerType = cc_lcc
                 ; C_CompilerType = cc_unknown
                 ),
                 ResCmdLinkOpts = ""
@@ -2578,6 +2520,33 @@ get_restricted_command_line_link_opts(Globals, LinkTargetType,
     ;
         RestrictedCommandLine = no,
         ResCmdLinkOpts = ""
+    ).
+
+    % Filter list of files into those with and without known object file
+    % extensions.
+    %
+:- pred filter_object_files(globals::in, list(string)::in,
+    list(string)::out, list(string)::out) is det.
+
+filter_object_files(Globals, Files, ObjectFiles, NonObjectFiles) :-
+    globals.lookup_string_option(Globals, object_file_extension, ObjExt),
+    globals.lookup_string_option(Globals, pic_object_file_extension,
+        PicObjExt),
+    globals.lookup_string_option(Globals, link_with_pic_object_file_extension,
+        LinkWithPicObjExt),
+    list.filter(has_object_file_extension(ObjExt, PicObjExt,
+        LinkWithPicObjExt), Files, ObjectFiles, NonObjectFiles).
+
+:- pred has_object_file_extension(string::in, string::in, string::in,
+    string::in) is semidet.
+
+has_object_file_extension(ObjExt, PicObjExt, LinkWithPicObjExt, FileName) :-
+    (
+        string.suffix(FileName, ObjExt)
+    ;
+        string.suffix(FileName, PicObjExt)
+    ;
+        string.suffix(FileName, LinkWithPicObjExt)
     ).
 
 post_link_make_symlink_or_copy(ErrorStream, LinkTargetType, ModuleName,
@@ -2698,7 +2667,6 @@ get_linker_output_option(Globals, LinkTargetType, OutputOpt) :-
     ;
         ( C_CompilerType = cc_gcc(_, _, _)
         ; C_CompilerType = cc_clang(_)
-        ; C_CompilerType = cc_lcc
         ; C_CompilerType = cc_unknown
         ),
         OutputOpt = " -o "
@@ -2710,12 +2678,11 @@ reserve_stack_size_flags(Globals) = Flags :-
     globals.lookup_int_option(Globals, cstack_reserve_size, ReserveStackSize),
     ( if ReserveStackSize = -1 then
         Flags = ""
-    else 
+    else
         get_c_compiler_type(Globals, C_CompilerType),
         (
             ( C_CompilerType = cc_gcc(_, _, _)
             ; C_CompilerType = cc_clang(_)
-            ; C_CompilerType = cc_lcc
             ; C_CompilerType = cc_unknown
             ),
             string.format("-Wl,--stack=%d", [i(ReserveStackSize)], Flags)
@@ -2734,9 +2701,7 @@ process_link_library(Globals, MercuryLibDirs, LibName, LinkerOpt, !Succeeded,
         !IO) :-
     globals.get_target(Globals, Target),
     (
-        ( Target = target_c
-        ; Target = target_x86_64
-        ),
+        Target = target_c,
         globals.lookup_string_option(Globals, mercury_linkage, MercuryLinkage),
         LinkOpt = "-l",
         LibSuffix = ""
@@ -2825,7 +2790,6 @@ create_archive(Globals, ErrorStream, LibFileName, Quote, ObjectList,
     ;
         ( C_CompilerType = cc_gcc(_, _, _)
         ; C_CompilerType = cc_clang(_)
-        ; C_CompilerType = cc_lcc
         ; C_CompilerType = cc_unknown
         ),
         ArOutputSpace = " "

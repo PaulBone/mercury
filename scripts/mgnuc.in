@@ -80,15 +80,7 @@ case "$C_COMPILER_TYPE" in
         DISABLE_OPTS_OPT="-O0"
         COMPILER=clang
         ;;
-    lcc*)
-        ANSI_OPTS=
-        CHECK_OPTS="-w"     # turn off all warnings due to spurious warnings.
-        OPT_OPTS=""
-        DEBUG_OPT="-g"
-        DISABLE_OPTS_OPT="-O0"
-        COMPILER=lcc
-        ;;
-    msvc*|cl*)
+    msvc*)
         ANSI_OPTS=""
         CHECK_OPTS="-nologo"    # Suppress the MSVC banner message.
         OPT_OPTS=""
@@ -133,8 +125,7 @@ Options:
     -v, --verbose
         Echo gcc command before executing it.
     --no-ansi
-        Don't pass \`-ansi' to gcc. Use the full contents of system headers,
-        rather than the ANSI subset.
+        Use the full contents of system headers, rather than the ANSI subset.
     --no-check
         Don't enable any of gcc's warnings.
     --low-level-debug
@@ -343,7 +334,6 @@ case $gc_method in
     boehm_debug)    GC_OPTS="$boehm_opts -DMR_BOEHM_GC_DEBUG -DGC_DEBUG -DKEEP_BACK_PTRS" ;;
     hgc)            GC_OPTS="-DMR_CONSERVATIVE_GC -DMR_HGC" ;;
     conservative)   GC_OPTS="-DMR_CONSERVATIVE_GC -DMR_BOEHM_GC" ;;
-    mps)            GC_OPTS="-DMR_CONSERVATIVE_GC -DMR_MPS_GC" ;;
     none)           GC_OPTS="" ;;
 esac
 
@@ -523,18 +513,6 @@ esac
 
 ARCH_OPTS=""
 case "$FULLARCH" in
-    mips-sgi-irix5.*)
-        # Nonlocal gotos don't work with PIC, which is the default for Irix 5,
-        # so if nonlocal gotos are enabled we need to disable the use of
-        # shared libraries.
-        case $non_local_gotos in
-            true)
-                LIBRARY_PATH="$NONSHARED_LIB_DIR:/usr/lib/nonshared:$LIBRARY_PATH"
-                export LIBRARY_PATH
-                AS_OPTS="-non_shared"
-            ;;
-        esac
-        ;;
     i*86-*|x86_64*)
         # The use of stack_pointer in the ASM_JUMP macro defined in
         # runtime/mercury_goto.h causes lots of warnings about using possibly

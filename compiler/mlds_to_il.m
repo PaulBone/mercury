@@ -150,7 +150,9 @@
 :- import_module backend_libs.rtti.
 :- import_module hlds.code_model.
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module ml_backend.ml_code_util.
 :- import_module ml_backend.ml_global_data.
 :- import_module ml_backend.ml_type_gen.
@@ -1066,7 +1068,7 @@ generate_method(_, IsCons, mlds_defn(Name, Context, Flags, Entity),
     Entity = mlds_function(_MaybePredProcId, Params, MaybeStatement,
         Attributes, EnvVarNames),
 
-    expect(set.empty(EnvVarNames), $module, $pred, "EnvVarNames"),
+    expect(set.is_empty(EnvVarNames), $module, $pred, "EnvVarNames"),
 
     il_info_get_module_name(!.Info, ModuleName),
 

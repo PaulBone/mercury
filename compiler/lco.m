@@ -182,7 +182,9 @@
 :- import_module hlds.quantification.
 :- import_module libs.globals.
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_mode.
 :- import_module parse_tree.prog_type.
@@ -1552,7 +1554,7 @@ lco_transform_variant_atomic_goal(ModuleInfo, VarToAddr, InstMap0,
 
 :- pred lco_transform_variant_plain_call(module_info::in, variant_map::in,
     var_to_target::in, instmap::in,
-    hlds_goal_expr::in(plain_call_expr), hlds_goal_expr::out,
+    hlds_goal_expr::in(goal_expr_plain_call), hlds_goal_expr::out,
     hlds_goal_info::in, hlds_goal_info::out, bool::out,
     proc_info::in, proc_info::out) is det.
 
@@ -1675,8 +1677,7 @@ make_store_goal(ModuleInfo, InstMap, GroundVar - StoreTarget, Goal,
         make_unification_args(GroundVar, ArgNum, 1, ArgTypes,
             ArgVars, ArgModes, !ProcInfo),
 
-        IsExistConstr = no,
-        RHS = rhs_functor(ConsId, IsExistConstr, ArgVars),
+        RHS = rhs_functor(ConsId, is_not_exist_constr, ArgVars),
 
         instmap_lookup_var(InstMap, AddrVar, AddrVarInst0),
         inst_expand(ModuleInfo, AddrVarInst0, AddrVarInst),
@@ -1731,5 +1732,5 @@ make_unification_arg(GroundVar, TargetArgNum, CurArgNum, ArgType,
     ).
 
 %-----------------------------------------------------------------------------%
-:- end_module lco.
+:- end_module transform_hlds.lco.
 %-----------------------------------------------------------------------------%

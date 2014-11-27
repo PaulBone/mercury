@@ -1,10 +1,10 @@
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % vim: ft=mercury ts=4 sw=4 et wm=0 tw=0
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 % Copyright (C) 1995-2000, 2003-2007, 2011 The University of Melbourne.
 % This file may only be copied under the terms of the GNU Library General
 % Public License - see the file COPYING.LIB in the Mercury distribution.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 %
 % File: rbtree.m.
 % Main author: petdr.
@@ -37,8 +37,8 @@
 % search:
 %   Fails if key looked up doesn't exist.
 %
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module rbtree.
 :- interface.
@@ -46,194 +46,189 @@
 :- import_module assoc_list.
 :- import_module list.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- type rbtree(Key, Value).
 
     % Initialise the data structure.
     %
-:- func rbtree.init = rbtree(K, V).
-:- pred rbtree.init(rbtree(K, V)::uo) is det.
+:- func init = rbtree(K, V).
+:- pred init(rbtree(K, V)::uo) is det.
 
     % Initialise an rbtree containing the given key-value pair.
     %
-:- func rbtree.singleton(K, V) = rbtree(K, V).
+:- func singleton(K, V) = rbtree(K, V).
 
     % Check whether a tree is empty.
     %
-:- pred rbtree.is_empty(rbtree(K, V)::in) is semidet.
+:- pred is_empty(rbtree(K, V)::in) is semidet.
 
     % Inserts a new key-value pair into the tree.
     % Fails if key already in the tree.
     %
-:- pred rbtree.insert(K::in, V::in, rbtree(K, V)::in, rbtree(K, V)::out)
-    is semidet.
+:- pred insert(K::in, V::in, rbtree(K, V)::in, rbtree(K, V)::out) is semidet.
 
     % Updates the value associated with a key.
     % Fails if the key does not exist.
     %
-:- pred rbtree.update(K::in, V::in, rbtree(K, V)::in, rbtree(K, V)::out)
-    is semidet.
+:- pred update(K::in, V::in, rbtree(K, V)::in, rbtree(K, V)::out) is semidet.
 
     % Update the value at the given key by applying the supplied
     % transformation to it.  Fails if the key is not found.  This is faster
     % than first searching for the value and then updating it.
     %
-:- pred rbtree.transform_value(pred(V, V)::in(pred(in, out) is det), K::in,
+:- pred transform_value(pred(V, V)::in(pred(in, out) is det), K::in,
     rbtree(K, V)::in, rbtree(K, V)::out) is semidet.
 
     % Sets a value regardless of whether key exists or not.
     %
-:- func rbtree.set(rbtree(K, V), K, V) = rbtree(K, V).
-:- pred rbtree.set(K::in, V::in, rbtree(K, V)::in, rbtree(K, V)::out) is det.
+:- func set(rbtree(K, V), K, V) = rbtree(K, V).
+:- pred set(K::in, V::in, rbtree(K, V)::in, rbtree(K, V)::out) is det.
 
     % Insert a duplicate key into the tree.
     %
-:- func rbtree.insert_duplicate(rbtree(K, V), K, V) = rbtree(K, V).
-:- pred rbtree.insert_duplicate(K::in, V::in,
+:- func insert_duplicate(rbtree(K, V), K, V) = rbtree(K, V).
+:- pred insert_duplicate(K::in, V::in,
     rbtree(K, V)::in, rbtree(K, V)::out) is det.
 
-:- pred rbtree.member(rbtree(K, V)::in, K::out, V::out) is nondet.
+:- pred member(rbtree(K, V)::in, K::out, V::out) is nondet.
 
     % Search for a key-value pair using the key.
     % Fails if the key does not exist.
     %
-:- pred rbtree.search(rbtree(K, V)::in, K::in, V::out) is semidet.
+:- pred search(rbtree(K, V)::in, K::in, V::out) is semidet.
 
     % Lookup the value associated with a key.
     % Throws an exception if the key does not exist.
     %
-:- func rbtree.lookup(rbtree(K, V), K) = V.
-:- pred rbtree.lookup(rbtree(K, V)::in, K::in, V::out) is det.
+:- func lookup(rbtree(K, V), K) = V.
+:- pred lookup(rbtree(K, V)::in, K::in, V::out) is det.
 
     % Search for a key-value pair using the key.  If there is no entry
     % for the given key, returns the pair for the next lower key instead.
     % Fails if there is no key with the given or lower value.
     %
-:- pred rbtree.lower_bound_search(rbtree(K, V)::in, K::in, K::out, V::out)
+:- pred lower_bound_search(rbtree(K, V)::in, K::in, K::out, V::out)
     is semidet.
 
     % Search for a key-value pair using the key.  If there is no entry
     % for the given key, returns the pair for the next lower key instead.
     % Throws an exception if there is no key with the given or lower value.
     %
-:- pred rbtree.lower_bound_lookup(rbtree(K, V)::in, K::in, K::out, V::out)
-    is det.
+:- pred lower_bound_lookup(rbtree(K, V)::in, K::in, K::out, V::out) is det.
 
     % Search for a key-value pair using the key.  If there is no entry
     % for the given key, returns the pair for the next higher key instead.
     % Fails if there is no key with the given or higher value.
     %
-:- pred rbtree.upper_bound_search(rbtree(K, V)::in, K::in, K::out, V::out)
+:- pred upper_bound_search(rbtree(K, V)::in, K::in, K::out, V::out)
     is semidet.
 
     % Search for a key-value pair using the key.  If there is no entry
     % for the given key, returns the pair for the next higher key instead.
     % Throws an exception if there is no key with the given or higher value.
     %
-:- pred rbtree.upper_bound_lookup(rbtree(K, V)::in, K::in, K::out, V::out)
-    is det.
+:- pred upper_bound_lookup(rbtree(K, V)::in, K::in, K::out, V::out) is det.
 
     % Delete the key-value pair associated with a key.
     % Does nothing if the key does not exist.
     %
-:- func rbtree.delete(rbtree(K, V), K) = rbtree(K, V).
-:- pred rbtree.delete(K::in, rbtree(K, V)::in, rbtree(K, V)::out) is det.
+:- func delete(rbtree(K, V), K) = rbtree(K, V).
+:- pred delete(K::in, rbtree(K, V)::in, rbtree(K, V)::out) is det.
 
     % Remove the key-value pair associated with a key.
     % Fails if the key does not exist.
     %
-:- pred rbtree.remove(K::in, V::out, rbtree(K, V)::in, rbtree(K, V)::out)
+:- pred remove(K::in, V::out, rbtree(K, V)::in, rbtree(K, V)::out)
     is semidet.
 
     % Deletes the node with the minimum key from the tree,
     % and returns the key and value fields.
     %
-:- pred rbtree.remove_smallest(K::out, V::out,
+:- pred remove_smallest(K::out, V::out,
     rbtree(K, V)::in, rbtree(K, V)::out) is semidet.
 
     % Deletes the node with the maximum key from the tree,
     % and returns the key and value fields.
     %
-:- pred rbtree.remove_largest(K::out, V::out,
+:- pred remove_largest(K::out, V::out,
     rbtree(K, V)::in, rbtree(K, V)::out) is semidet.
 
     % Returns an in-order list of all the keys in the rbtree.
     %
-:- func rbtree.keys(rbtree(K, V)) = list(K).
-:- pred rbtree.keys(rbtree(K, V)::in, list(K)::out) is det.
+:- func keys(rbtree(K, V)) = list(K).
+:- pred keys(rbtree(K, V)::in, list(K)::out) is det.
 
     % Returns a list of values such that the keys associated with the
     % values are in-order.
     %
-:- func rbtree.values(rbtree(K, V)) = list(V).
-:- pred rbtree.values(rbtree(K, V)::in, list(V)::out) is det.
+:- func values(rbtree(K, V)) = list(V).
+:- pred values(rbtree(K, V)::in, list(V)::out) is det.
 
     % Count the number of elements in the tree.
     %
-:- func rbtree.count(rbtree(K, V)) = int.
-:- pred rbtree.count(rbtree(K, V)::in, int::out) is det.
+:- func count(rbtree(K, V)) = int.
+:- pred count(rbtree(K, V)::in, int::out) is det.
 
-:- func rbtree.assoc_list_to_rbtree(assoc_list(K, V)) = rbtree(K, V).
-:- pred rbtree.assoc_list_to_rbtree(assoc_list(K, V)::in, rbtree(K, V)::out)
+:- func assoc_list_to_rbtree(assoc_list(K, V)) = rbtree(K, V).
+:- pred assoc_list_to_rbtree(assoc_list(K, V)::in, rbtree(K, V)::out) is det.
+
+:- func from_assoc_list(assoc_list(K, V)) = rbtree(K, V).
+
+:- func rbtree_to_assoc_list(rbtree(K, V)) = assoc_list(K, V).
+:- pred rbtree_to_assoc_list(rbtree(K, V)::in, assoc_list(K, V)::out)
     is det.
 
-:- func rbtree.from_assoc_list(assoc_list(K, V)) = rbtree(K, V).
+:- func to_assoc_list(rbtree(K, V)) = assoc_list(K, V).
 
-:- func rbtree.rbtree_to_assoc_list(rbtree(K, V)) = assoc_list(K, V).
-:- pred rbtree.rbtree_to_assoc_list(rbtree(K, V)::in, assoc_list(K, V)::out)
-    is det.
-
-:- func rbtree.to_assoc_list(rbtree(K, V)) = assoc_list(K, V).
-
-:- func rbtree.foldl(func(K, V, T) = T, rbtree(K, V), T) = T.
-:- pred rbtree.foldl(pred(K, V, T, T), rbtree(K, V), T, T).
-:- mode rbtree.foldl(pred(in, in, in, out) is det, in, in, out) is det.
-:- mode rbtree.foldl(pred(in, in, mdi, muo) is det, in, mdi, muo) is det.
-:- mode rbtree.foldl(pred(in, in, di, uo) is det, in, di, uo) is det.
-:- mode rbtree.foldl(pred(in, in, in, out) is semidet, in, in, out)
+:- func foldl(func(K, V, T) = T, rbtree(K, V), T) = T.
+:- pred foldl(pred(K, V, T, T), rbtree(K, V), T, T).
+:- mode foldl(pred(in, in, in, out) is det, in, in, out) is det.
+:- mode foldl(pred(in, in, mdi, muo) is det, in, mdi, muo) is det.
+:- mode foldl(pred(in, in, di, uo) is det, in, di, uo) is det.
+:- mode foldl(pred(in, in, in, out) is semidet, in, in, out)
     is semidet.
-:- mode rbtree.foldl(pred(in, in, mdi, muo) is semidet, in, mdi, muo)
+:- mode foldl(pred(in, in, mdi, muo) is semidet, in, mdi, muo)
     is semidet.
-:- mode rbtree.foldl(pred(in, in, di, uo) is semidet, in, di, uo)
+:- mode foldl(pred(in, in, di, uo) is semidet, in, di, uo)
     is semidet.
 
-:- pred rbtree.foldl2(pred(K, V, T, T, U, U), rbtree(K, V), T, T, U, U).
-:- mode rbtree.foldl2(pred(in, in, in, out, in, out) is det,
+:- pred foldl2(pred(K, V, T, T, U, U), rbtree(K, V), T, T, U, U).
+:- mode foldl2(pred(in, in, in, out, in, out) is det,
     in, in, out, in, out) is det.
-:- mode rbtree.foldl2(pred(in, in, in, out, mdi, muo) is det,
+:- mode foldl2(pred(in, in, in, out, mdi, muo) is det,
     in, in, out, mdi, muo) is det.
-:- mode rbtree.foldl2(pred(in, in, in, out, di, uo) is det,
+:- mode foldl2(pred(in, in, in, out, di, uo) is det,
     in, in, out, di, uo) is det.
-:- mode rbtree.foldl2(pred(in, in, di, uo, di, uo) is det,
+:- mode foldl2(pred(in, in, di, uo, di, uo) is det,
     in, di, uo, di, uo) is det.
-:- mode rbtree.foldl2(pred(in, in, in, out, in, out) is semidet,
+:- mode foldl2(pred(in, in, in, out, in, out) is semidet,
     in, in, out, in, out) is semidet.
-:- mode rbtree.foldl2(pred(in, in, in, out, mdi, muo) is semidet,
+:- mode foldl2(pred(in, in, in, out, mdi, muo) is semidet,
     in, in, out, mdi, muo) is semidet.
-:- mode rbtree.foldl2(pred(in, in, in, out, di, uo) is semidet,
+:- mode foldl2(pred(in, in, in, out, di, uo) is semidet,
     in, in, out, di, uo) is semidet.
 
-:- pred rbtree.foldl3(pred(K, V, T, T, U, U, W, W), rbtree(K, V),
+:- pred foldl3(pred(K, V, T, T, U, U, W, W), rbtree(K, V),
     T, T, U, U, W, W).
-:- mode rbtree.foldl3(pred(in, in, in, out, in, out, in, out) is det,
+:- mode foldl3(pred(in, in, in, out, in, out, in, out) is det,
     in, in, out, in, out, in, out) is det.
-:- mode rbtree.foldl3(pred(in, in, in, out, in, out, in, out) is semidet,
+:- mode foldl3(pred(in, in, in, out, in, out, in, out) is semidet,
     in, in, out, in, out, in, out) is semidet.
-:- mode rbtree.foldl3(pred(in, in, in, out, in, out, di, uo) is det,
+:- mode foldl3(pred(in, in, in, out, in, out, di, uo) is det,
     in, in, out, in, out, di, uo) is det.
-:- mode rbtree.foldl3(pred(in, in, in, out, di, uo, di, uo) is det,
+:- mode foldl3(pred(in, in, in, out, di, uo, di, uo) is det,
     in, in, out, di, uo, di, uo) is det.
-:- mode rbtree.foldl3(pred(in, in, di, uo, di, uo, di, uo) is det,
+:- mode foldl3(pred(in, in, di, uo, di, uo, di, uo) is det,
     in, di, uo, di, uo, di, uo) is det.
 
-:- func rbtree.map_values(func(K, V) = W, rbtree(K, V)) = rbtree(K, W).
-:- pred rbtree.map_values(pred(K, V, W), rbtree(K, V), rbtree(K, W)).
-:- mode rbtree.map_values(pred(in, in, out) is det, in, out) is det.
-:- mode rbtree.map_values(pred(in, in, out) is semidet, in, out) is semidet.
+:- func map_values(func(K, V) = W, rbtree(K, V)) = rbtree(K, W).
+:- pred map_values(pred(K, V, W), rbtree(K, V), rbtree(K, W)).
+:- mode map_values(pred(in, in, out) is det, in, out) is det.
+:- mode map_values(pred(in, in, out) is semidet, in, out) is semidet.
 
-%-----------------------------------------------------------------------------%
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
@@ -243,14 +238,14 @@
 :- import_module pair.
 :- import_module require.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- type rbtree(K,V)
     --->    empty
     ;       red(K, V, rbtree(K,V), rbtree(K,V))
     ;       black(K, V, rbtree(K, V), rbtree(K, V)).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.init = RBT :-
     rbtree.init(RBT).
@@ -262,7 +257,7 @@ rbtree.is_empty(Tree) :-
 
 rbtree.singleton(K, V) = black(K, V, empty, empty).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 % Special conditions that must be satisfied by Red-Black trees.
 %   * The root node must be black.
@@ -381,7 +376,7 @@ rbtree.insert_2(black(K0, V0, L0, R0), K, V, Tree) :-
         )
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.update(_K, _V, empty, _T) :-
     fail.
@@ -414,7 +409,7 @@ rbtree.update(K, V, black(K0, V0, L, R), Tree) :-
         Tree = black(K0, V0, L, NewR)
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.transform_value(_P, _K, empty, _T) :-
     fail.
@@ -449,7 +444,7 @@ rbtree.transform_value(P, K, black(K0, V0, L, R), Tree) :-
         Tree = black(K0, V0, L, NewR)
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 % Special conditions that must be satisfied by Red-Black trees.
 %   * The root node must be black.
@@ -574,7 +569,7 @@ rbtree.set_2(black(K0, V0, L0, R0), K, V, Tree) :-
         )
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 % Special conditions that must be satisfied by Red-Black trees.
 %   * The root node must be black.
@@ -711,7 +706,7 @@ rbtree.insert_duplicate_2(black(K0, V0, L0, R0), K, V, Tree) :-
         )
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.member(empty, _K, _V) :- fail.
 rbtree.member(red(K0, V0, Left, Right), K, V) :-
@@ -733,7 +728,7 @@ rbtree.member(black(K0, V0, Left, Right), K, V) :-
         rbtree.member(Right, K, V)
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.search(Tree, K, V) :-
     ( Tree = red(K0, V0, Left, Right)
@@ -761,7 +756,7 @@ rbtree.lookup(T, K, V) :-
         report_lookup_error("rbtree.lookup: key not found", K, V)
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.lower_bound_search(Tree, SearchK, K, V) :-
     ( Tree = red(K0, V0, Left, Right)
@@ -795,7 +790,7 @@ rbtree.lower_bound_lookup(T, SearchK, K, V) :-
             SearchK, V)
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.upper_bound_search(Tree, SearchK, K, V) :-
     ( Tree = red(K0, V0, Left, Right)
@@ -829,7 +824,7 @@ rbtree.upper_bound_lookup(T, SearchK, K, V) :-
             SearchK, V)
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.delete(!.RBT, K) = !:RBT :-
     rbtree.delete(K, !RBT).
@@ -915,7 +910,7 @@ rbtree.delete_2(black(K0, V0, L, R), K, MustRemove, MaybeV, Tree) :-
         Tree = black(K0, V0, L, NewR)
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.remove(K, V, !Tree) :-
     rbtree.delete_2(!.Tree, K, yes, yes(V), !:Tree).
@@ -982,7 +977,7 @@ rbtree.remove_smallest(NewK, NewV, black(K0, V0, L, R), Tree) :-
         Tree = black(K0, V0, NewL, R)
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.keys(RBT) = Ks :-
     rbtree.keys(RBT, Ks).
@@ -997,7 +992,7 @@ rbtree.keys(black(K0, _V0, L, R), List) :-
     rbtree.keys(R, List1),
     list.append(List0, [K0 | List1], List).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.values(RBT) = Vs :-
     rbtree.values(RBT, Vs).
@@ -1012,7 +1007,7 @@ rbtree.values(black(_K0, V0, L, R), List) :-
     rbtree.values(R, List1),
     list.append(List0, [V0 | List1], List).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.count(RBT) = N :-
     rbtree.count(RBT, N).
@@ -1027,7 +1022,7 @@ rbtree.count(black(_K, _V, L, R), N) :-
     rbtree.count(R, N1),
     N = 1 + NO + N1.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.from_assoc_list(AList) = rbtree.assoc_list_to_rbtree(AList).
 
@@ -1039,7 +1034,7 @@ rbtree.assoc_list_to_rbtree([K - V | T], Tree) :-
     rbtree.assoc_list_to_rbtree(T, Tree0),
     rbtree.set(K, V, Tree0, Tree).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.to_assoc_list(T) = rbtree.rbtree_to_assoc_list(T).
 
@@ -1056,7 +1051,7 @@ rbtree.rbtree_to_assoc_list(black(K0, V0, Left, Right), L) :-
     rbtree.rbtree_to_assoc_list(Right, L1),
     list.append(L0, [K0 - V0|L1], L).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.foldl(F, T, A) = B :-
     P = ( pred(W::in, X::in, Y::in, Z::out) is det :- Z = F(W, X, Y) ),
@@ -1072,7 +1067,7 @@ rbtree.foldl(Pred, black(K, V, Left, Right), !Acc) :-
     Pred(K, V, !Acc),
     rbtree.foldl(Pred, Right, !Acc).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.foldl2(_, empty, !Acc1, !Acc2).
 rbtree.foldl2(Pred, red(K, V, Left, Right), !Acc1, !Acc2) :-
@@ -1084,7 +1079,7 @@ rbtree.foldl2(Pred, black(K, V, Left, Right), !Acc1, !Acc2) :-
     Pred(K, V, !Acc1, !Acc2),
     rbtree.foldl2(Pred, Right, !Acc1, !Acc2).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.foldl3(_, empty, !Acc1, !Acc2, !Acc3).
 rbtree.foldl3(Pred, red(K, V, Left, Right), !Acc1, !Acc2, !Acc3) :-
@@ -1096,7 +1091,7 @@ rbtree.foldl3(Pred, black(K, V, Left, Right), !Acc1, !Acc2, !Acc3) :-
     Pred(K, V, !Acc1, !Acc2, !Acc3),
     rbtree.foldl3(Pred, Right, !Acc1, !Acc2, !Acc3).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 rbtree.map_values(F, T1) = T2 :-
     P = ( pred(X::in, Y::in, Z::out) is det :- Z = F(X, Y) ),
@@ -1116,6 +1111,6 @@ rbtree.map_values(Pred, Tree0, Tree) :-
     rbtree.map_values(Pred, Right0, Right),
     Tree = black(K0, W0, Left, Right).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 :- end_module rbtree.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

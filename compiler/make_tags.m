@@ -102,7 +102,7 @@
 :- import_module hlds.hlds_out.hlds_out_util.
 :- import_module libs.globals.
 :- import_module libs.options.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_type.
 :- import_module parse_tree.prog_out.
 
@@ -459,7 +459,6 @@ post_process_type_defns(!HLDS, Specs) :-
         ; Target = target_csharp
         ; Target = target_java
         ; Target = target_erlang
-        ; Target = target_x86_64
         ),
         % Direct arg functors have not (yet) been implemented on these targets.
         Specs = []
@@ -547,7 +546,7 @@ convert_direct_arg_functors_if_suitable(ModuleName, DebugTypeRep, MaxTag,
                     DebugTypeRep = yes,
                     trace [io(!IO)] (
                         output_direct_arg_functor_summary(ModuleName, TypeCtor,
-                            DirectArgFunctorNames, !IO) 
+                            DirectArgFunctorNames, !IO)
                     )
                 ;
                     DebugTypeRep = no
@@ -593,7 +592,7 @@ is_direct_arg_ctor(TypeTable, TypeCtorModule, TypeStatus,
         % Trust the `direct_arg' attribute of an imported type.
         status_is_imported(TypeStatus) = yes,
         list.contains(AssertedDirectArgCtors, ConsName / Arity)
-    -> 
+    ->
         ArgCond = direct_arg_asserted
     ;
         % Tuples are always acceptable argument types as they are represented
@@ -632,9 +631,9 @@ is_direct_arg_ctor(TypeTable, TypeCtorModule, TypeStatus,
         (
             status_defined_in_this_module(TypeStatus) = yes,
             list.contains(AssertedDirectArgCtors, ConsName / Arity)
-        -> 
+        ->
             ArgCond = direct_arg_asserted
-        ; 
+        ;
             ArgTypeCtor = type_ctor(ArgTypeCtorSymName, _ArgTypeCtorArity),
             sym_name_get_module_name(ArgTypeCtorSymName, ArgTypeCtorModule),
             ( TypeCtorModule = ArgTypeCtorModule ->

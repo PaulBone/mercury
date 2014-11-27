@@ -4,6 +4,7 @@ include Cairo.options
 # It does not work with single-precision floats.
 #
 MCFLAGS = \
+	--libgrades-exclude csharp					\
 	--libgrades-exclude java 					\
 	--libgrades-exclude erlang 					\
 	--libgrades-exclude spf						\

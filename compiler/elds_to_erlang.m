@@ -51,7 +51,9 @@
 :- import_module hlds.special_pred.
 :- import_module libs.file_util.
 :- import_module libs.globals.
+:- import_module mdbcomp.builtin_modules.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.file_names.
 :- import_module parse_tree.module_cmds.
 :- import_module parse_tree.prog_data.
@@ -324,10 +326,10 @@ main_wrapper_code = "
 
     mercury__startup() ->
         mercury__erlang_builtin:'ML_start_global_server'(),
-        mercury__io:'ML_io_init_state'().
+        mercury__library:'ML_std_library_init'().
 
     mercury__shutdown(ForceBadExit) ->
-        mercury__io:'ML_io_finalize_state'(),
+        mercury__library:'ML_std_library_finalize'(),
         'ML_erlang_global_server' ! {get_exit_status, self()},
         receive
             {get_exit_status_ack, ExitStatus0} ->

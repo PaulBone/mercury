@@ -149,6 +149,7 @@
 :- import_module hlds.hlds_out.
 :- import_module hlds.hlds_out.hlds_out_util.
 :- import_module hlds.instmap.
+:- import_module hlds.make_goal.
 :- import_module hlds.passes_aux.
 :- import_module hlds.pred_table.
 :- import_module hlds.quantification.
@@ -156,6 +157,7 @@
 :- import_module libs.file_util.
 :- import_module libs.globals.
 :- import_module libs.options.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_mode.
 :- import_module parse_tree.prog_out.
 :- import_module parse_tree.set_of_var.
@@ -218,23 +220,84 @@ check_pred_modes(WhatToCheck, MayChangeCalledProc, !ModuleInfo,
                 DelayPartialInstantiations),
             (
                 DelayPartialInstantiations = yes,
+                BeforeDPISafeToContinue = SafeToContinue0,
+                BeforeDPISpecs = !.Specs,
+                BeforeDPIModuleInfo = !.ModuleInfo,
                 delay_partial_inst_preds(PredIds, ChangedPreds, !ModuleInfo),
                 % --delay-partial-instantiations requires mode checking to be
                 % run again.
                 modecheck_to_fixpoint(ChangedPreds, MaxIterations, WhatToCheck,
-                    MayChangeCalledProc, !ModuleInfo,
-                    SafeToContinue, FixpointSpecs),
-                % !.Specs and FixpointSpecs are two sets of warning messages
-                % about the program, with !.Specs being derived from the
-                % version before delay_partial_inst_preds, and FixpointSpecs
-                % being derived from the version after. They ought to be the
-                % same, but just in case they are not, we do not want to
-                % confuse users by reporting the same problem twice.
-                % Which version we pick is a question of taste. !.Specs
-                % is more closely related to the compiler's original expansion
-                % of the program, but FixpointSpecs may be more closely related
-                % to the expansion intended by the programmer.
-                !:Specs = FixpointSpecs
+                    MayChangeCalledProc, !.ModuleInfo, AfterDPIModuleInfo,
+                    AfterDPISafeToContinue, AfterDPISpecs),
+                MaybeBeforeDPISeverity =
+                    worst_severity_in_specs(Globals, BeforeDPISpecs),
+                MaybeAfterDPISeverity =
+                    worst_severity_in_specs(Globals, AfterDPISpecs),
+                % BeforeDPISpecs and AfterDPISpecs ought to be the same,
+                % but in its current form, delay_partial_inst can also
+                % INTRODUCE mode errors. This can happen in situations where
+                % a predicate (such as get_feedback_data in feedback.m in the
+                % mdbcomp directory) REQUIRES being passed a partially
+                % instantiated term.
+                %
+                % Ideally, we would apply the delay_partial_inst transformation
+                % to the predicates where it does not cause problems, and
+                % undo it in the predicates where it does. Unfortunately,
+                % in the presence of mode inference, separating the two
+                % categories is not easy, so we if delay_partial_inst
+                % causes ANY new problems, from ANY predicate, we undo
+                % ALL its updates.
+                (
+                    MaybeBeforeDPISeverity = no,
+                    MaybeAfterDPISeverity = no,
+                    % There is no difference; BeforeDPISpecs and AfterDPISpecs
+                    % are equivalent. Pick one.
+                    !:Specs = AfterDPISpecs,
+                    !:ModuleInfo = AfterDPIModuleInfo,
+                    SafeToContinue = AfterDPISafeToContinue
+                ;
+                    MaybeBeforeDPISeverity = no,
+                    MaybeAfterDPISeverity = yes(_),
+                    % delay_partial_inst introduced a problem. Undo its effect.
+                    !:Specs = BeforeDPISpecs,
+                    !:ModuleInfo = BeforeDPIModuleInfo,
+                    SafeToContinue = BeforeDPISafeToContinue
+                ;
+                    MaybeBeforeDPISeverity = yes(_),
+                    MaybeAfterDPISeverity = no,
+                    % delay_partial_inst fixed a problem. Keep its effect.
+                    !:Specs = AfterDPISpecs,
+                    !:ModuleInfo = AfterDPIModuleInfo,
+                    SafeToContinue = AfterDPISafeToContinue
+                ;
+                    MaybeBeforeDPISeverity = yes(BeforeDPISeverity),
+                    MaybeAfterDPISeverity = yes(AfterDPISeverity),
+                    WorstSeverity =
+                        worst_severity(BeforeDPISeverity, AfterDPISeverity),
+                    % We do not have a COUNT of the number of problems
+                    % in either BeforeDPISpecs or AfterDPISpecs, so we
+                    % cannot choose the one that reports fewer problems.
+                    % However, to a large extent that does not matter,
+                    % because what we actually want to minimize is the
+                    % total COMPLEXITY of the mode problems we report
+                    % to the user, and a single complex mode error can be
+                    % as hard to understand as several simpler ones.
+                    %
+                    % If the delay_partial_inst transformation does not fix
+                    % all the mode errors in the module (without necessarily
+                    % fixing all the warnings), then we prefer to go with
+                    % the untransformed version of the errors, since these
+                    % should be easier to relate to the code as written.
+                    ( AfterDPISeverity = WorstSeverity ->
+                        !:Specs = BeforeDPISpecs,
+                        !:ModuleInfo = BeforeDPIModuleInfo,
+                        SafeToContinue = BeforeDPISafeToContinue
+                    ;
+                        !:Specs = AfterDPISpecs,
+                        !:ModuleInfo = AfterDPIModuleInfo,
+                        SafeToContinue = AfterDPISafeToContinue
+                    )
+                )
             ;
                 DelayPartialInstantiations = no,
                 SafeToContinue = modes_safe_to_continue
@@ -341,8 +404,8 @@ report_max_iterations_exceeded(ModuleInfo) = Spec :-
         MaxIterations),
     Pieces = [words("Mode analysis iteration limit exceeded."), nl,
         words("You may need to declare the modes explicitly"),
-        words("or use the `--mode-inference-iteration-limit' option"),
-        words("to increase the limit."),
+        words("or use the"), quote("--mode-inference-iteration-limit"),
+        words("option to increase the limit."),
         words("(The current limit is"), int_fixed(MaxIterations),
         words("iterations.)"), nl],
     Msg = error_msg(no, do_not_treat_as_first, 0, [always(Pieces)]),
@@ -624,9 +687,12 @@ do_modecheck_proc(ProcId, PredId, WhatToCheck, MayChangeCalledProc,
         get_live_vars(HeadVars, ArgLives0, LiveVarsList),
         set_of_var.list_to_set(LiveVarsList, LiveVars),
 
+        get_constrained_inst_vars(!.ModuleInfo, ArgModes0, HeadInstVars),
+
         % Initialize the mode info.
         mode_info_init(!.ModuleInfo, PredId, ProcId, Context, LiveVars,
-            InstMap0, WhatToCheck, MayChangeCalledProc, !:ModeInfo),
+            HeadInstVars, InstMap0, WhatToCheck, MayChangeCalledProc,
+            !:ModeInfo),
         mode_info_set_changed_flag(!.Changed, !ModeInfo),
 
         pred_info_get_markers(PredInfo, Markers),
@@ -635,11 +701,16 @@ do_modecheck_proc(ProcId, PredId, WhatToCheck, MayChangeCalledProc,
         ;
             InferModes = no
         ),
+        ( is_unify_pred(PredInfo) ->
+            IsUnifyPred = yes
+        ;
+            IsUnifyPred = no
+        ),
         mode_list_get_final_insts(!.ModuleInfo, ArgModes0, ArgFinalInsts0),
 
         modecheck_proc_body(!.ModuleInfo, WhatToCheck, InferModes,
-            Markers, PredId, ProcId, Body0, Body, HeadVars, InstMap0,
-            ArgFinalInsts0, ArgFinalInsts, !ModeInfo),
+            Markers, IsUnifyPred, PredId, ProcId, Body0, Body, HeadVars,
+            InstMap0, ArgFinalInsts0, ArgFinalInsts, !ModeInfo),
 
         mode_info_get_errors(!.ModeInfo, ModeErrors),
         (
@@ -699,16 +770,16 @@ do_modecheck_proc(ProcId, PredId, WhatToCheck, MayChangeCalledProc,
     ).
 
 :- pred modecheck_proc_body(module_info::in, how_to_check_goal::in,
-    bool::in, pred_markers::in, pred_id::in, proc_id::in,
-    hlds_goal::in, hlds_goal::out,
-    list(prog_var)::in, instmap::in, list(mer_inst)::in, list(mer_inst)::out,
-    mode_info::in, mode_info::out) is det.
+    bool::in, pred_markers::in, bool::in, pred_id::in, proc_id::in,
+    hlds_goal::in, hlds_goal::out, list(prog_var)::in, instmap::in,
+    list(mer_inst)::in, list(mer_inst)::out, mode_info::in, mode_info::out)
+    is det.
 
-modecheck_proc_body(ModuleInfo, WhatToCheck, InferModes, Markers,
+modecheck_proc_body(ModuleInfo, WhatToCheck, InferModes, Markers, IsUnifyPred,
         PredId, ProcId, Body0, Body, HeadVars, InstMap0,
         ArgFinalInsts0, ArgFinalInsts, ModeInfo0, ModeInfo) :-
     do_modecheck_proc_body(ModuleInfo, WhatToCheck, InferModes, Markers,
-        PredId, ProcId, Body0, Body1, HeadVars, InstMap0,
+        IsUnifyPred, PredId, ProcId, Body0, Body1, HeadVars, InstMap0,
         ArgFinalInsts0, ArgFinalInsts1, ModeInfo0, ModeInfo1),
     mode_info_get_errors(ModeInfo1, ModeErrors1),
     (
@@ -735,8 +806,8 @@ modecheck_proc_body(ModuleInfo, WhatToCheck, InferModes, Markers,
             mode_info_set_make_ground_terms_unique(make_ground_terms_unique,
                 ModeInfo0, ModeInfo2),
             do_modecheck_proc_body(ModuleInfo, WhatToCheck, InferModes,
-                Markers, PredId, ProcId, Body0, Body, HeadVars, InstMap0,
-                ArgFinalInsts0, ArgFinalInsts, ModeInfo2, ModeInfo)
+                Markers, IsUnifyPred, PredId, ProcId, Body0, Body, HeadVars,
+                InstMap0, ArgFinalInsts0, ArgFinalInsts, ModeInfo2, ModeInfo)
         ;
             HadFromGroundTerm = did_not_have_from_ground_term_scope,
             % The error could not have been due a ground term, so the results
@@ -748,13 +819,13 @@ modecheck_proc_body(ModuleInfo, WhatToCheck, InferModes, Markers,
     ).
 
 :- pred do_modecheck_proc_body(module_info::in, how_to_check_goal::in,
-    bool::in, pred_markers::in, pred_id::in, proc_id::in,
+    bool::in, pred_markers::in, bool::in, pred_id::in, proc_id::in,
     hlds_goal::in, hlds_goal::out, list(prog_var)::in, instmap::in,
     list(mer_inst)::in, list(mer_inst)::out, mode_info::in, mode_info::out)
     is det.
 
 do_modecheck_proc_body(ModuleInfo, WhatToCheck, InferModes, Markers,
-        PredId, ProcId, Body0, Body, HeadVars, InstMap0,
+        IsUnifyPred, PredId, ProcId, Body0, Body, HeadVars, InstMap0,
         ArgFinalInsts0, ArgFinalInsts, !ModeInfo) :-
     string.format("procedure_%d_%d",
         [i(pred_id_to_int(PredId)), i(proc_id_to_int(ProcId))],
@@ -864,7 +935,14 @@ do_modecheck_proc_body(ModuleInfo, WhatToCheck, InferModes, Markers,
         mode_checkpoint(exit, CheckpointMsg, !ModeInfo),
 
         % Check that final insts match those specified in the mode declaration.
-        modecheck_final_insts(HeadVars, InferModes,
+        (
+            IsUnifyPred = no,
+            GroundMatchesBound = ground_matches_bound_if_complete
+        ;
+            IsUnifyPred = yes,
+            GroundMatchesBound = ground_matches_bound_always
+        ),
+        modecheck_final_insts_gmb(HeadVars, InferModes, GroundMatchesBound,
             ArgFinalInsts0, ArgFinalInsts, Body1, Body, !ModeInfo)
     ).
 
@@ -1040,8 +1118,8 @@ modecheck_clause_disj(CheckpointMsg, HeadVars, InstMap0, ArgFinalInsts0,
     mode_checkpoint(exit, CheckpointMsg, !ModeInfo),
 
     % Check that final insts match those specified in the mode declaration.
-    modecheck_final_insts(HeadVars, no, ArgFinalInsts0,
-        _ArgFinalInsts, Disjunct1, Disjunct, !ModeInfo).
+    modecheck_final_insts(HeadVars, no, ArgFinalInsts0, _ArgFinalInsts,
+        Disjunct1, Disjunct, !ModeInfo).
 
 :- pred modecheck_clause_switch(string::in, list(prog_var)::in, instmap::in,
     list(mer_inst)::in, prog_var::in, case::in, case::out,
@@ -1146,8 +1224,16 @@ modecheck_lambda_final_insts(HeadVars, ArgFinalInsts, !Goal, !ModeInfo) :-
     list(mer_inst)::in, list(mer_inst)::out, hlds_goal::in, hlds_goal::out,
     mode_info::in, mode_info::out) is det.
 
-modecheck_final_insts(HeadVars, InferModes, FinalInsts0, FinalInsts,
-        Body0, Body, !ModeInfo) :-
+modecheck_final_insts(HeadVars, InferModes, !FinalInsts, !Body, !ModeInfo) :-
+    modecheck_final_insts_gmb(HeadVars, InferModes,
+        ground_matches_bound_if_complete, !FinalInsts, !Body, !ModeInfo).
+
+:- pred modecheck_final_insts_gmb(list(prog_var)::in, bool::in,
+    ground_matches_bound::in, list(mer_inst)::in, list(mer_inst)::out,
+    hlds_goal::in, hlds_goal::out, mode_info::in, mode_info::out) is det.
+
+modecheck_final_insts_gmb(HeadVars, InferModes, GroundMatchesBound,
+        FinalInsts0, FinalInsts, Body0, Body, !ModeInfo) :-
     mode_info_get_module_info(!.ModeInfo, ModuleInfo),
     mode_info_get_errors(!.ModeInfo, Errors),
     % If there were any mode errors, use an unreachable instmap.
@@ -1183,15 +1269,17 @@ modecheck_final_insts(HeadVars, InferModes, FinalInsts0, FinalInsts,
         module_info_proc_info(ModuleInfo, PredId, ProcId, ProcInfo),
         proc_info_arglives(ProcInfo, ModuleInfo, ArgLives),
         maybe_clobber_insts(VarFinalInsts2, ArgLives, FinalInsts),
-        check_final_insts(HeadVars, FinalInsts0, FinalInsts, InferModes, 1,
-            ModuleInfo, Body0, Body, no, Changed1, !ModeInfo),
+        check_final_insts(HeadVars, FinalInsts0, FinalInsts, InferModes,
+            GroundMatchesBound, 1, ModuleInfo, Body0, Body, no, Changed1,
+            !ModeInfo),
         mode_info_get_changed_flag(!.ModeInfo, Changed2),
         bool.or_list([Changed0, Changed1, Changed2], Changed),
         mode_info_set_changed_flag(Changed, !ModeInfo)
     ;
         InferModes = no,
-        check_final_insts(HeadVars, FinalInsts0, VarFinalInsts1,
-            InferModes, 1, ModuleInfo, Body0, Body, no, _Changed1, !ModeInfo),
+        check_final_insts(HeadVars, FinalInsts0, VarFinalInsts1, InferModes,
+            GroundMatchesBound, 1, ModuleInfo, Body0, Body, no, _Changed1,
+            !ModeInfo),
         FinalInsts = FinalInsts0
     ).
 
@@ -1214,12 +1302,12 @@ maybe_clobber_insts([Inst0 | Insts0], [IsLive | IsLives], [Inst | Insts]) :-
     maybe_clobber_insts(Insts0, IsLives, Insts).
 
 :- pred check_final_insts(list(prog_var)::in,
-    list(mer_inst)::in, list(mer_inst)::in,
-    bool::in, int::in, module_info::in, hlds_goal::in, hlds_goal::out,
+    list(mer_inst)::in, list(mer_inst)::in, bool::in, ground_matches_bound::in,
+    int::in, module_info::in, hlds_goal::in, hlds_goal::out,
     bool::in, bool::out, mode_info::in, mode_info::out) is det.
 
-check_final_insts(Vars, Insts, VarInsts, InferModes, ArgNum, ModuleInfo,
-        !Goal, !Changed, !ModeInfo) :-
+check_final_insts(Vars, Insts, VarInsts, InferModes, GroundMatchesBound,
+        ArgNum, ModuleInfo, !Goal, !Changed, !ModeInfo) :-
     (
         Vars = [],
         Insts = [],
@@ -1233,7 +1321,10 @@ check_final_insts(Vars, Insts, VarInsts, InferModes, ArgNum, ModuleInfo,
     ->
         mode_info_get_var_types(!.ModeInfo, VarTypes),
         lookup_var_type(VarTypes, Var, Type),
-        ( inst_matches_final_typed(VarInst, Inst, Type, ModuleInfo) ->
+        (
+            inst_matches_final_gmb(VarInst, Inst, Type, ModuleInfo,
+                GroundMatchesBound)
+        ->
             true
         ;
             !:Changed = yes,
@@ -1282,7 +1373,8 @@ check_final_insts(Vars, Insts, VarInsts, InferModes, ArgNum, ModuleInfo,
             )
         ),
         check_final_insts(VarsTail, InstsTail, VarInstsTail,
-            InferModes, ArgNum + 1, ModuleInfo, !Goal, !Changed, !ModeInfo)
+            InferModes, GroundMatchesBound, ArgNum + 1, ModuleInfo,
+            !Goal, !Changed, !ModeInfo)
     ;
         unexpected($module, $pred, "length mismatch")
     ).
@@ -1403,7 +1495,7 @@ report_eval_method_requires_ground_args(ProcInfo) = Spec :-
     proc_info_get_context(ProcInfo, Context),
     EvalMethodS = eval_method_to_string(EvalMethod),
     MainPieces = [words("Sorry, not implemented:"),
-        fixed("`pragma " ++ EvalMethodS ++ "'"),
+        pragma_decl(EvalMethodS),
         words("declaration not allowed for procedure"),
         words("with partially instantiated modes."), nl],
     VerbosePieces = [words("Tabling of predicates/functions"),
@@ -1421,7 +1513,7 @@ report_eval_method_destroys_uniqueness(ProcInfo) = Spec :-
     proc_info_get_context(ProcInfo, Context),
     EvalMethodS = eval_method_to_string(EvalMethod),
     MainPieces = [words("Error:"),
-        fixed("`pragma " ++ EvalMethodS ++ "'"),
+        pragma_decl(EvalMethodS),
         words("declaration not allowed for procedure"),
         words("with unique modes."), nl],
     VerbosePieces =
@@ -1438,7 +1530,8 @@ report_eval_method_destroys_uniqueness(ProcInfo) = Spec :-
 
 report_wrong_mode_for_main(ProcInfo) = Spec :-
     proc_info_get_context(ProcInfo, Context),
-    Pieces = [words("Error: main/2 must have mode `(di, uo)'."), nl],
+    Pieces = [words("Error:"), sym_name_and_arity(unqualified("main") / 2),
+        words("must have mode"), quote("(di, uo)"), suffix("."), nl],
     Msg = simple_msg(Context, [always(Pieces)]),
     Spec = error_spec(severity_error, phase_mode_check(report_in_any_mode),
         [Msg]).

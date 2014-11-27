@@ -740,6 +740,8 @@ MR_add_line_spy_point(MR_SpyAction action, MR_SpyIgnore_When ignore_when,
     int             old_size;
     int             new_size;
     char            *filename;
+    int             num_file_matches = 0;
+    int             num_line_matches = 0;
 
     *problem = NULL;
     if (ignore_when != MR_SPY_DONT_IGNORE) {
@@ -758,24 +760,46 @@ MR_add_line_spy_point(MR_SpyAction action, MR_SpyIgnore_When ignore_when,
 
     old_size = MR_spied_label_next;
     MR_process_file_line_layouts(filename, linenumber,
-        MR_add_line_spy_point_callback, point_slot);
+        MR_add_line_spy_point_callback, point_slot,
+        &num_file_matches, &num_line_matches);
     new_size = MR_spied_label_next;
 
     if (new_size == old_size) {
+        if (num_line_matches != 0) {
+            /* Every line match should add a new spy point. */
+            MR_fatal_error("MR_add_line_spy_point: num_line_matches != 0");
+        }
+
         /* there were no matching labels */
 #ifdef  MR_HAVE_A_SNPRINTF
-        snprintf(MR_error_msg_buf, MR_ERROR_MSG_BUF_SIZE,
-            "there is no event at %s:%d", filename, linenumber);
+        if (num_file_matches == 0) {
+            snprintf(MR_error_msg_buf, MR_ERROR_MSG_BUF_SIZE,
+                "there is no debuggable source file named %s", filename);
+        } else {
+            snprintf(MR_error_msg_buf, MR_ERROR_MSG_BUF_SIZE,
+                "there is no event at line %d in %s",
+                linenumber, filename);
+        }
 #else
         /* not absolutely safe, but the risk of overflow is minimal */
-        sprintf(MR_error_msg_buf, "there is no event at %s:%d",
-            filename, linenumber);
+        if (num_file_matches == 0) {
+            sprintf(MR_error_msg_buf,
+                "there is no debuggable source file named %s", filename);
+        } else {
+            sprintf(MR_error_msg_buf,
+                "there is no event at line %d in file %s",
+                linenumber, filename);
+        }
         if (strlen(MR_error_msg_buf) >= MR_ERROR_MSG_BUF_SIZE) {
             MR_fatal_error("MR_add_line_spy_point: buf overflow");
         }
 #endif
         *problem = MR_error_msg_buf;
         return -1;
+    }
+
+    if (num_line_matches == 0) {
+        MR_fatal_error("MR_add_line_spy_point: num_line_matches == 0");
     }
 
     /*
@@ -1183,30 +1207,31 @@ MR_print_spy_point(FILE *fp, int spy_point_num, MR_bool verbose)
             MR_print_spy_print_what(fp, node);
 
             fprintf(fp, " (");
-            switch (node->MR_p_format) {
-                case MR_BROWSE_FORMAT_FLAT:
-                    fprintf(fp, "flat");
-                    break;
 
-                case MR_BROWSE_FORMAT_RAW_PRETTY:
-                    fprintf(fp, "raw pretty");
-                    break;
+            if ((int) node->MR_p_format ==  MR_BROWSE_DEFAULT_FORMAT) {
+                fprintf(fp, "default");
+            } else {
+                switch (node->MR_p_format) {
+                    case MR_BROWSE_FORMAT_FLAT:
+                        fprintf(fp, "flat");
+                        break;
 
-                case MR_BROWSE_FORMAT_PRETTY:
-                    fprintf(fp, "pretty");
-                    break;
+                    case MR_BROWSE_FORMAT_RAW_PRETTY:
+                        fprintf(fp, "raw pretty");
+                        break;
 
-                case MR_BROWSE_FORMAT_VERBOSE:
-                    fprintf(fp, "verbose");
-                    break;
+                    case MR_BROWSE_FORMAT_PRETTY:
+                        fprintf(fp, "pretty");
+                        break;
 
-                case MR_BROWSE_DEFAULT_FORMAT:
-                    fprintf(fp, "default");
-                    break;
+                    case MR_BROWSE_FORMAT_VERBOSE:
+                        fprintf(fp, "verbose");
+                        break;
 
-                default:
-                    MR_fatal_error("invalid node->MR_p_format");
-                    break;
+                    default:
+                        MR_fatal_error("invalid node->MR_p_format");
+                        break;
+                }
             }
 
             if (! node->MR_p_warn) {
@@ -1410,30 +1435,30 @@ MR_save_spy_points(FILE *fp, FILE *err_fp)
                     fprintf(fp, " -n");
                 }
 
-                switch (node->MR_p_format) {
-                    case MR_BROWSE_FORMAT_FLAT:
-                        fprintf(fp, " -f");
-                        break;
 
-                    case MR_BROWSE_FORMAT_RAW_PRETTY:
-                        /* -p is the closest approximation */
-                        fprintf(fp, " -p");
-                        break;
+                if ((int) node->MR_p_format != MR_BROWSE_DEFAULT_FORMAT) {
+                    switch (node->MR_p_format) {
+                        case MR_BROWSE_FORMAT_FLAT:
+                            fprintf(fp, " -f");
+                            break;
 
-                    case MR_BROWSE_FORMAT_PRETTY:
-                        fprintf(fp, " -p");
-                        break;
+                        case MR_BROWSE_FORMAT_RAW_PRETTY:
+                            /* -p is the closest approximation */
+                            fprintf(fp, " -p");
+                            break;
 
-                    case MR_BROWSE_FORMAT_VERBOSE:
-                        fprintf(fp, " -v");
-                        break;
+                        case MR_BROWSE_FORMAT_PRETTY:
+                            fprintf(fp, " -p");
+                            break;
 
-                    case MR_BROWSE_DEFAULT_FORMAT:
-                        break;
+                        case MR_BROWSE_FORMAT_VERBOSE:
+                            fprintf(fp, " -v");
+                            break;
 
-                    default:
-                        MR_fatal_error("invalid node->MR_p_format");
-                        break;
+                        default:
+                            MR_fatal_error("invalid node->MR_p_format");
+                            break;
+                    }
                 }
 
                 fprintf(fp, " ");

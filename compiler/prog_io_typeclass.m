@@ -17,7 +17,7 @@
 :- module parse_tree.prog_io_typeclass.
 :- interface.
 
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_item.
 :- import_module parse_tree.prog_io_util.
@@ -58,9 +58,10 @@
 
 :- implementation.
 
+:- import_module mdbcomp.prim_data.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.mercury_to_mercury.
-:- import_module parse_tree.prog_io.
+:- import_module parse_tree.prog_io_item.
 :- import_module parse_tree.prog_io_sym_name.
 :- import_module parse_tree.prog_type.
 :- import_module parse_tree.prog_util.
@@ -251,7 +252,7 @@ tvars_in_fundeps(FunDeps) = list.condense(list.map(tvars_in_fundep, FunDeps)).
 
 tvars_in_fundep(fundep(Domain, Range)) = Domain ++ Range.
 
-:- pred parse_superclass_constraints(module_name::in, varset::in, term::in, 
+:- pred parse_superclass_constraints(module_name::in, varset::in, term::in,
     maybe2(list(prog_constraint), list(prog_fundep))::out) is det.
 
 parse_superclass_constraints(_ModuleName, VarSet, ConstraintsTerm, Result) :-

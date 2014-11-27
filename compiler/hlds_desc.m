@@ -5,16 +5,16 @@
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %-----------------------------------------------------------------------------%
-% 
+%
 % File: hlds_desc.m.
 % Main author: zs.
-% 
+%
 % This module's functions are intended to generate short descriptions
 % of parts of the HLDS for use in debugging messages. Whereas the code
 % in hlds_out.m is intended to completely describe a given construct,
 % the code here is intended to orient programmers about what part of the HLDS
 % is currently being processed.
-% 
+%
 %-----------------------------------------------------------------------------%
 %-----------------------------------------------------------------------------%
 
@@ -53,7 +53,7 @@
 :- import_module hlds.hlds_out.
 :- import_module hlds.hlds_out.hlds_out_util.
 :- import_module hlds.hlds_pred.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.mercury_to_mercury.
 :- import_module parse_tree.prog_out.
 
@@ -144,6 +144,9 @@ describe_goal(ModuleInfo, VarSet, Goal) = FullDesc :-
         ;
             Reason = require_complete_switch(_),
             Desc = "scope require complete switch"
+        ;
+            Reason = require_switch_arms_detism(_, _),
+            Desc = "scope require switch arm detism"
         ;
             Reason = commit(_),
             Desc = "scope commit"

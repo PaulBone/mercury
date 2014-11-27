@@ -5,14 +5,14 @@
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %-----------------------------------------------------------------------------%
-% 
+%
 % File: inst_graph.m.
 % Author: dmo.
-% 
+%
 % This module defines operations on instantiation graphs. The purpose of the
 % data structure and of the operations on it are defined in chapter 6 of
 % David Overton's PhD thesis.
-% 
+%
 %-----------------------------------------------------------------------------%
 
 :- module hlds.inst_graph.
@@ -135,12 +135,11 @@
     list(prog_var)::in, list(prog_var)::in, prog_var::out, prog_var::out)
     is nondet.
 
-    % Merge two inst_graphs by renaming the variables in the second
-    % inst_graph. Also return the variable substitution map.
+    % Merge two inst_graphs by renaming the variables in the second inst_graph.
+    % Also return the variable substitution map.
     %
 :- pred merge(inst_graph::in, prog_varset::in, inst_graph::in, prog_varset::in,
-    inst_graph::out, prog_varset::out, map(prog_var, prog_var)::out)
-    is det.
+    inst_graph::out, prog_varset::out, map(prog_var, prog_var)::out) is det.
 
 %   % Join two inst_graphs together by taking the maximum unrolling
 %   % of the type tree of each variable from the two graphs.
@@ -360,24 +359,17 @@ corresponding_members([A | _], [B | _], A, B).
 corresponding_members([_ | As], [_ | Bs], A, B) :-
     corresponding_members(As, Bs, A, B).
 
-merge(InstGraph0, VarSet0, NewInstGraph, NewVarSet, InstGraph, VarSet, Sub) :-
-    varset.merge_subst_without_names(VarSet0, NewVarSet, VarSet, Sub0),
-    (
-        map.map_values_only(pred(term.variable(V, _)::in, V::out) is semidet,
-            Sub0, Sub1)
-    ->
-        Sub = Sub1
-    ;
-        unexpected($module, $pred, "non-variable terms in substitution")
-    ),
+merge(InstGraph0, VarSet0, NewInstGraph, NewVarSet, InstGraph, VarSet,
+        Renaming) :-
+    varset.merge_renaming_without_names(VarSet0, NewVarSet, VarSet, Renaming),
     map.foldl((pred(Var0::in, Node0::in, IG0::in, IG::out) is det :-
         Node0 = node(Functors0, MaybeParent),
         map.map_values_only(
             (pred(Args0::in, Args::out) is det :-
-                map.apply_to_list(Args0, Sub, Args)),
+                map.apply_to_list(Args0, Renaming, Args)),
             Functors0, Functors),
         Node = node(Functors, MaybeParent),
-        map.lookup(Sub, Var0, Var),
+        map.lookup(Renaming, Var0, Var),
         map.det_insert(Var, Node, IG0, IG)
     ), NewInstGraph, InstGraph0, InstGraph).
 
@@ -390,11 +382,11 @@ merge(InstGraph0, VarSet0, NewInstGraph, NewVarSet, InstGraph, VarSet, Sub) :-
 %       ), VarsB),
 %   list.foldl2(join_nodes(InstGraphB, VarSetB), VarsB, InstGraphA,
 %       InstGraph, VarSetA, VarSet).
-% 
+%
 % :- pred join_nodes(inst_graph, prog_varset, prog_var, inst_graph, inst_graph,
 %       prog_varset, prog_varset).
 % :- mode join_nodes(in, in, in, in, out, in, out) is det.
-% 
+%
 % join_nodes(_, _, _, _, _, _, _) :- error("join_nodes: NYI").
 
 %-----------------------------------------------------------------------------%
@@ -444,23 +436,21 @@ dump_var(VarSet, Var, !IO) :-
 
 :- type inst_graph_info
     --->    inst_graph_info(
+                % Inst graph derived from the mode declarations,
+                % if there are any. If there are no mode declarations
+                % for the pred, this is the same as the
+                % implementation_inst_graph.
                 interface_inst_graph    :: inst_graph,
-                                        % Inst graph derived from the mode
-                                        % declarations, if there are any.
-                                        % If there are no mode declarations
-                                        % for the pred, this is the same as
-                                        % the implementation_inst_graph.
 
+                % Vars that appear in the head of the mode declaration
+                % constraint.
                 interface_vars          :: list(prog_var),
-                                        % Vars that appear in the head of the
-                                        % mode declaration constraint.
 
+                % Varset used for interface_inst_graph.
                 interface_varset        :: prog_varset,
-                                        % Varset used for interface_inst_graph.
 
+                % Inst graph derived from the body of the predicate.
                 implementation_inst_graph :: inst_graph
-                                        % Inst graph derived from the body of
-                                        % the predicate.
             ).
 
 inst_graph_info_init = inst_graph_info(InstGraph, [], VarSet, InstGraph) :-

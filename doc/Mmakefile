@@ -122,7 +122,7 @@ mercury.info: mercury.info.in ../VERSION
 	# formatted versions of the man pages.
 	# But it might make sense to add them.
 .PHONY: all
-all: $(INFOPAGES) $(DVI) $(HTML) manpages $(MDB_DOC) 
+all: $(INFOPAGES) $(DVI) $(HTML) manpages $(MDB_DOC)
 #all: ps pdf text formatted_manpages
 
 #-----------------------------------------------------------------------------#
@@ -131,39 +131,39 @@ all: $(INFOPAGES) $(DVI) $(HTML) manpages $(MDB_DOC)
 dvi: $(TEXINFO_FILES:%=%.dvi)
 
 .PHONY: warn_no_dvi
-warn_no_dvi: 
+warn_no_dvi:
 	# Warning: Unable to build .dvi files.
-	# This is probably due to a missing `texi2dvi'
+	# This is probably due to a missing `texi2dvi'.
 
 .PHONY: info
 info: mercury.info $(TEXINFO_INFO_FILES)
 
 .PHONY: warn_no_info
-warn_no_info: 
+warn_no_info:
 	# Warning: Unable to build .info files.
-	# This is probably due to a missing `makeinfo'
+	# This is probably due to a missing `makeinfo'.
 
 .PHONY: html
 html: mercury.html $(TEXINFO_INFO_FILES:%.info=%.html)
 
 .PHONY: warn_no_html
-warn_no_html: 
+warn_no_html:
 	# Warning: Unable to build .html files.
-	# This is probably due to a missing `perl'
+	# This is probably due to a missing `perl'.
 
 .PHONY: ps
 ps: $(TEXINFO_FILES:%=%.ps)
 
 .PHONY: warn_no_ps
-warn_no_ps: 
+warn_no_ps:
 	# Warning: Unable to build .ps files.
-	# This is probably due to a missing `dvips' or `text2dvi'
+	# This is probably due to a missing `dvips' or `text2dvi'.
 
 .PHONY: pdf
 pdf: $(TEXINFO_FILES:%=%.pdf)
 
 .PHONY: warn_no_pdf
-warn_no_pdf: 
+warn_no_pdf:
 	# Warning: Unable to build .pdf files.
 	# This is probably due to a missing `pdftex'.
 
@@ -220,9 +220,9 @@ mercury_library/index.html: library.texi_pp
 #-----------------------------------------------------------------------------#
 
 .PHONY: warn_no_mdb_doc
-warn_no_mdb_doc: 
+warn_no_mdb_doc:
 	# Warning: Unable to build mdb documentation.
-	# This is probably due to a missing `makeinfo' or `info'
+	# This is probably due to a missing `makeinfo' or `info'.
 
 mdb_doc: generate_mdb_doc mercury_user_guide.info mdb_categories
 	./generate_mdb_doc
@@ -251,94 +251,27 @@ mdb_command_test.inp: generate_mdb_command_test mdb_doc
 library-menu.texi_pp: ../VERSION $(LIBRARY_DIR)/*.m
 	{ 								\
 	echo "";							\
-	for filename in $(LIBRARY_DIR)/*.m; do				\
-		case $$filename in					\
-			$(LIBRARY_DIR)/backjump.m)			\
-				;;					\
-			$(LIBRARY_DIR)/erlang_conf.m)                   \
-				;;					\
-			$(LIBRARY_DIR)/erlang_rtti_implementation.m)	\
-				;;					\
-			$(LIBRARY_DIR)/mer_std.m)			\
-				;;					\
-			$(LIBRARY_DIR)/mutvar.m)			\
-				;;					\
-			$(LIBRARY_DIR)/par_builtin.m)			\
-				;;					\
-			$(LIBRARY_DIR)/private_builtin.m)		\
-				;;					\
-			$(LIBRARY_DIR)/profiling_builtin.m)		\
-				;;					\
-			$(LIBRARY_DIR)/region_builtin.m)		\
-				;;					\
-			$(LIBRARY_DIR)/robdd.m)				\
-				;;					\
-			$(LIBRARY_DIR)/rtti_implementation.m)		\
-				;;					\
-			$(LIBRARY_DIR)/stm_builtin.m)			\
-				;;					\
-			$(LIBRARY_DIR)/table_builtin.m)			\
-				;;					\
-			$(LIBRARY_DIR)/term_size_prof_builtin.m)	\
-				;;					\
-			$(LIBRARY_DIR)/test_bitset.m)			\
-				;;					\
-			*)						\
-				echo "* `basename $$filename .m`::"; 	\
-				;;					\
-		esac;							\
+	for filename in `cat $(LIBRARY_DIR)/MODULES_DOC`; do		\
+		echo "* `basename $$filename .m`::";			\
 	done;								\
 	} > library-menu.texi_pp
 
-library-chapters.texi_pp: ../VERSION $(LIBRARY_DIR)/[a-z]*.m
-	for filename in $(LIBRARY_DIR)/[a-z]*.m; do 			\
-		case $$filename in					\
-			$(LIBRARY_DIR)/backjump.m)			\
-				;;					\
-			$(LIBRARY_DIR)/erlang_conf.m)                   \
-				;;					\
-			$(LIBRARY_DIR)/erlang_rtti_implementation.m)	\
-				;;					\
-			$(LIBRARY_DIR)/mer_std.m)			\
-				;;					\
-			$(LIBRARY_DIR)/mutvar.m)			\
-				;;					\
-			$(LIBRARY_DIR)/par_builtin.m)			\
-				;;					\
-			$(LIBRARY_DIR)/private_builtin.m)		\
-				;;					\
-			$(LIBRARY_DIR)/profiling_builtin.m)		\
-				;;					\
-			$(LIBRARY_DIR)/region_builtin.m)		\
-				;;					\
-			$(LIBRARY_DIR)/robdd.m)				\
-				;;					\
-			$(LIBRARY_DIR)/rtti_implementation.m)		\
-				;;					\
-			$(LIBRARY_DIR)/stm_builtin.m)			\
-				;;					\
-			$(LIBRARY_DIR)/table_builtin.m)			\
-				;;					\
-			$(LIBRARY_DIR)/term_size_prof_builtin.m)	\
-				;;					\
-			$(LIBRARY_DIR)/test_bitset.m)			\
-				;;					\
-			*)						\
-				file="`basename $$filename .m`"; 	\
-				echo "@node $$file"; 			\
-				echo "@chapter $$file"; 		\
-				echo "@example"; 			\
-				sed -n -e '/:- implementation/q' 	\
-					-e 's/^%----*----% *$$/%--------------------------------------------------%/' 						\
-					-e 's/@/@@/g' 			\
-					-e 's/{/@{/g' 			\
-					-e 's/}/@}/g' 			\
-					-e 'p' 				\
-					"$$filename"; 			\
-				echo "@end example"; 			\
-				echo ""; 				\
-				;;					\
-		esac;							\
+library-chapters.texi_pp: ../VERSION $(LIBRARY_DIR)/*.m
+	for filename in `cat $(LIBRARY_DIR)/MODULES_DOC`; do		\
+		file="`basename $$filename .m`"; 			\
+		echo "@node $$file"; 					\
+		echo "@chapter $$file"; 				\
+		echo "@example"; 					\
+		sed -n -e '/:- implementation/q' 			\
+			-e '/NOTE_TO_IMPLEMENTORS/d'			\
+			-e 's/^%----*----% *$$/%--------------------------------------------------%/' 	\
+			-e 's/@/@@/g' 					\
+			-e 's/{/@{/g' 					\
+			-e 's/}/@}/g' 					\
+			-e 'p' 						\
+			$(LIBRARY_DIR)/"$$filename";			\
+		echo "@end example"; 					\
+		echo ""; 						\
 	done > library-chapters.texi_pp
 
 library.dvi_log library_toc.html library_1.html mercury_library.info \

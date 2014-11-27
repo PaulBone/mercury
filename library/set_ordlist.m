@@ -13,8 +13,8 @@
 % This file contains a `set' ADT.
 % Sets are implemented here as sorted lists without duplicates.
 %
-%--------------------------------------------------------------------------%
-%--------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module set_ordlist.
 :- interface.
@@ -22,473 +22,465 @@
 :- import_module bool.
 :- import_module list.
 
-%--------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- type set_ordlist(_T).
 
-    % `set_ordlist.init(Set)' is true iff `Set' is an empty set.
+    % `init(Set)' is true iff `Set' is an empty set.
     %
-:- pred set_ordlist.init(set_ordlist(_T)::uo) is det.
-:- func set_ordlist.init = set_ordlist(T).
+:- pred init(set_ordlist(_T)::uo) is det.
+:- func init = set_ordlist(T).
 
-    % `set_ordlist.list_to_set(List, Set)' is true iff `Set' is the set
+    % `list_to_set(List, Set)' is true iff `Set' is the set
     % containing only the members of `List'.
     %
-:- pred set_ordlist.list_to_set(list(T)::in, set_ordlist(T)::out) is det.
-:- func set_ordlist.list_to_set(list(T)) = set_ordlist(T).
+:- pred list_to_set(list(T)::in, set_ordlist(T)::out) is det.
+:- func list_to_set(list(T)) = set_ordlist(T).
 
-    % A synonym for set_ordlist.list_to_set/1.
+    % A synonym for list_to_set/1.
     %
-:- func set_ordlist.from_list(list(T)) = set_ordlist(T).
+:- func from_list(list(T)) = set_ordlist(T).
 
-    % `set_ordlist.sorted_list_to_set(List, Set)' is true iff `Set' is
-    % the set containing only the members of `List'.  `List' must be sorted.
+    % `sorted_list_to_set(List, Set)' is true iff `Set' is the set containing
+    % only the members of `List'.  `List' must be sorted.
     %
-:- pred set_ordlist.sorted_list_to_set(list(T)::in, set_ordlist(T)::out)
-    is det.
-:- func set_ordlist.sorted_list_to_set(list(T)) = set_ordlist(T).
+:- pred sorted_list_to_set(list(T)::in, set_ordlist(T)::out) is det.
+:- func sorted_list_to_set(list(T)) = set_ordlist(T).
 
-    % A synonym for set_ordlist.sorted_list_to_set/1.
+    % A synonym for sorted_list_to_set/1.
     %
-:- func set_ordlist.from_sorted_list(list(T)) = set_ordlist(T).
+:- func from_sorted_list(list(T)) = set_ordlist(T).
 
-    % `set_ordlist.to_sorted_list(Set, List)' is true iff `List' is the
-    % list of all the members of `Set', in sorted order.
+    % `to_sorted_list(Set, List)' is true iff `List' is the list of all the
+    % members of `Set', in sorted order.
     %
-:- pred set_ordlist.to_sorted_list(set_ordlist(T)::in, list(T)::out) is det.
-:- func set_ordlist.to_sorted_list(set_ordlist(T)) = list(T).
+:- pred to_sorted_list(set_ordlist(T)::in, list(T)::out) is det.
+:- func to_sorted_list(set_ordlist(T)) = list(T).
 
-    % `set_ordlist.singleton_set(Elem, Set)' is true iff `Set' is the set
-    % containing just the single element `Elem'.
+    % `singleton_set(Elem, Set)' is true iff `Set' is the set containing just
+    % the single element `Elem'.
     %
-:- pred set_ordlist.singleton_set(T, set_ordlist(T)).
-:- mode set_ordlist.singleton_set(in, out) is det.
-:- mode set_ordlist.singleton_set(out, in) is semidet.
+:- pred singleton_set(T, set_ordlist(T)).
+:- mode singleton_set(in, out) is det.
+:- mode singleton_set(out, in) is semidet.
 
-:- func set_ordlist.make_singleton_set(T) = set_ordlist(T).
-:- pred set_ordlist.is_singleton(set_ordlist(T)::in, T::out) is semidet.
+:- func make_singleton_set(T) = set_ordlist(T).
+:- pred is_singleton(set_ordlist(T)::in, T::out) is semidet.
 
-    % `set_ordlist.equal(SetA, SetB)' is true iff
-    % `SetA' and `SetB' contain the same elements.
+    % `equal(SetA, SetB)' is true iff `SetA' and `SetB' contain the same
+    % elements.
     %
-:- pred set_ordlist.equal(set_ordlist(T)::in, set_ordlist(T)::in) is semidet.
+:- pred equal(set_ordlist(T)::in, set_ordlist(T)::in) is semidet.
 
-    % `set_ordlist.empty(Set)' is true iff `Set' is an empty set.
+    % `empty(Set)' is true iff `Set' is an empty set.
+    % `is_empty' is a synonym for `empty'.
     %
-:- pred set_ordlist.empty(set_ordlist(_T)::in) is semidet.
-:- pred set_ordlist.is_empty(set_ordlist(T)::in) is semidet.
+:- pred empty(set_ordlist(_T)::in) is semidet.
+:- pred is_empty(set_ordlist(T)::in) is semidet.
 
-:- pred set_ordlist.non_empty(set_ordlist(T)::in) is semidet.
-:- pred set_ordlist.is_non_empty(set_ordlist(T)::in) is semidet.
-
-    % `set_ordlist.subset(SetA, SetB)' is true iff `SetA' is a subset of
-    % `SetB'.
+    % `non_empty(Set)' is true iff `Set' is not an empty set.
+    % `is_non_empty' is a synonym for `non_empty'.
     %
-:- pred set_ordlist.subset(set_ordlist(T)::in, set_ordlist(T)::in) is semidet.
+:- pred non_empty(set_ordlist(T)::in) is semidet.
+:- pred is_non_empty(set_ordlist(T)::in) is semidet.
 
-    % `set_ordlist.superset(SetA, SetB)' is true iff `SetA' is a
-    % superset of `SetB'.
+    % `subset(SetA, SetB)' is true iff `SetA' is a subset of `SetB'.
     %
-:- pred set_ordlist.superset(set_ordlist(T)::in, set_ordlist(T)::in)
+:- pred subset(set_ordlist(T)::in, set_ordlist(T)::in) is semidet.
+
+    % `superset(SetA, SetB)' is true iff `SetA' is a superset of `SetB'.
+    %
+:- pred superset(set_ordlist(T)::in, set_ordlist(T)::in)
     is semidet.
 
-    % `set_ordlist.member(X, Set)' is true iff `X' is a member of `Set'.
+    % `member(X, Set)' is true iff `X' is a member of `Set'.
     %
-:- pred set_ordlist.member(T, set_ordlist(T)).
-:- mode set_ordlist.member(in, in) is semidet.
-:- mode set_ordlist.member(out, in) is nondet.
+:- pred member(T, set_ordlist(T)).
+:- mode member(in, in) is semidet.
+:- mode member(out, in) is nondet.
 
-    % `set_ordlist.is_member(X, Set, Result)' returns
-    % `Result = yes' iff `X' is a member of `Set'.
+    % `is_member(X, Set, Result)' returns `Result = yes' iff `X' is a member of
+    % `Set'.
     %
-:- pred set_ordlist.is_member(T::in, set_ordlist(T)::in, bool::out) is det.
+:- pred is_member(T::in, set_ordlist(T)::in, bool::out) is det.
 
-    % `set_ordlist.contains(Set, X)' is true iff `X' is a member of `Set'.
+    % `contains(Set, X)' is true iff `X' is a member of `Set'.
     %
-:- pred set_ordlist.contains(set_ordlist(T)::in, T::in) is semidet.
+:- pred contains(set_ordlist(T)::in, T::in) is semidet.
 
-    % `set_ordlist.insert(X, Set0, Set)' is true iff `Set' is the union
+    % `insert(X, Set0, Set)' is true iff `Set' is the union
     % of `Set0' and the set containing only `X'.
     %
-:- pred set_ordlist.insert(T::in, set_ordlist(T)::in, set_ordlist(T)::out)
+:- pred insert(T::in, set_ordlist(T)::in, set_ordlist(T)::out)
     is det.
-:- func set_ordlist.insert(set_ordlist(T), T) = set_ordlist(T).
+:- func insert(set_ordlist(T), T) = set_ordlist(T).
 
-    % `set_ordlist.insert_new(X, Set0, Set)' is true iff
-    % `Set0' does not contain `X', while `Set' is the union of `Set0'
-    % and the set containing only `X'.
+    % `insert_new(X, Set0, Set)' is true iff `Set0' does not contain `X', while
+    % `Set' is the union of `Set0' and the set containing only `X'.
     %
-:- pred set_ordlist.insert_new(T::in,
+:- pred insert_new(T::in,
     set_ordlist(T)::in, set_ordlist(T)::out) is semidet.
 
-    % `set_ordlist.insert_list(Xs, Set0, Set)' is true iff `Set' is the
-    % union of `Set0' and the set containing only the members of `Xs'.
+    % `insert_list(Xs, Set0, Set)' is true iff `Set' is the union of `Set0' and
+    % the set containing only the members of `Xs'.
     %
-:- pred set_ordlist.insert_list(list(T)::in,
+:- pred insert_list(list(T)::in,
     set_ordlist(T)::in, set_ordlist(T)::out) is det.
-:- func set_ordlist.insert_list(set_ordlist(T), list(T)) = set_ordlist(T).
+:- func insert_list(set_ordlist(T), list(T)) = set_ordlist(T).
 
-    % `set_ordlist.delete(Set0, X, Set)' is true iff `Set' is the
+    % `delete(Set0, X, Set)' is true iff `Set' is the
     % relative complement of `Set0' and the set containing only `X', i.e.
     % if `Set' is the set which contains all the elements of `Set0'
     % except `X'.
     %
-:- pred set_ordlist.delete(T::in, set_ordlist(T)::in, set_ordlist(T)::out)
-    is det.
-:- func set_ordlist.delete(set_ordlist(T), T) = set_ordlist(T).
+:- pred delete(T::in, set_ordlist(T)::in, set_ordlist(T)::out) is det.
+:- func delete(set_ordlist(T), T) = set_ordlist(T).
 
-    % `set_ordlist.delete_list(Xs, Set0, Set)' is true iff `Set' is the
-    % relative complement of `Set0' and the set containing only the members
-    % of `Xs'.
+    % `delete_list(Xs, Set0, Set)' is true iff `Set' is the relative complement
+    % of `Set0' and the set containing only the members of `Xs'.
     %
-:- pred set_ordlist.delete_list(list(T)::in,
-    set_ordlist(T)::in, set_ordlist(T)::out) is det.
-:- func set_ordlist.delete_list(set_ordlist(T), list(T)) = set_ordlist(T).
+:- pred delete_list(list(T)::in, set_ordlist(T)::in, set_ordlist(T)::out)
+    is det.
+:- func delete_list(set_ordlist(T), list(T)) = set_ordlist(T).
 
-    % `set_ordlist.remove(X, Set0, Set)' is true iff `Set0' contains `X',
+    % `remove(X, Set0, Set)' is true iff `Set0' contains `X',
     % and `Set' is the relative complement of `Set0' and the set
     % containing only `X', i.e.  if `Set' is the set which contains
     % all the elements of `Set0' except `X'.
     %
-:- pred set_ordlist.remove(T::in, set_ordlist(T)::in, set_ordlist(T)::out)
+:- pred remove(T::in, set_ordlist(T)::in, set_ordlist(T)::out)
     is semidet.
 
-    % `set_ordlist.remove_list(Xs, Set0, Set)' is true iff Xs does not
-    % contain any duplicates, `Set0' contains every member of `Xs',
-    % and `Set' is the relative complement of `Set0' and the set
-    % containing only the members of `Xs'.
+    % `remove_list(Xs, Set0, Set)' is true iff Xs does not contain any
+    % duplicates, `Set0' contains every member of `Xs', and `Set' is the
+    % relative complement of `Set0' and the set containing only the members of
+    % `Xs'.
     %
-:- pred set_ordlist.remove_list(list(T)::in,
-    set_ordlist(T)::in, set_ordlist(T)::out) is semidet.
+:- pred remove_list(list(T)::in, set_ordlist(T)::in, set_ordlist(T)::out)
+    is semidet.
 
-    % `set_ordlist.remove_least(X, Set0, Set)' is true iff `X' is the
-    % least element in `Set0', and `Set' is the set which contains all the
-    % elements of `Set0' except `X'.
+    % `remove_least(X, Set0, Set)' is true iff `X' is the least element in
+    % `Set0', and `Set' is the set which contains all the elements of `Set0'
+    % except `X'.
+    %
+:- pred remove_least(T::out, set_ordlist(T)::in, set_ordlist(T)::out)
+    is semidet.
 
-:- pred set_ordlist.remove_least(T::out,
-    set_ordlist(T)::in, set_ordlist(T)::out) is semidet.
-
-    % `set_ordlist.union(SetA, SetB, Set)' is true iff `Set' is the union
+    % `union(SetA, SetB, Set)' is true iff `Set' is the union
     % of `SetA' and `SetB'. The efficiency of the union operation is
     % O(card(SetA)+card(SetB)) and is not sensitive to the argument
     % ordering.
     %
-:- pred set_ordlist.union(set_ordlist(T)::in, set_ordlist(T)::in,
-    set_ordlist(T)::out) is det.
-:- func set_ordlist.union(set_ordlist(T), set_ordlist(T)) = set_ordlist(T).
-
-    % `set_ordlist.union_list(A, B)' is true iff `B' is the union of
-    % all the sets in `A'
-    %
-:- pred set_ordlist.union_list(list(set_ordlist(T))::in, set_ordlist(T)::out)
+:- pred union(set_ordlist(T)::in, set_ordlist(T)::in, set_ordlist(T)::out)
     is det.
-:- func set_ordlist.union_list(list(set_ordlist(T))) = set_ordlist(T).
+:- func union(set_ordlist(T), set_ordlist(T)) = set_ordlist(T).
 
-    % `set_ordlist.power_union(A, B)' is true iff `B' is the union of
+    % `union_list(A, B)' is true iff `B' is the union of all the sets in `A'
+    %
+:- pred union_list(list(set_ordlist(T))::in, set_ordlist(T)::out) is det.
+:- func union_list(list(set_ordlist(T))) = set_ordlist(T).
+
+    % `power_union(A, B)' is true iff `B' is the union of
     % all the sets in `A'
     %
-:- pred set_ordlist.power_union(set_ordlist(set_ordlist(T))::in,
+:- pred power_union(set_ordlist(set_ordlist(T))::in,
     set_ordlist(T)::out) is det.
-:- func set_ordlist.power_union(set_ordlist(set_ordlist(T))) = set_ordlist(T).
+:- func power_union(set_ordlist(set_ordlist(T))) = set_ordlist(T).
 
-    % `set_ordlist.intersect(SetA, SetB, Set)' is true iff `Set' is the
-    % intersection of `SetA' and `SetB'. The efficiency of the intersection
-    % operation is not influenced by the argument order.
+    % `intersect(SetA, SetB, Set)' is true iff `Set' is the intersection of
+    % `SetA' and `SetB'. The efficiency of the intersection operation is not
+    % influenced by the argument order.
     %
-:- pred set_ordlist.intersect(set_ordlist(T), set_ordlist(T), set_ordlist(T)).
-:- mode set_ordlist.intersect(in, in, out) is det.
-:- mode set_ordlist.intersect(in, in, in) is semidet.
-:- func set_ordlist.intersect(set_ordlist(T), set_ordlist(T))
+:- pred intersect(set_ordlist(T), set_ordlist(T), set_ordlist(T)).
+:- mode intersect(in, in, out) is det.
+:- mode intersect(in, in, in) is semidet.
+:- func intersect(set_ordlist(T), set_ordlist(T)) = set_ordlist(T).
+
+    % `power_intersect(A, B)' is true iff `B' is the intersection of all the
+    % sets in `A'.
+    %
+:- pred power_intersect(set_ordlist(set_ordlist(T))::in,
+    set_ordlist(T)::out) is det.
+:- func power_intersect(set_ordlist(set_ordlist(T)))
     = set_ordlist(T).
 
-    % `set_ordlist.power_intersect(A, B)' is true iff `B' is the
-    % intersection of all the sets in `A'.
+    % `intersect_list(A) = B' is true iff `B' is the intersection of all the
+    % sets in `A'.
     %
-:- pred set_ordlist.power_intersect(set_ordlist(set_ordlist(T))::in,
-    set_ordlist(T)::out) is det.
-:- func set_ordlist.power_intersect(set_ordlist(set_ordlist(T)))
-    = set_ordlist(T).
+:- func intersect_list(list(set_ordlist(T))) = set_ordlist(T).
+:- pred intersect_list(list(set_ordlist(T))::in, set_ordlist(T)::out) is det.
 
-    % `set_ordlist.intersect_list(A) = B' is true iff `B' is the
-    % intersection of all the sets in `A'.
-    %
-:- func set_ordlist.intersect_list(list(set_ordlist(T))) = set_ordlist(T).
-:- pred set_ordlist.intersect_list(list(set_ordlist(T))::in,
-    set_ordlist(T)::out) is det.
-
-    % `set_ordlist.difference(SetA, SetB, Set)' is true iff `Set' is the
+    % `difference(SetA, SetB, Set)' is true iff `Set' is the
     % set containing all the elements of `SetA' except those that
     % occur in `SetB'.
     %
-:- pred set_ordlist.difference(set_ordlist(T)::in, set_ordlist(T)::in,
+:- pred difference(set_ordlist(T)::in, set_ordlist(T)::in,
     set_ordlist(T)::out) is det.
-:- func set_ordlist.difference(set_ordlist(T), set_ordlist(T))
-    = set_ordlist(T).
+:- func difference(set_ordlist(T), set_ordlist(T)) = set_ordlist(T).
 
-    % `set_ordlist.count(Set, Count)' is true iff `Set' has
-    % `Count' elements.
+    % `count(Set, Count)' is true iff `Set' has `Count' elements.
     %
-:- pred set_ordlist.count(set_ordlist(T)::in, int::out) is det.
-:- func set_ordlist.count(set_ordlist(T)) = int.
+:- pred count(set_ordlist(T)::in, int::out) is det.
+:- func count(set_ordlist(T)) = int.
 
     % Return the set of items for which the given predicate succeeds.
     %
-:- func set_ordlist.filter(pred(T1), set_ordlist(T1)) = set_ordlist(T1).
-:- mode set_ordlist.filter(pred(in) is semidet, in) = out is det.
-:- pred set_ordlist.filter(pred(T1), set_ordlist(T1), set_ordlist(T1)).
-:- mode set_ordlist.filter(pred(in) is semidet, in, out) is det.
+:- func filter(pred(T1), set_ordlist(T1)) = set_ordlist(T1).
+:- mode filter(pred(in) is semidet, in) = out is det.
+:- pred filter(pred(T1), set_ordlist(T1), set_ordlist(T1)).
+:- mode filter(pred(in) is semidet, in, out) is det.
 
-    % Return the set of items for which the given predicate succeeds,
-    % and the set of items for which it fails.
+    % Return the set of items for which the given predicate succeeds, and the
+    % set of items for which it fails.
     %
-:- pred set_ordlist.filter(pred(T1), set_ordlist(T1),
+:- pred filter(pred(T1), set_ordlist(T1),
     set_ordlist(T1), set_ordlist(T1)).
-:- mode set_ordlist.filter(pred(in) is semidet, in, out, out) is det.
+:- mode filter(pred(in) is semidet, in, out, out) is det.
 
-:- func set_ordlist.map(func(T1) = T2, set_ordlist(T1)) = set_ordlist(T2).
+:- func map(func(T1) = T2, set_ordlist(T1)) = set_ordlist(T2).
 
-:- func set_ordlist.filter_map(func(T1) = T2, set_ordlist(T1))
+:- func filter_map(func(T1) = T2, set_ordlist(T1))
     = set_ordlist(T2).
-:- mode set_ordlist.filter_map(func(in) = out is semidet, in) = out is det.
+:- mode filter_map(func(in) = out is semidet, in) = out is det.
 
-:- pred set_ordlist.filter_map(pred(T1, T2), set_ordlist(T1),
+:- pred filter_map(pred(T1, T2), set_ordlist(T1),
     set_ordlist(T2)).
-:- mode set_ordlist.filter_map(pred(in, out) is semidet, in, out) is det.
+:- mode filter_map(pred(in, out) is semidet, in, out) is det.
 
-:- func set_ordlist.fold(func(T1, T2) = T2, set_ordlist(T1), T2) = T2.
-:- pred set_ordlist.fold(pred(T1, T2, T2), set_ordlist(T1), T2, T2).
-:- mode set_ordlist.fold(pred(in, in, out) is det, in, in, out) is det.
-:- mode set_ordlist.fold(pred(in, mdi, muo) is det, in, mdi, muo) is det.
-:- mode set_ordlist.fold(pred(in, di, uo) is det, in, di, uo) is det.
-:- mode set_ordlist.fold(pred(in, in, out) is semidet, in, in, out)
+:- func fold(func(T1, T2) = T2, set_ordlist(T1), T2) = T2.
+:- pred fold(pred(T1, T2, T2), set_ordlist(T1), T2, T2).
+:- mode fold(pred(in, in, out) is det, in, in, out) is det.
+:- mode fold(pred(in, mdi, muo) is det, in, mdi, muo) is det.
+:- mode fold(pred(in, di, uo) is det, in, di, uo) is det.
+:- mode fold(pred(in, in, out) is semidet, in, in, out)
     is semidet.
-:- mode set_ordlist.fold(pred(in, mdi, muo) is semidet, in, mdi, muo)
+:- mode fold(pred(in, mdi, muo) is semidet, in, mdi, muo)
     is semidet.
-:- mode set_ordlist.fold(pred(in, di, uo) is semidet, in, di, uo)
-    is semidet.
-
-:- func set_ordlist.foldl(func(T1, T2) = T2, set_ordlist(T1), T2) = T2.
-:- pred set_ordlist.foldl(pred(T1, T2, T2), set_ordlist(T1), T2, T2).
-:- mode set_ordlist.foldl(pred(in, in, out) is det, in, in, out) is det.
-:- mode set_ordlist.foldl(pred(in, mdi, muo) is det, in, mdi, muo) is det.
-:- mode set_ordlist.foldl(pred(in, di, uo) is det, in, di, uo) is det.
-:- mode set_ordlist.foldl(pred(in, in, out) is semidet, in, in, out)
-    is semidet.
-:- mode set_ordlist.foldl(pred(in, mdi, muo) is semidet, in, mdi, muo)
-    is semidet.
-:- mode set_ordlist.foldl(pred(in, di, uo) is semidet, in, di, uo)
+:- mode fold(pred(in, di, uo) is semidet, in, di, uo)
     is semidet.
 
-:- pred set_ordlist.fold2(pred(T1, T2, T2, T3, T3), set_ordlist(T1),
+:- func foldl(func(T1, T2) = T2, set_ordlist(T1), T2) = T2.
+:- pred foldl(pred(T1, T2, T2), set_ordlist(T1), T2, T2).
+:- mode foldl(pred(in, in, out) is det, in, in, out) is det.
+:- mode foldl(pred(in, mdi, muo) is det, in, mdi, muo) is det.
+:- mode foldl(pred(in, di, uo) is det, in, di, uo) is det.
+:- mode foldl(pred(in, in, out) is semidet, in, in, out)
+    is semidet.
+:- mode foldl(pred(in, mdi, muo) is semidet, in, mdi, muo)
+    is semidet.
+:- mode foldl(pred(in, di, uo) is semidet, in, di, uo)
+    is semidet.
+
+:- pred fold2(pred(T1, T2, T2, T3, T3), set_ordlist(T1),
     T2, T2, T3, T3).
-:- mode set_ordlist.fold2(pred(in, in, out, in, out) is det, in,
+:- mode fold2(pred(in, in, out, in, out) is det, in,
     in, out, in, out) is det.
-:- mode set_ordlist.fold2(pred(in, in, out, mdi, muo) is det, in,
+:- mode fold2(pred(in, in, out, mdi, muo) is det, in,
     in, out, mdi, muo) is det.
-:- mode set_ordlist.fold2(pred(in, in, out, di, uo) is det, in,
+:- mode fold2(pred(in, in, out, di, uo) is det, in,
     in, out, di, uo) is det.
-:- mode set_ordlist.fold2(pred(in, in, out, in, out) is semidet, in,
+:- mode fold2(pred(in, in, out, in, out) is semidet, in,
     in, out, in, out) is semidet.
-:- mode set_ordlist.fold2(pred(in, in, out, mdi, muo) is semidet, in,
+:- mode fold2(pred(in, in, out, mdi, muo) is semidet, in,
     in, out, mdi, muo) is semidet.
-:- mode set_ordlist.fold2(pred(in, in, out, di, uo) is semidet, in,
+:- mode fold2(pred(in, in, out, di, uo) is semidet, in,
     in, out, di, uo) is semidet.
 
-:- pred set_ordlist.foldl2(pred(T1, T2, T2, T3, T3), set_ordlist(T1),
+:- pred foldl2(pred(T1, T2, T2, T3, T3), set_ordlist(T1),
     T2, T2, T3, T3).
-:- mode set_ordlist.foldl2(pred(in, in, out, in, out) is det, in,
+:- mode foldl2(pred(in, in, out, in, out) is det, in,
     in, out, in, out) is det.
-:- mode set_ordlist.foldl2(pred(in, in, out, mdi, muo) is det, in,
+:- mode foldl2(pred(in, in, out, mdi, muo) is det, in,
     in, out, mdi, muo) is det.
-:- mode set_ordlist.foldl2(pred(in, in, out, di, uo) is det, in,
+:- mode foldl2(pred(in, in, out, di, uo) is det, in,
     in, out, di, uo) is det.
-:- mode set_ordlist.foldl2(pred(in, in, out, in, out) is semidet, in,
+:- mode foldl2(pred(in, in, out, in, out) is semidet, in,
     in, out, in, out) is semidet.
-:- mode set_ordlist.foldl2(pred(in, in, out, mdi, muo) is semidet, in,
+:- mode foldl2(pred(in, in, out, mdi, muo) is semidet, in,
     in, out, mdi, muo) is semidet.
-:- mode set_ordlist.foldl2(pred(in, in, out, di, uo) is semidet, in,
+:- mode foldl2(pred(in, in, out, di, uo) is semidet, in,
     in, out, di, uo) is semidet.
 
-:- pred set_ordlist.fold3(pred(T1, T2, T2, T3, T3, T4, T4),
+:- pred fold3(pred(T1, T2, T2, T3, T3, T4, T4),
     set_ordlist(T1), T2, T2, T3, T3, T4, T4).
-:- mode set_ordlist.fold3(pred(in, in, out, in, out, in, out) is det, in,
+:- mode fold3(pred(in, in, out, in, out, in, out) is det, in,
     in, out, in, out, in, out) is det.
-:- mode set_ordlist.fold3(pred(in, in, out, in, out, mdi, muo) is det, in,
+:- mode fold3(pred(in, in, out, in, out, mdi, muo) is det, in,
     in, out, in, out, mdi, muo) is det.
-:- mode set_ordlist.fold3(pred(in, in, out, in, out, di, uo) is det, in,
+:- mode fold3(pred(in, in, out, in, out, di, uo) is det, in,
     in, out, in, out, di, uo) is det.
-:- mode set_ordlist.fold3(pred(in, in, out, in, out, in, out) is semidet, in,
+:- mode fold3(pred(in, in, out, in, out, in, out) is semidet, in,
     in, out, in, out, in, out) is semidet.
-:- mode set_ordlist.fold3(pred(in, in, out, in, out, mdi, muo) is semidet, in,
+:- mode fold3(pred(in, in, out, in, out, mdi, muo) is semidet, in,
     in, out, in, out, mdi, muo) is semidet.
-:- mode set_ordlist.fold3(pred(in, in, out, in, out, di, uo) is semidet, in,
+:- mode fold3(pred(in, in, out, in, out, di, uo) is semidet, in,
     in, out, in, out, di, uo) is semidet.
 
-:- pred set_ordlist.foldl3(pred(T1, T2, T2, T3, T3, T4, T4),
+:- pred foldl3(pred(T1, T2, T2, T3, T3, T4, T4),
     set_ordlist(T1), T2, T2, T3, T3, T4, T4).
-:- mode set_ordlist.foldl3(pred(in, in, out, in, out, in, out) is det, in,
+:- mode foldl3(pred(in, in, out, in, out, in, out) is det, in,
     in, out, in, out, in, out) is det.
-:- mode set_ordlist.foldl3(pred(in, in, out, in, out, mdi, muo) is det, in,
+:- mode foldl3(pred(in, in, out, in, out, mdi, muo) is det, in,
     in, out, in, out, mdi, muo) is det.
-:- mode set_ordlist.foldl3(pred(in, in, out, in, out, di, uo) is det, in,
+:- mode foldl3(pred(in, in, out, in, out, di, uo) is det, in,
     in, out, in, out, di, uo) is det.
-:- mode set_ordlist.foldl3(pred(in, in, out, in, out, in, out) is semidet, in,
+:- mode foldl3(pred(in, in, out, in, out, in, out) is semidet, in,
     in, out, in, out, in, out) is semidet.
-:- mode set_ordlist.foldl3(pred(in, in, out, in, out, mdi, muo) is semidet, in,
+:- mode foldl3(pred(in, in, out, in, out, mdi, muo) is semidet, in,
     in, out, in, out, mdi, muo) is semidet.
-:- mode set_ordlist.foldl3(pred(in, in, out, in, out, di, uo) is semidet, in,
+:- mode foldl3(pred(in, in, out, in, out, di, uo) is semidet, in,
     in, out, in, out, di, uo) is semidet.
 
-:- pred set_ordlist.fold4(pred(T1, T2, T2, T3, T3, T4, T4, T5, T5),
+:- pred fold4(pred(T1, T2, T2, T3, T3, T4, T4, T5, T5),
     set_ordlist(T1), T2, T2, T3, T3, T4, T4, T5, T5).
-:- mode set_ordlist.fold4(
+:- mode fold4(
     pred(in, in, out, in, out, in, out, in, out) is det, in,
     in, out, in, out, in, out, in, out) is det.
-:- mode set_ordlist.fold4(
+:- mode fold4(
     pred(in, in, out, in, out, in, out, mdi, muo) is det, in,
     in, out, in, out, in, out, mdi, muo) is det.
-:- mode set_ordlist.fold4(
+:- mode fold4(
     pred(in, in, out, in, out, in, out, di, uo) is det, in,
     in, out, in, out, in, out, di, uo) is det.
-:- mode set_ordlist.fold4(
+:- mode fold4(
     pred(in, in, out, in, out, in, out, in, out) is semidet, in,
     in, out, in, out, in, out, in, out) is semidet.
-:- mode set_ordlist.fold4(
+:- mode fold4(
     pred(in, in, out, in, out, in, out, mdi, muo) is semidet, in,
     in, out, in, out, in, out, mdi, muo) is semidet.
-:- mode set_ordlist.fold4(
+:- mode fold4(
     pred(in, in, out, in, out, in, out, di, uo) is semidet, in,
     in, out, in, out, in, out, di, uo) is semidet.
 
-:- pred set_ordlist.foldl4(pred(T1, T2, T2, T3, T3, T4, T4, T5, T5),
+:- pred foldl4(pred(T1, T2, T2, T3, T3, T4, T4, T5, T5),
     set_ordlist(T1), T2, T2, T3, T3, T4, T4, T5, T5).
-:- mode set_ordlist.foldl4(
+:- mode foldl4(
     pred(in, in, out, in, out, in, out, in, out) is det, in,
     in, out, in, out, in, out, in, out) is det.
-:- mode set_ordlist.foldl4(
+:- mode foldl4(
     pred(in, in, out, in, out, in, out, mdi, muo) is det, in,
     in, out, in, out, in, out, mdi, muo) is det.
-:- mode set_ordlist.foldl4(
+:- mode foldl4(
     pred(in, in, out, in, out, in, out, di, uo) is det, in,
     in, out, in, out, in, out, di, uo) is det.
-:- mode set_ordlist.foldl4(
+:- mode foldl4(
     pred(in, in, out, in, out, in, out, in, out) is semidet, in,
     in, out, in, out, in, out, in, out) is semidet.
-:- mode set_ordlist.foldl4(
+:- mode foldl4(
     pred(in, in, out, in, out, in, out, mdi, muo) is semidet, in,
     in, out, in, out, in, out, mdi, muo) is semidet.
-:- mode set_ordlist.foldl4(
+:- mode foldl4(
     pred(in, in, out, in, out, in, out, di, uo) is semidet, in,
     in, out, in, out, in, out, di, uo) is semidet.
 
-:- pred set_ordlist.fold5(
+:- pred fold5(
     pred(T1, T2, T2, T3, T3, T4, T4, T5, T5, T6, T6),
     set_ordlist(T1), T2, T2, T3, T3, T4, T4, T5, T5, T6, T6).
-:- mode set_ordlist.fold5(
+:- mode fold5(
     pred(in, in, out, in, out, in, out, in, out, in, out) is det, in,
     in, out, in, out, in, out, in, out, in, out) is det.
-:- mode set_ordlist.fold5(
+:- mode fold5(
     pred(in, in, out, in, out, in, out, in, out, mdi, muo) is det, in,
     in, out, in, out, in, out, in, out, mdi, muo) is det.
-:- mode set_ordlist.fold5(
+:- mode fold5(
     pred(in, in, out, in, out, in, out, in, out, di, uo) is det, in,
     in, out, in, out, in, out, in, out, di, uo) is det.
-:- mode set_ordlist.fold5(
+:- mode fold5(
     pred(in, in, out, in, out, in, out, in, out, in, out) is semidet, in,
     in, out, in, out, in, out, in, out, in, out) is semidet.
-:- mode set_ordlist.fold5(
+:- mode fold5(
     pred(in, in, out, in, out, in, out, in, out, mdi, muo) is semidet, in,
     in, out, in, out, in, out, in, out, mdi, muo) is semidet.
-:- mode set_ordlist.fold5(
+:- mode fold5(
     pred(in, in, out, in, out, in, out, in, out, di, uo) is semidet, in,
     in, out, in, out, in, out, in, out, di, uo) is semidet.
 
-:- pred set_ordlist.foldl5(
+:- pred foldl5(
     pred(T1, T2, T2, T3, T3, T4, T4, T5, T5, T6, T6),
     set_ordlist(T1), T2, T2, T3, T3, T4, T4, T5, T5, T6, T6).
-:- mode set_ordlist.foldl5(
+:- mode foldl5(
     pred(in, in, out, in, out, in, out, in, out, in, out) is det, in,
     in, out, in, out, in, out, in, out, in, out) is det.
-:- mode set_ordlist.foldl5(
+:- mode foldl5(
     pred(in, in, out, in, out, in, out, in, out, mdi, muo) is det, in,
     in, out, in, out, in, out, in, out, mdi, muo) is det.
-:- mode set_ordlist.foldl5(
+:- mode foldl5(
     pred(in, in, out, in, out, in, out, in, out, di, uo) is det, in,
     in, out, in, out, in, out, in, out, di, uo) is det.
-:- mode set_ordlist.foldl5(
+:- mode foldl5(
     pred(in, in, out, in, out, in, out, in, out, in, out) is semidet, in,
     in, out, in, out, in, out, in, out, in, out) is semidet.
-:- mode set_ordlist.foldl5(
+:- mode foldl5(
     pred(in, in, out, in, out, in, out, in, out, mdi, muo) is semidet, in,
     in, out, in, out, in, out, in, out, mdi, muo) is semidet.
-:- mode set_ordlist.foldl5(
+:- mode foldl5(
     pred(in, in, out, in, out, in, out, in, out, di, uo) is semidet, in,
     in, out, in, out, in, out, in, out, di, uo) is semidet.
 
-:- pred set_ordlist.fold6(pred(T, A, A, B, B, C, C, D, D, E, E, F, F),
+:- pred fold6(pred(T, A, A, B, B, C, C, D, D, E, E, F, F),
     set_ordlist(T), A, A, B, B, C, C, D, D, E, E, F, F).
-:- mode set_ordlist.fold6(
+:- mode fold6(
     pred(in, in, out, in, out, in, out, in, out, in, out, in, out) is det,
     in, in, out, in, out, in, out, in, out, in, out, in, out) is det.
-:- mode set_ordlist.fold6(
+:- mode fold6(
     pred(in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is det,
     in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is det.
-:- mode set_ordlist.fold6(
+:- mode fold6(
     pred(in, in, out, in, out, in, out, in, out, in, out, di, uo) is det,
     in, in, out, in, out, in, out, in, out, in, out, di, uo) is det.
-:- mode set_ordlist.fold6(
+:- mode fold6(
     pred(in, in, out, in, out, in, out, in, out, in, out, in, out) is semidet,
     in, in, out, in, out, in, out, in, out, in, out, in, out) is semidet.
-:- mode set_ordlist.fold6(
+:- mode fold6(
     pred(in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is semidet,
     in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is semidet.
-:- mode set_ordlist.fold6(
+:- mode fold6(
     pred(in, in, out, in, out, in, out, in, out, in, out, di, uo) is semidet,
     in, in, out, in, out, in, out, in, out, in, out, di, uo) is semidet.
 
-:- pred set_ordlist.foldl6(pred(T, A, A, B, B, C, C, D, D, E, E, F, F),
+:- pred foldl6(pred(T, A, A, B, B, C, C, D, D, E, E, F, F),
     set_ordlist(T), A, A, B, B, C, C, D, D, E, E, F, F).
-:- mode set_ordlist.foldl6(
+:- mode foldl6(
     pred(in, in, out, in, out, in, out, in, out, in, out, in, out) is det,
     in, in, out, in, out, in, out, in, out, in, out, in, out) is det.
-:- mode set_ordlist.foldl6(
+:- mode foldl6(
     pred(in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is det,
     in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is det.
-:- mode set_ordlist.foldl6(
+:- mode foldl6(
     pred(in, in, out, in, out, in, out, in, out, in, out, di, uo) is det,
     in, in, out, in, out, in, out, in, out, in, out, di, uo) is det.
-:- mode set_ordlist.foldl6(
+:- mode foldl6(
     pred(in, in, out, in, out, in, out, in, out, in, out, in, out) is semidet,
     in, in, out, in, out, in, out, in, out, in, out, in, out) is semidet.
-:- mode set_ordlist.foldl6(
+:- mode foldl6(
     pred(in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is semidet,
     in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is semidet.
-:- mode set_ordlist.foldl6(
+:- mode foldl6(
     pred(in, in, out, in, out, in, out, in, out, in, out, di, uo) is semidet,
     in, in, out, in, out, in, out, in, out, in, out, di, uo) is semidet.
 
-    % all_true(Pred, Set) succeeds iff Pred(Element) succeeds
-    % for all the elements of Set.
+    % all_true(Pred, Set) succeeds iff Pred(Element) succeeds for all the
+    % elements of Set.
     %
 :- pred all_true(pred(T)::in(pred(in) is semidet), set_ordlist(T)::in)
     is semidet.
 
-    % set_ordlist.divide(Pred, Set, TruePart, FalsePart):
+    % divide(Pred, Set, TruePart, FalsePart):
     % TruePart consists of those elements of Set for which Pred succeeds;
     % FalsePart consists of those elements of Set for which Pred fails.
     %
-:- pred set_ordlist.divide(pred(T)::in(pred(in) is semidet),
+:- pred divide(pred(T)::in(pred(in) is semidet),
     set_ordlist(T)::in, set_ordlist(T)::out, set_ordlist(T)::out) is det.
 
-    % set_ordlist.divide_by_set(DivideBySet, Set, InPart, OutPart):
+    % divide_by_set(DivideBySet, Set, InPart, OutPart):
     % InPart consists of those elements of Set which are also in DivideBySet;
     % OutPart consists of those elements of Set which are not in DivideBySet.
     %
-:- pred set_ordlist.divide_by_set(set_ordlist(T)::in, set_ordlist(T)::in,
+:- pred divide_by_set(set_ordlist(T)::in, set_ordlist(T)::in,
     set_ordlist(T)::out, set_ordlist(T)::out) is det.
 
-%--------------------------------------------------------------------------%
-%--------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
@@ -514,11 +506,11 @@
 :- pragma type_spec(set_ordlist.intersect_list/2, T = var(_)).
 :- pragma type_spec(set_ordlist.difference/3, T = var(_)).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % We use a d.u. type to work around spurious type ambiguity errors when a
     % program makes calls unqualified procedures which could be confused with
@@ -528,7 +520,7 @@
 :- type set_ordlist(T)
     --->    sol(list(T)).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.init = S :-
     set_ordlist.init(S).
@@ -573,7 +565,7 @@ set_ordlist.to_sorted_list(S) = Xs :-
 
 set_ordlist.to_sorted_list(sol(List), List).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.insert(!.S, T) = !:S :-
     set_ordlist.insert(T, !S).
@@ -627,7 +619,7 @@ set_ordlist.insert_list(List0, !Set) :-
     list.sort_and_remove_dups(List0, List),
     set_ordlist.union(sol(List), !Set).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.delete(!.S, T) = !:S :-
     set_ordlist.delete(T, !S).
@@ -642,7 +634,7 @@ set_ordlist.delete_list(D, !Set) :-
     list.sort_and_remove_dups(D, DS),
     set_ordlist.difference(!.Set, sol(DS), !:Set).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.remove_list(Elems, !Set) :-
     set_ordlist.sort_no_dups(Elems, ElemSet),
@@ -679,7 +671,7 @@ set_ordlist.remove(Elem, sol(Set0), sol(Set)) :-
 
 set_ordlist.remove_least(Elem, sol([Elem | Set]), sol(Set)).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pragma promise_equivalent_clauses(set_ordlist.member/2).
 
@@ -710,7 +702,7 @@ set_ordlist.is_member_2(E, [H | T], R) :-
 set_ordlist.contains(S, E) :-
     set_ordlist.member(E, S).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.subset(Subset, Set) :-
     set_ordlist.intersect(Set, Subset, Subset).
@@ -745,7 +737,7 @@ set_ordlist.power_union_2([NextSet | SetofSets], Set0, Set) :-
     set_ordlist.union(Set0, NextSet, Set1),
     set_ordlist.power_union_2(SetofSets, Set1, Set).
 
-%--------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.intersect(S1, S2) = S3 :-
     set_ordlist.intersect(S1, S2, S3).
@@ -793,7 +785,7 @@ set_ordlist.intersect_list([S0 | Ss]) = S :-
 set_ordlist.intersect_list(ListofSets, Set) :-
     Set = set_ordlist.intersect_list(ListofSets).
 
-%--------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.difference(S1, S2) = S3 :-
     set_ordlist.difference(S1, S2, S3).
@@ -820,7 +812,7 @@ set_ordlist.difference_2([X | Xs], [Y | Ys], Set) :-
         set_ordlist.difference_2([X | Xs], Ys, Set)
     ).
 
-%--------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.count(S) = N :-
     set_ordlist.count(S, N).
@@ -828,7 +820,7 @@ set_ordlist.count(S) = N :-
 set_ordlist.count(sol(Set), Count) :-
     list.length(Set, Count).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.fold(F, S, A) =
     set_ordlist.foldl(F, S, A).
@@ -872,12 +864,12 @@ set_ordlist.fold6(P, S, !A, !B, !C, !D, !E, !F) :-
 set_ordlist.foldl6(P, S, !A, !B, !C, !D, !E, !F) :-
     list.foldl6(P, set_ordlist.to_sorted_list(S), !A, !B, !C, !D, !E, !F).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.all_true(P, sol(L)) :-
     list.all_true(P, L).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.filter(P, Set) = TrueSet :-
     List = set_ordlist.to_sorted_list(Set),
@@ -893,7 +885,7 @@ set_ordlist.filter(P, Set, TrueSet, FalseSet) :-
     set_ordlist.sorted_list_to_set(TrueList, TrueSet),
     set_ordlist.sorted_list_to_set(FalseList, FalseSet).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.map(F, Set) = TransformedSet :-
     List = set_ordlist.to_sorted_list(Set),
@@ -910,7 +902,7 @@ set_ordlist.filter_map(PF, Set, TransformedTrueSet) :-
     list.filter_map(PF, List, TransformedTrueList),
     set_ordlist.list_to_set(TransformedTrueList, TransformedTrueSet).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_ordlist.divide(Pred, sol(Set), sol(TruePart), sol(FalsePart)) :-
     % The calls to reverse allow us to make divide_2 tail recursive.
@@ -964,6 +956,6 @@ set_ordlist.divide_by_set_2([Div | Divs], [H | T], !RevTrue, !RevFalse) :-
         set_ordlist.divide_by_set_2([Div | Divs], T, !RevTrue, !RevFalse)
     ).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 :- end_module set_ordlist.
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

@@ -20,6 +20,7 @@
 
 :- import_module libs.globals.
 :- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.set_of_var.
 
@@ -355,6 +356,11 @@
     %
 :- pred type_constructors_are_type_info(list(constructor)::in) is semidet.
 
+    % Is the discriminated union type with the given list of constructors
+    % an enum? Is yes, return the number of bits required to represent it.
+    %
+:- pred du_type_is_enum(list(constructor)::in, int::out) is semidet.
+
     % type_ctor_should_be_notag(Globals, TypeCtor, ReservedTag, Ctors,
     %   MaybeUserEqComp, SingleFunctorName, SingleArgType, MaybeSingleArgName):
     %
@@ -417,10 +423,12 @@
 :- implementation.
 
 :- import_module libs.options.
+:- import_module mdbcomp.builtin_modules.
 :- import_module parse_tree.prog_out.
 :- import_module parse_tree.prog_util.
 :- import_module parse_tree.prog_type_subst.
 
+:- import_module int.
 :- import_module require.
 :- import_module string.
 
@@ -952,7 +960,7 @@ qualify_cons_id(Args, ConsId0, ConsId, InstConsId) :-
         ; ConsId0 = type_info_const(_)
         ; ConsId0 = typeclass_info_const(_)
         ; ConsId0 = ground_term_const(_, _)
-        ; ConsId0 = table_io_decl(_)
+        ; ConsId0 = table_io_entry_desc(_)
         ; ConsId0 = tabling_info_const(_)
         ; ConsId0 = deep_profiling_proc_layout(_)
         ),
@@ -1001,6 +1009,21 @@ name_is_type_info("base_typeclass_info").
 
 %-----------------------------------------------------------------------------%
 
+du_type_is_enum(Ctors, NumBits) :-
+    Ctors = [_, _ | _],
+    all [Ctor] (
+        list.member(Ctor, Ctors)
+    => (
+        Ctor = ctor(ExistQTVars, ExistConstraints, _Name, Args, _Context),
+        ExistQTVars = [],
+        ExistConstraints = [],
+        Args = []
+    )),
+    list.length(Ctors, NumFunctors),
+    int.log2(NumFunctors, NumBits).
+
+%-----------------------------------------------------------------------------%
+
 type_ctor_should_be_notag(Globals, _TypeCtor, ReserveTagPragma, Ctors,
         MaybeUserEqCmp, SingleFunctorName, SingleArgType,
         MaybeSingleArgName) :-
@@ -1009,17 +1032,23 @@ type_ctor_should_be_notag(Globals, _TypeCtor, ReserveTagPragma, Ctors,
     MaybeUserEqCmp = no,
 
     type_is_single_ctor_single_arg(Ctors, SingleFunctorName, SingleArgType,
-        MaybeSingleArgName0),
+        MaybeCtorFieldName),
 
-    % We don't handle unary tuples as no_tag types -- they are rare enough
-    % that it's not worth the implementation effort.
+    % We do not handle unary tuples as no_tag types -- they are rare enough
+    % that it is not worth the implementation effort.
     %
     % XXX Since the tuple type constructor doesn't have a HLDS type defn body,
     % will this test ever fail? Even if it can fail, we should test TypeCtor,
     % not SingleFunctorName.
     SingleFunctorName \= unqualified("{}"),
 
-    MaybeSingleArgName = map_maybe(unqualify_name, MaybeSingleArgName0).
+    (
+        MaybeCtorFieldName = no,
+        MaybeSingleArgName = no
+    ;
+        MaybeCtorFieldName = yes(ctor_field_name(SymName, _)),
+        MaybeSingleArgName = yes(unqualify_name(SymName))
+    ).
 
 %-----------------------------------------------------------------------------%
 %

@@ -32,6 +32,7 @@
 
 :- import_module check_hlds.type_util.
 :- import_module hlds.code_model.
+:- import_module hlds.goal_form.
 :- import_module hlds.hlds_data.
 :- import_module hlds.hlds_goal.
 :- import_module hlds.hlds_llds.
@@ -727,13 +728,13 @@ init_maybe_trace_info(TraceLevel, Globals, ModuleInfo, PredInfo,
         eff_trace_level_is_none(ModuleInfo, PredInfo, ProcInfo, TraceLevel)
             = no
     ->
-        proc_info_get_has_tail_call_events(ProcInfo, HasTailCallEvents),
+        proc_info_get_has_tail_call_event(ProcInfo, HasTailCallEvents),
         (
-            HasTailCallEvents = tail_call_events,
+            HasTailCallEvents = has_tail_call_event,
             get_next_label(TailRecLabel, !CI),
             MaybeTailRecLabel = yes(TailRecLabel)
         ;
-            HasTailCallEvents = no_tail_call_events,
+            HasTailCallEvents = has_no_tail_call_event,
             MaybeTailRecLabel = no
         ),
         trace_setup(ModuleInfo, PredInfo, ProcInfo, Globals, MaybeTailRecLabel,
@@ -1255,13 +1256,15 @@ add_closure_layout(ClosureLayout, !CI) :-
     set_closure_layouts([ClosureLayout | ClosureLayouts], !CI).
 
 add_parprof_string(String, SlotNum, !CI) :-
-    Size0 = !.CI ^ code_info_persistent ^ cip_pp_string_table_size,
-    RevTable0 = !.CI ^ code_info_persistent ^ cip_pp_rev_string_table,
+    Persistent0 = !.CI ^ code_info_persistent,
+    Size0 = Persistent0 ^ cip_pp_string_table_size,
+    RevTable0 = Persistent0 ^ cip_pp_rev_string_table,
     SlotNum = Size0,
     Size = Size0 + 1,
     RevTable = [String | RevTable0],
-    !CI ^ code_info_persistent ^ cip_pp_string_table_size := Size,
-    !CI ^ code_info_persistent ^ cip_pp_rev_string_table := RevTable.
+    Persistent1 = Persistent0 ^ cip_pp_string_table_size := Size,
+    Persistent = Persistent1 ^ cip_pp_rev_string_table := RevTable,
+    !CI ^ code_info_persistent := Persistent.
 
 get_parprof_rev_string_table(CI, RevTable, TableSize) :-
     RevTable = CI ^ code_info_persistent ^ cip_pp_rev_string_table,

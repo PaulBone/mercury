@@ -12,8 +12,8 @@
 %
 % This module implements sets using 2-3-4 trees.
 %
-%--------------------------------------------------------------------------%
-%--------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- module set_tree234.
 :- interface.
@@ -22,476 +22,460 @@
 :- import_module list.
 :- import_module set.
 
-%--------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- type set_tree234(_T).
 
-    % `set_tree234.init = Set' is true iff `Set' is an empty set.
+    % `init = Set' is true iff `Set' is an empty set.
     %
-:- func set_tree234.init = set_tree234(T).
+:- func init = set_tree234(T).
 
-    % `set_tree234.singleton_set(Elem, Set)' is true iff `Set' is the set
-    % containing just the single element `Elem'.
+    % `singleton_set(Elem, Set)' is true iff `Set' is the set containing just
+    % the single element `Elem'.
     %
-:- pred set_tree234.singleton_set(T, set_tree234(T)).
-:- mode set_tree234.singleton_set(in, out) is det.
-:- mode set_tree234.singleton_set(out, in) is semidet.
+:- pred singleton_set(T, set_tree234(T)).
+:- mode singleton_set(in, out) is det.
+:- mode singleton_set(out, in) is semidet.
 
-:- func set_tree234.make_singleton_set(T) = set_tree234(T).
+:- func make_singleton_set(T) = set_tree234(T).
 
-:- pred set_tree234.is_singleton(set_tree234(T)::in, T::out) is semidet.
+:- pred is_singleton(set_tree234(T)::in, T::out) is semidet.
 
-    % `set_tree234.empty(Set)' is true iff `Set' is an empty set.
+    % `empty(Set)' is true iff `Set' is an empty set.
+    % `is_empty' is a synonym for `empty'.
     %
-:- pred set_tree234.empty(set_tree234(_T)::in) is semidet.
+:- pred empty(set_tree234(_T)::in) is semidet.
+:- pred is_empty(set_tree234(_T)::in) is semidet.
 
-    % A synonym for the above.
+    % `non_empty(Set)' is true iff `Set' is not an empty set.
+    % `is_non_empty' is a synonym for `non_empty'.
     %
-:- pred set_tree234.is_empty(set_tree234(_T)::in) is semidet.
+:- pred non_empty(set_tree234(T)::in) is semidet.
+:- pred is_non_empty(set_tree234(T)::in) is semidet.
 
-:- pred set_tree234.non_empty(set_tree234(T)::in) is semidet.
-:- pred set_tree234.is_non_empty(set_tree234(T)::in) is semidet.
-
-    % `set_tree234.member(X, Set)' is true iff `X' is a member of `Set'.
+    % `member(X, Set)' is true iff `X' is a member of `Set'.
     %
-:- pred set_tree234.member(T, set_tree234(T)).
-:- mode set_tree234.member(in, in) is semidet.
-:- mode set_tree234.member(out, in) is nondet.
+:- pred member(T, set_tree234(T)).
+:- mode member(in, in) is semidet.
+:- mode member(out, in) is nondet.
 
-    % `set_tree234.is_member(Set, X, Result)' returns
-    % `Result = yes' iff `X' is a member of `Set'.
+    % `is_member(Set, X, Result)' returns `Result = yes' iff `X' is a member of
+    % `Set'.
     %
-:- func set_tree234.is_member(set_tree234(T), T) = bool.
-:- pred set_tree234.is_member(set_tree234(T)::in, T::in, bool::out) is det.
+:- func is_member(set_tree234(T), T) = bool.
+:- pred is_member(set_tree234(T)::in, T::in, bool::out) is det.
 
-    % `set_tree234.contains(Set, X)' is true iff `X' is a member of `Set'.
+    % `contains(Set, X)' is true iff `X' is a member of `Set'.
     %
-:- pred set_tree234.contains(set_tree234(T)::in, T::in) is semidet.
+:- pred contains(set_tree234(T)::in, T::in) is semidet.
 
-    % `set_tree234.list_to_set(List) = Set' is true iff `Set' is the set
-    % containing only the members of `List'.
+    % `list_to_set(List) = Set' is true iff `Set' is the set containing only
+    % the members of `List'.
     %
-:- func set_tree234.list_to_set(list(T)) = set_tree234(T).
-:- pred set_tree234.list_to_set(list(T)::in, set_tree234(T)::out) is det.
+:- func list_to_set(list(T)) = set_tree234(T).
+:- pred list_to_set(list(T)::in, set_tree234(T)::out) is det.
 
-:- func set_tree234.from_list(list(T)) = set_tree234(T).
-:- pred set_tree234.from_list(list(T)::in, set_tree234(T)::out) is det.
+:- func from_list(list(T)) = set_tree234(T).
+:- pred from_list(list(T)::in, set_tree234(T)::out) is det.
 
-    % `set_tree234.sorted_list_to_set(List) = Set' is true iff `Set' is
-    % the set containing only the members of `List'. `List' must be sorted.
+    % `sorted_list_to_set(List) = Set' is true iff `Set' is the set containing
+    % only the members of `List'. `List' must be sorted.
     %
-:- func set_tree234.sorted_list_to_set(list(T)) = set_tree234(T).
-:- pred set_tree234.sorted_list_to_set(list(T)::in, set_tree234(T)::out) is det.
+:- func sorted_list_to_set(list(T)) = set_tree234(T).
+:- pred sorted_list_to_set(list(T)::in, set_tree234(T)::out) is det.
 
     % `from_set(Set)' returns a set_tree234 containing only the members of
     % `Set'. Takes O(card(Set)) time and space.
     %
 :- func from_set(set.set(T)) = set_tree234(T).
 
-    % `set_tree234.to_sorted_list(Set) = List' is true iff `List' is the
-    % list of all the members of `Set', in sorted order.
+    % `to_sorted_list(Set) = List' is true iff `List' is the list of all the
+    % members of `Set', in sorted order.
     %
-:- func set_tree234.to_sorted_list(set_tree234(T)) = list(T).
-:- pred set_tree234.to_sorted_list(set_tree234(T)::in, list(T)::out) is det.
+:- func to_sorted_list(set_tree234(T)) = list(T).
+:- pred to_sorted_list(set_tree234(T)::in, list(T)::out) is det.
 
-    % `to_sorted_list(Set)' returns a set.set containing all the members
-    % of `Set', in sorted order. Takes O(card(Set)) time and space.
+    % `to_sorted_list(Set)' returns a set.set containing all the members of
+    % `Set', in sorted order. Takes O(card(Set)) time and space.
     %
 :- func to_set(set_tree234(T)) = set.set(T).
 
-    % `set_tree234.equal(SetA, SetB)' is true iff
-    % `SetA' and `SetB' contain the same elements.
+    % `equal(SetA, SetB)' is true iff `SetA' and `SetB' contain the same
+    % elements.
     %
-:- pred set_tree234.equal(set_tree234(T)::in, set_tree234(T)::in) is semidet.
+:- pred equal(set_tree234(T)::in, set_tree234(T)::in) is semidet.
 
-    % `set_tree234.subset(SetA, SetB)' is true iff `SetA' is a subset of
-    % `SetB'.
+    % `subset(SetA, SetB)' is true iff `SetA' is a subset of `SetB'.
     %
-:- pred set_tree234.subset(set_tree234(T)::in, set_tree234(T)::in) is semidet.
+:- pred subset(set_tree234(T)::in, set_tree234(T)::in) is semidet.
 
-    % `set_tree234.superset(SetA, SetB)' is true iff `SetA' is a
-    % superset of `SetB'.
+    % `superset(SetA, SetB)' is true iff `SetA' is a superset of `SetB'.
     %
-:- pred set_tree234.superset(set_tree234(T)::in, set_tree234(T)::in)
-    is semidet.
+:- pred superset(set_tree234(T)::in, set_tree234(T)::in) is semidet.
 
-    % `set_tree234.insert(X, Set0, Set)' is true iff `Set' is the union
-    % of `Set0' and the set containing only `X'.
+    % `insert(X, Set0, Set)' is true iff `Set' is the union of `Set0' and the
+    % set containing only `X'.
     %
-:- func set_tree234.insert(T, set_tree234(T)) = set_tree234(T).
-:- pred set_tree234.insert(T::in, set_tree234(T)::in, set_tree234(T)::out)
+:- func insert(T, set_tree234(T)) = set_tree234(T).
+:- pred insert(T::in, set_tree234(T)::in, set_tree234(T)::out) is det.
+
+    % `insert_new(X, Set0, Set)' is true iff `Set0' does not contain `X', while
+    % `Set' is the union of `Set0' and the set containing only `X'.
+    %
+:- pred insert_new(T::in, set_tree234(T)::in, set_tree234(T)::out) is semidet.
+
+    % `insert_list(Xs, Set0, Set)' is true iff `Set' is the union of `Set0' and
+    % the set containing only the members of `Xs'.
+    %
+:- func insert_list(list(T), set_tree234(T)) = set_tree234(T).
+:- pred insert_list(list(T)::in, set_tree234(T)::in, set_tree234(T)::out)
     is det.
 
-    % `set_tree234.insert_new(X, Set0, Set)' is true iff
-    % `Set0' does not contain `X', while `Set' is the union of `Set0'
-    % and the set containing only `X'.
+    % `delete(X, Set0, Set)' is true iff `Set' is the relative complement of
+    % `Set0' and the set containing only `X', i.e.  if `Set' is the set which
+    % contains all the elements of `Set0' except `X'.
     %
-:- pred set_tree234.insert_new(T::in,
-    set_tree234(T)::in, set_tree234(T)::out) is semidet.
+:- func delete(T, set_tree234(T)) = set_tree234(T).
+:- pred delete(T::in, set_tree234(T)::in, set_tree234(T)::out) is det.
 
-    % `set_tree234.insert_list(Xs, Set0, Set)' is true iff `Set' is the
-    % union of `Set0' and the set containing only the members of `Xs'.
+    % `delete_list(Xs, Set0, Set)' is true iff `Set' is the relative complement
+    % of `Set0' and the set containing only the members of `Xs'.
     %
-:- func set_tree234.insert_list(list(T), set_tree234(T)) = set_tree234(T).
-:- pred set_tree234.insert_list(list(T)::in,
-    set_tree234(T)::in, set_tree234(T)::out) is det.
-
-    % `set_tree234.delete(X, Set0, Set)' is true iff `Set' is the
-    % relative complement of `Set0' and the set containing only `X', i.e.
-    % if `Set' is the set which contains all the elements of `Set0'
-    % except `X'.
-    %
-:- func set_tree234.delete(T, set_tree234(T)) = set_tree234(T).
-:- pred set_tree234.delete(T::in, set_tree234(T)::in, set_tree234(T)::out)
+:- func delete_list(list(T), set_tree234(T)) = set_tree234(T).
+:- pred delete_list(list(T)::in, set_tree234(T)::in, set_tree234(T)::out)
     is det.
 
-    % `set_tree234.delete_list(Xs, Set0, Set)' is true iff `Set' is the
-    % relative complement of `Set0' and the set containing only the members
-    % of `Xs'.
-    %
-:- func set_tree234.delete_list(list(T), set_tree234(T)) = set_tree234(T).
-:- pred set_tree234.delete_list(list(T)::in,
-    set_tree234(T)::in, set_tree234(T)::out) is det.
-
-    % `set_tree234.remove(X, Set0, Set)' is true iff `Set0' contains `X',
+    % `remove(X, Set0, Set)' is true iff `Set0' contains `X',
     % and `Set' is the relative complement of `Set0' and the set
     % containing only `X', i.e.  if `Set' is the set which contains
     % all the elements of `Set0' except `X'.
     %
-:- pred set_tree234.remove(T::in, set_tree234(T)::in, set_tree234(T)::out)
+:- pred remove(T::in, set_tree234(T)::in, set_tree234(T)::out)
     is semidet.
 
-    % `set_tree234.remove_list(Xs, Set0, Set)' is true iff Xs does not
-    % contain any duplicates, `Set0' contains every member of `Xs',
-    % and `Set' is the relative complement of `Set0' and the set
-    % containing only the members of `Xs'.
+    % `remove_list(Xs, Set0, Set)' is true iff Xs does not contain any
+    % duplicates, `Set0' contains every member of `Xs', and `Set' is the
+    % relative complement of `Set0' and the set containing only the members of
+    % `Xs'.
     %
-:- pred set_tree234.remove_list(list(T)::in,
-    set_tree234(T)::in, set_tree234(T)::out) is semidet.
+:- pred remove_list(list(T)::in, set_tree234(T)::in, set_tree234(T)::out)
+    is semidet.
 
-    % `set_tree234.remove_least(X, Set0, Set)' is true iff `X' is the
-    % least element in `Set0', and `Set' is the set which contains all the
-    % elements of `Set0' except `X'.
+    % `remove_least(X, Set0, Set)' is true iff `X' is the least element in
+    % `Set0', and `Set' is the set which contains all the elements of `Set0'
+    % except `X'.
     %
-:- pred set_tree234.remove_least(T::out,
-    set_tree234(T)::in, set_tree234(T)::out) is semidet.
+:- pred remove_least(T::out, set_tree234(T)::in, set_tree234(T)::out)
+    is semidet.
 
-    % `set_tree234.union(SetA, SetB) = Set' is true iff `Set' is the union
-    % of `SetA' and `SetB'.
+    % `union(SetA, SetB) = Set' is true iff `Set' is the union of `SetA' and
+    % `SetB'.
     %
-:- func set_tree234.union(set_tree234(T), set_tree234(T)) = set_tree234(T).
-:- pred set_tree234.union(set_tree234(T)::in, set_tree234(T)::in,
-    set_tree234(T)::out) is det.
-
-    % `set_tree234.union_list(A, B)' is true iff `B' is the union of
-    % all the sets in `A'
-    %
-:- func set_tree234.union_list(list(set_tree234(T))) = set_tree234(T).
-:- pred set_tree234.union_list(list(set_tree234(T))::in, set_tree234(T)::out)
+:- func union(set_tree234(T), set_tree234(T)) = set_tree234(T).
+:- pred union(set_tree234(T)::in, set_tree234(T)::in, set_tree234(T)::out)
     is det.
 
-    % `set_tree234.power_union(A) = B' is true iff `B' is the union of
+    % `union_list(A, B)' is true iff `B' is the union of all the sets in `A'
+    %
+:- func union_list(list(set_tree234(T))) = set_tree234(T).
+:- pred union_list(list(set_tree234(T))::in, set_tree234(T)::out)
+    is det.
+
+    % `power_union(A) = B' is true iff `B' is the union of
     % all the sets in `A'
     %
-:- func set_tree234.power_union(set_tree234(set_tree234(T))) = set_tree234(T).
-:- pred set_tree234.power_union(set_tree234(set_tree234(T))::in,
+:- func power_union(set_tree234(set_tree234(T))) = set_tree234(T).
+:- pred power_union(set_tree234(set_tree234(T))::in,
     set_tree234(T)::out) is det.
 
-    % `set_tree234.intersect(SetA, SetB) = Set' is true iff `Set' is the
-    % intersection of `SetA' and `SetB'.
+    % `intersect(SetA, SetB) = Set' is true iff `Set' is the intersection of
+    % `SetA' and `SetB'.
     %
-:- func set_tree234.intersect(set_tree234(T), set_tree234(T)) = set_tree234(T).
-:- pred set_tree234.intersect(set_tree234(T)::in, set_tree234(T)::in,
+:- func intersect(set_tree234(T), set_tree234(T)) = set_tree234(T).
+:- pred intersect(set_tree234(T)::in, set_tree234(T)::in,
     set_tree234(T)::out) is det.
 
-    % `set_tree234.power_intersect(A, B)' is true iff `B' is the
-    % intersection of all the sets in `A'.
+    % `power_intersect(A, B)' is true iff `B' is the intersection of all the
+    % sets in `A'.
     %
-:- func set_tree234.power_intersect(set_tree234(set_tree234(T)))
-    = set_tree234(T).
-:- pred set_tree234.power_intersect(set_tree234(set_tree234(T))::in,
+:- func power_intersect(set_tree234(set_tree234(T))) = set_tree234(T).
+:- pred power_intersect(set_tree234(set_tree234(T))::in,
     set_tree234(T)::out) is det.
 
-    % `set_tree234.intersect_list(A, B)' is true iff `B' is the
-    % intersection of all the sets in `A'.
+    % `intersect_list(A, B)' is true iff `B' is the intersection of all the
+    % sets in `A'.
     %
-:- func set_tree234.intersect_list(list(set_tree234(T))) = set_tree234(T).
-:- pred set_tree234.intersect_list(list(set_tree234(T))::in,
+:- func intersect_list(list(set_tree234(T))) = set_tree234(T).
+:- pred intersect_list(list(set_tree234(T))::in,
     set_tree234(T)::out) is det.
 
-    % `set_tree234.difference(SetA, SetB, Set)' is true iff `Set' is the
-    % set containing all the elements of `SetA' except those that
-    % occur in `SetB'.
+    % `difference(SetA, SetB, Set)' is true iff `Set' is the set containing all
+    % the elements of `SetA' except those that occur in `SetB'.
     %
-:- func set_tree234.difference(set_tree234(T), set_tree234(T))
-    = set_tree234(T).
-:- pred set_tree234.difference(set_tree234(T)::in, set_tree234(T)::in,
+:- func difference(set_tree234(T), set_tree234(T)) = set_tree234(T).
+:- pred difference(set_tree234(T)::in, set_tree234(T)::in,
     set_tree234(T)::out) is det.
 
-    % `set_tree234.count(Set, Count)' is true iff `Set' has
-    % `Count' elements.
+    % `count(Set, Count)' is true iff `Set' has `Count' elements.
     %
-:- func set_tree234.count(set_tree234(T)) = int.
+:- func count(set_tree234(T)) = int.
 
-:- func set_tree234.map(func(T1) = T2, set_tree234(T1)) = set_tree234(T2).
-:- pred set_tree234.map(pred(T1, T2)::in(pred(in, out) is det),
+:- func map(func(T1) = T2, set_tree234(T1)) = set_tree234(T2).
+:- pred map(pred(T1, T2)::in(pred(in, out) is det),
     set_tree234(T1)::in, set_tree234(T2)::out) is det.
 
-:- pred set_tree234.filter_map(pred(T1, T2)::in(pred(in, out) is semidet),
+:- pred filter_map(pred(T1, T2)::in(pred(in, out) is semidet),
     set_tree234(T1)::in, set_tree234(T2)::out) is det.
 
-:- func set_tree234.filter_map(func(T1) = T2, set_tree234(T1))
+:- func filter_map(func(T1) = T2, set_tree234(T1))
     = set_tree234(T2).
-:- mode set_tree234.filter_map(func(in) = out is semidet, in) = out is det.
+:- mode filter_map(func(in) = out is semidet, in) = out is det.
 
-:- func set_tree234.fold(func(T1, T2) = T2, set_tree234(T1), T2) = T2.
-:- pred set_tree234.fold(pred(T1, T2, T2), set_tree234(T1), T2, T2).
-:- mode set_tree234.fold(pred(in, in, out) is det, in, in, out) is det.
-:- mode set_tree234.fold(pred(in, mdi, muo) is det, in, mdi, muo) is det.
-:- mode set_tree234.fold(pred(in, di, uo) is det, in, di, uo) is det.
-:- mode set_tree234.fold(pred(in, in, out) is semidet, in, in, out)
-    is semidet.
-:- mode set_tree234.fold(pred(in, mdi, muo) is semidet, in, mdi, muo)
-    is semidet.
-:- mode set_tree234.fold(pred(in, di, uo) is semidet, in, di, uo)
-    is semidet.
+:- func fold(func(T1, T2) = T2, set_tree234(T1), T2) = T2.
+:- pred fold(pred(T1, T2, T2), set_tree234(T1), T2, T2).
+:- mode fold(pred(in, in, out) is det, in, in, out) is det.
+:- mode fold(pred(in, mdi, muo) is det, in, mdi, muo) is det.
+:- mode fold(pred(in, di, uo) is det, in, di, uo) is det.
+:- mode fold(pred(in, in, out) is semidet, in, in, out) is semidet.
+:- mode fold(pred(in, mdi, muo) is semidet, in, mdi, muo) is semidet.
+:- mode fold(pred(in, di, uo) is semidet, in, di, uo) is semidet.
 
-:- func set_tree234.foldl(func(T1, T2) = T2, set_tree234(T1), T2) = T2.
-:- pred set_tree234.foldl(pred(T1, T2, T2), set_tree234(T1), T2, T2).
-:- mode set_tree234.foldl(pred(in, in, out) is det, in, in, out) is det.
-:- mode set_tree234.foldl(pred(in, mdi, muo) is det, in, mdi, muo) is det.
-:- mode set_tree234.foldl(pred(in, di, uo) is det, in, di, uo) is det.
-:- mode set_tree234.foldl(pred(in, in, out) is semidet, in, in, out)
+:- func foldl(func(T1, T2) = T2, set_tree234(T1), T2) = T2.
+:- pred foldl(pred(T1, T2, T2), set_tree234(T1), T2, T2).
+:- mode foldl(pred(in, in, out) is det, in, in, out) is det.
+:- mode foldl(pred(in, mdi, muo) is det, in, mdi, muo) is det.
+:- mode foldl(pred(in, di, uo) is det, in, di, uo) is det.
+:- mode foldl(pred(in, in, out) is semidet, in, in, out)
     is semidet.
-:- mode set_tree234.foldl(pred(in, mdi, muo) is semidet, in, mdi, muo)
+:- mode foldl(pred(in, mdi, muo) is semidet, in, mdi, muo)
     is semidet.
-:- mode set_tree234.foldl(pred(in, di, uo) is semidet, in, di, uo)
+:- mode foldl(pred(in, di, uo) is semidet, in, di, uo)
     is semidet.
 
-:- pred set_tree234.fold2(pred(T1, T2, T2, T3, T3), set_tree234(T1),
+:- pred fold2(pred(T1, T2, T2, T3, T3), set_tree234(T1),
     T2, T2, T3, T3).
-:- mode set_tree234.fold2(pred(in, in, out, in, out) is det, in,
+:- mode fold2(pred(in, in, out, in, out) is det, in,
     in, out, in, out) is det.
-:- mode set_tree234.fold2(pred(in, in, out, mdi, muo) is det, in,
+:- mode fold2(pred(in, in, out, mdi, muo) is det, in,
     in, out, mdi, muo) is det.
-:- mode set_tree234.fold2(pred(in, in, out, di, uo) is det, in,
+:- mode fold2(pred(in, in, out, di, uo) is det, in,
     in, out, di, uo) is det.
-:- mode set_tree234.fold2(pred(in, in, out, in, out) is semidet, in,
+:- mode fold2(pred(in, in, out, in, out) is semidet, in,
     in, out, in, out) is semidet.
-:- mode set_tree234.fold2(pred(in, in, out, mdi, muo) is semidet, in,
+:- mode fold2(pred(in, in, out, mdi, muo) is semidet, in,
     in, out, mdi, muo) is semidet.
-:- mode set_tree234.fold2(pred(in, in, out, di, uo) is semidet, in,
+:- mode fold2(pred(in, in, out, di, uo) is semidet, in,
     in, out, di, uo) is semidet.
 
-:- pred set_tree234.foldl2(pred(T1, T2, T2, T3, T3), set_tree234(T1),
+:- pred foldl2(pred(T1, T2, T2, T3, T3), set_tree234(T1),
     T2, T2, T3, T3).
-:- mode set_tree234.foldl2(pred(in, in, out, in, out) is det, in,
+:- mode foldl2(pred(in, in, out, in, out) is det, in,
     in, out, in, out) is det.
-:- mode set_tree234.foldl2(pred(in, in, out, mdi, muo) is det, in,
+:- mode foldl2(pred(in, in, out, mdi, muo) is det, in,
     in, out, mdi, muo) is det.
-:- mode set_tree234.foldl2(pred(in, in, out, di, uo) is det, in,
+:- mode foldl2(pred(in, in, out, di, uo) is det, in,
     in, out, di, uo) is det.
-:- mode set_tree234.foldl2(pred(in, in, out, in, out) is semidet, in,
+:- mode foldl2(pred(in, in, out, in, out) is semidet, in,
     in, out, in, out) is semidet.
-:- mode set_tree234.foldl2(pred(in, in, out, mdi, muo) is semidet, in,
+:- mode foldl2(pred(in, in, out, mdi, muo) is semidet, in,
     in, out, mdi, muo) is semidet.
-:- mode set_tree234.foldl2(pred(in, in, out, di, uo) is semidet, in,
+:- mode foldl2(pred(in, in, out, di, uo) is semidet, in,
     in, out, di, uo) is semidet.
 
-:- pred set_tree234.fold3(
+:- pred fold3(
     pred(T1, T2, T2, T3, T3, T4, T4), set_tree234(T1),
     T2, T2, T3, T3, T4, T4).
-:- mode set_tree234.fold3(pred(in, in, out, in, out, in, out) is det, in,
+:- mode fold3(pred(in, in, out, in, out, in, out) is det, in,
     in, out, in, out, in, out) is det.
-:- mode set_tree234.fold3(pred(in, in, out, in, out, mdi, muo) is det, in,
+:- mode fold3(pred(in, in, out, in, out, mdi, muo) is det, in,
     in, out, in, out, mdi, muo) is det.
-:- mode set_tree234.fold3(pred(in, in, out, in, out, di, uo) is det, in,
+:- mode fold3(pred(in, in, out, in, out, di, uo) is det, in,
     in, out, in, out, di, uo) is det.
-:- mode set_tree234.fold3(pred(in, in, out, in, out, in, out) is semidet, in,
+:- mode fold3(pred(in, in, out, in, out, in, out) is semidet, in,
     in, out, in, out, in, out) is semidet.
-:- mode set_tree234.fold3(pred(in, in, out, in, out, mdi, muo) is semidet, in,
+:- mode fold3(pred(in, in, out, in, out, mdi, muo) is semidet, in,
     in, out, in, out, mdi, muo) is semidet.
-:- mode set_tree234.fold3(pred(in, in, out, in, out, di, uo) is semidet, in,
+:- mode fold3(pred(in, in, out, in, out, di, uo) is semidet, in,
     in, out, in, out, di, uo) is semidet.
 
-:- pred set_tree234.foldl3(
+:- pred foldl3(
     pred(T1, T2, T2, T3, T3, T4, T4), set_tree234(T1),
     T2, T2, T3, T3, T4, T4).
-:- mode set_tree234.foldl3(pred(in, in, out, in, out, in, out) is det, in,
+:- mode foldl3(pred(in, in, out, in, out, in, out) is det, in,
     in, out, in, out, in, out) is det.
-:- mode set_tree234.foldl3(pred(in, in, out, in, out, mdi, muo) is det, in,
+:- mode foldl3(pred(in, in, out, in, out, mdi, muo) is det, in,
     in, out, in, out, mdi, muo) is det.
-:- mode set_tree234.foldl3(pred(in, in, out, in, out, di, uo) is det, in,
+:- mode foldl3(pred(in, in, out, in, out, di, uo) is det, in,
     in, out, in, out, di, uo) is det.
-:- mode set_tree234.foldl3(pred(in, in, out, in, out, in, out) is semidet, in,
+:- mode foldl3(pred(in, in, out, in, out, in, out) is semidet, in,
     in, out, in, out, in, out) is semidet.
-:- mode set_tree234.foldl3(pred(in, in, out, in, out, mdi, muo) is semidet, in,
+:- mode foldl3(pred(in, in, out, in, out, mdi, muo) is semidet, in,
     in, out, in, out, mdi, muo) is semidet.
-:- mode set_tree234.foldl3(pred(in, in, out, in, out, di, uo) is semidet, in,
+:- mode foldl3(pred(in, in, out, in, out, di, uo) is semidet, in,
     in, out, in, out, di, uo) is semidet.
 
-:- pred set_tree234.fold4(
+:- pred fold4(
     pred(T1, T2, T2, T3, T3, T4, T4, T5, T5), set_tree234(T1),
     T2, T2, T3, T3, T4, T4, T5, T5).
-:- mode set_tree234.fold4(pred(in, in, out, in, out, in, out, in, out) is det,
+:- mode fold4(pred(in, in, out, in, out, in, out, in, out) is det,
     in, in, out, in, out, in, out, in, out) is det.
-:- mode set_tree234.fold4(pred(in, in, out, in, out, in, out, mdi, muo) is det,
+:- mode fold4(pred(in, in, out, in, out, in, out, mdi, muo) is det,
     in, in, out, in, out, in, out, mdi, muo) is det.
-:- mode set_tree234.fold4(pred(in, in, out, in, out, in, out, di, uo) is det,
+:- mode fold4(pred(in, in, out, in, out, in, out, di, uo) is det,
     in, in, out, in, out, in, out, di, uo) is det.
-:- mode set_tree234.fold4(
+:- mode fold4(
     pred(in, in, out, in, out, in, out, in, out) is semidet,
     in, in, out, in, out, in, out, in, out) is semidet.
-:- mode set_tree234.fold4(
+:- mode fold4(
     pred(in, in, out, in, out, in, out, mdi, muo) is semidet,
     in, in, out, in, out, in, out, mdi, muo) is semidet.
-:- mode set_tree234.fold4(
+:- mode fold4(
     pred(in, in, out, in, out, in, out, di, uo) is semidet,
     in, in, out, in, out, in, out, di, uo) is semidet.
 
-:- pred set_tree234.foldl4(
+:- pred foldl4(
     pred(T1, T2, T2, T3, T3, T4, T4, T5, T5), set_tree234(T1),
     T2, T2, T3, T3, T4, T4, T5, T5).
-:- mode set_tree234.foldl4(pred(in, in, out, in, out, in, out, in, out) is det,
+:- mode foldl4(pred(in, in, out, in, out, in, out, in, out) is det,
     in, in, out, in, out, in, out, in, out) is det.
-:- mode set_tree234.foldl4(pred(in, in, out, in, out, in, out, mdi, muo) is det,
+:- mode foldl4(pred(in, in, out, in, out, in, out, mdi, muo) is det,
     in, in, out, in, out, in, out, mdi, muo) is det.
-:- mode set_tree234.foldl4(pred(in, in, out, in, out, in, out, di, uo) is det,
+:- mode foldl4(pred(in, in, out, in, out, in, out, di, uo) is det,
     in, in, out, in, out, in, out, di, uo) is det.
-:- mode set_tree234.foldl4(
+:- mode foldl4(
     pred(in, in, out, in, out, in, out, in, out) is semidet,
     in, in, out, in, out, in, out, in, out) is semidet.
-:- mode set_tree234.foldl4(
+:- mode foldl4(
     pred(in, in, out, in, out, in, out, mdi, muo) is semidet,
     in, in, out, in, out, in, out, mdi, muo) is semidet.
-:- mode set_tree234.foldl4(
+:- mode foldl4(
     pred(in, in, out, in, out, in, out, di, uo) is semidet,
     in, in, out, in, out, in, out, di, uo) is semidet.
 
-:- pred set_tree234.fold5(
+:- pred fold5(
     pred(T1, T2, T2, T3, T3, T4, T4, T5, T5, T6, T6),
     set_tree234(T1), T2, T2, T3, T3, T4, T4, T5, T5, T6, T6).
-:- mode set_tree234.fold5(
+:- mode fold5(
     pred(in, in, out, in, out, in, out, in, out, in, out) is det,
     in, in, out, in, out, in, out, in, out, in, out) is det.
-:- mode set_tree234.fold5(
+:- mode fold5(
     pred(in, in, out, in, out, in, out, in, out, mdi, muo) is det,
     in, in, out, in, out, in, out, in, out, mdi, muo) is det.
-:- mode set_tree234.fold5(
+:- mode fold5(
     pred(in, in, out, in, out, in, out, in, out, di, uo) is det,
     in, in, out, in, out, in, out, in, out, di, uo) is det.
-:- mode set_tree234.fold5(
+:- mode fold5(
     pred(in, in, out, in, out, in, out, in, out, in, out) is semidet,
     in, in, out, in, out, in, out, in, out, in, out) is semidet.
-:- mode set_tree234.fold5(
+:- mode fold5(
     pred(in, in, out, in, out, in, out, in, out, mdi, muo) is semidet,
     in, in, out, in, out, in, out, in, out, mdi, muo) is semidet.
-:- mode set_tree234.fold5(
+:- mode fold5(
     pred(in, in, out, in, out, in, out, in, out, di, uo) is semidet,
     in, in, out, in, out, in, out, in, out, di, uo) is semidet.
 
-:- pred set_tree234.foldl5(
+:- pred foldl5(
     pred(T1, T2, T2, T3, T3, T4, T4, T5, T5, T6, T6),
     set_tree234(T1), T2, T2, T3, T3, T4, T4, T5, T5, T6, T6).
-:- mode set_tree234.foldl5(
+:- mode foldl5(
     pred(in, in, out, in, out, in, out, in, out, in, out) is det,
     in, in, out, in, out, in, out, in, out, in, out) is det.
-:- mode set_tree234.foldl5(
+:- mode foldl5(
     pred(in, in, out, in, out, in, out, in, out, mdi, muo) is det,
     in, in, out, in, out, in, out, in, out, mdi, muo) is det.
-:- mode set_tree234.foldl5(
+:- mode foldl5(
     pred(in, in, out, in, out, in, out, in, out, di, uo) is det,
     in, in, out, in, out, in, out, in, out, di, uo) is det.
-:- mode set_tree234.foldl5(
+:- mode foldl5(
     pred(in, in, out, in, out, in, out, in, out, in, out) is semidet,
     in, in, out, in, out, in, out, in, out, in, out) is semidet.
-:- mode set_tree234.foldl5(
+:- mode foldl5(
     pred(in, in, out, in, out, in, out, in, out, mdi, muo) is semidet,
     in, in, out, in, out, in, out, in, out, mdi, muo) is semidet.
-:- mode set_tree234.foldl5(
+:- mode foldl5(
     pred(in, in, out, in, out, in, out, in, out, di, uo) is semidet,
     in, in, out, in, out, in, out, in, out, di, uo) is semidet.
 
-:- pred set_tree234.fold6(
+:- pred fold6(
     pred(T1, T2, T2, T3, T3, T4, T4, T5, T5, T6, T6, T7, T7),
     set_tree234(T1), T2, T2, T3, T3, T4, T4, T5, T5, T6, T6, T7, T7).
-:- mode set_tree234.fold6(
+:- mode fold6(
     pred(in, in, out, in, out, in, out, in, out, in, out, in, out) is det,
     in, in, out, in, out, in, out, in, out, in, out, in, out) is det.
-:- mode set_tree234.fold6(
+:- mode fold6(
     pred(in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is det,
     in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is det.
-:- mode set_tree234.fold6(
+:- mode fold6(
     pred(in, in, out, in, out, in, out, in, out, in, out, di, uo) is det,
     in, in, out, in, out, in, out, in, out, in, out, di, uo) is det.
-:- mode set_tree234.fold6(
+:- mode fold6(
     pred(in, in, out, in, out, in, out, in, out, in, out, in, out) is semidet,
     in, in, out, in, out, in, out, in, out, in, out, in, out) is semidet.
-:- mode set_tree234.fold6(
+:- mode fold6(
     pred(in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is semidet,
     in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is semidet.
-:- mode set_tree234.fold6(
+:- mode fold6(
     pred(in, in, out, in, out, in, out, in, out, in, out, di, uo) is semidet,
     in, in, out, in, out, in, out, in, out, in, out, di, uo) is semidet.
 
-:- pred set_tree234.foldl6(
+:- pred foldl6(
     pred(T1, T2, T2, T3, T3, T4, T4, T5, T5, T6, T6, T7, T7),
     set_tree234(T1), T2, T2, T3, T3, T4, T4, T5, T5, T6, T6, T7, T7).
-:- mode set_tree234.foldl6(
+:- mode foldl6(
     pred(in, in, out, in, out, in, out, in, out, in, out, in, out) is det,
     in, in, out, in, out, in, out, in, out, in, out, in, out) is det.
-:- mode set_tree234.foldl6(
+:- mode foldl6(
     pred(in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is det,
     in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is det.
-:- mode set_tree234.foldl6(
+:- mode foldl6(
     pred(in, in, out, in, out, in, out, in, out, in, out, di, uo) is det,
     in, in, out, in, out, in, out, in, out, in, out, di, uo) is det.
-:- mode set_tree234.foldl6(
+:- mode foldl6(
     pred(in, in, out, in, out, in, out, in, out, in, out, in, out) is semidet,
     in, in, out, in, out, in, out, in, out, in, out, in, out) is semidet.
-:- mode set_tree234.foldl6(
+:- mode foldl6(
     pred(in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is semidet,
     in, in, out, in, out, in, out, in, out, in, out, mdi, muo) is semidet.
-:- mode set_tree234.foldl6(
+:- mode foldl6(
     pred(in, in, out, in, out, in, out, in, out, in, out, di, uo) is semidet,
     in, in, out, in, out, in, out, in, out, in, out, di, uo) is semidet.
 
-    % all_true(Pred, Set) succeeds iff Pred(Element) succeeds
-    % for all the elements of Set.
+    % all_true(Pred, Set) succeeds iff Pred(Element) succeeds for all the
+    % elements of Set.
     %
-:- pred set_tree234.all_true(pred(T)::in(pred(in) is semidet),
+:- pred all_true(pred(T)::in(pred(in) is semidet),
     set_tree234(T)::in) is semidet.
 
     % Return the set of items for which the predicate succeeds.
     %
-:- func set_tree234.filter(pred(T)::in(pred(in) is semidet),
+:- func filter(pred(T)::in(pred(in) is semidet),
     set_tree234(T)::in) = (set_tree234(T)::out) is det.
-:- pred set_tree234.filter(pred(T)::in(pred(in) is semidet),
+:- pred filter(pred(T)::in(pred(in) is semidet),
     set_tree234(T)::in, set_tree234(T)::out) is det.
 
     % Return the set of items for which the predicate succeeds,
     % and the set for which it fails.
     %
-:- pred set_tree234.filter(pred(T)::in(pred(in) is semidet),
+:- pred filter(pred(T)::in(pred(in) is semidet),
     set_tree234(T)::in, set_tree234(T)::out, set_tree234(T)::out) is det.
 
-    % set_tree234.divide(Pred, Set, TruePart, FalsePart):
+    % divide(Pred, Set, TruePart, FalsePart):
     % TruePart consists of those elements of Set for which Pred succeeds;
     % FalsePart consists of those elements of Set for which Pred fails.
     %
-:- pred set_tree234.divide(pred(T)::in(pred(in) is semidet),
+:- pred divide(pred(T)::in(pred(in) is semidet),
     set_tree234(T)::in, set_tree234(T)::out, set_tree234(T)::out) is det.
 
-    % set_tree234.divide_by_set(DivideBySet, Set, InPart, OutPart):
+    % divide_by_set(DivideBySet, Set, InPart, OutPart):
     % InPart consists of those elements of Set which are also in
     % DivideBySet; OutPart consists of those elements of which are
     % not in DivideBySet.
     %
-:- pred set_tree234.divide_by_set(set_tree234(T)::in, set_tree234(T)::in,
+:- pred divide_by_set(set_tree234(T)::in, set_tree234(T)::in,
     set_tree234(T)::out, set_tree234(T)::out) is det.
 
-%--------------------------------------------------------------------------%
-%--------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- implementation.
 
@@ -550,7 +534,7 @@
 % :- mode uo_set_tree234(T) == free >> uniq_set_tree234(T).
 % :- mode uo_set_tree234    == free >> uniq_set_tree234(ground).
 
-%-----------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.init = empty.
 
@@ -700,7 +684,7 @@ set_tree234.is_member(T, E) = R :-
 set_tree234.contains(T, E) :-
     set_tree234.is_member(T, E, yes).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.list_to_set(List) = Tree :-
     set_tree234.list_to_set_2(List, empty, Tree).
@@ -732,7 +716,7 @@ set_tree234.list_to_set_2([E | Es], !Tree) :-
 set_tree234.to_set(Tree) =
     set.sorted_list_to_set(set_tree234.to_sorted_list(Tree)).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.to_sorted_list(Tree) = List :-
     set_tree234.to_sorted_list_2(Tree, [], List).
@@ -760,7 +744,7 @@ set_tree234.to_sorted_list_2(four(E0, E1, E2, T0, T1, T2, T3), L0, L) :-
 set_tree234.from_set(Set) =
     set_tree234.sorted_list_to_set(set.to_sorted_list(Set)).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.equal(SetA, SetB) :-
     set_tree234.to_sorted_list(SetA, ListA),
@@ -790,7 +774,7 @@ set_tree234.subset(four(E0, E1, E2, T0, T1, T2, T3), Set) :-
 set_tree234.superset(SuperSet, Set) :-
     set_tree234.subset(Set, SuperSet).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- inst two(E, T)   ---> two(E, T, T).
 :- inst three(E, T) ---> three(E, E, T, T, T).
@@ -814,7 +798,7 @@ set_tree234.superset(SuperSet, Set) :-
 % :- mode di_four  == di(uniq_four(unique, unique)).
 % :- mode sdi_four == di(uniq_four(ground, uniq_tree234_gg)).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.insert(E, Tin) = Tout :-
     set_tree234.insert(E, Tin, Tout).
@@ -1093,7 +1077,7 @@ set_tree234.insert3(E, Tin, Tout) :-
         )
     ).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.insert_new(E, Tin, Tout) :-
     (
@@ -1359,7 +1343,7 @@ set_tree234.insert_new3(E, Tin, Tout) :-
         )
     ).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.insert_list(Es, Set0) = Set :-
     set_tree234.insert_list(Es, Set0, Set).
@@ -1369,7 +1353,7 @@ set_tree234.insert_list([E | Es], !Set) :-
     set_tree234.insert(E, !Set),
     set_tree234.insert_list(Es, !Set).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 :- pred set_tree234.split_four(set_tree234(E)::in_four, E::out,
     set_tree234(E)::out_two, set_tree234(E)::out_two) is det.
@@ -1380,7 +1364,7 @@ set_tree234.split_four(Tin, MidE, Sub0, Sub1) :-
     MidE = E1,
     Sub1 = two(E2, T2, T3).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.delete(E, Tin) = Tout :-
     set_tree234.delete(E, Tin, Tout).
@@ -1640,7 +1624,7 @@ set_tree234.delete_list([E | Es], !Set) :-
     set_tree234.delete(E, !Set),
     set_tree234.delete_list(Es, !Set).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % We use the same algorithm as set_tree234.delete.
 
@@ -1892,7 +1876,7 @@ set_tree234.remove_list([E | Es], !Set) :-
     set_tree234.remove(E, !Set),
     set_tree234.remove_list(Es, !Set).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % The algorithm we use similar to set_tree234.delete, except that we
     % always go down the left subtree.
@@ -1966,7 +1950,7 @@ set_tree234.remove_least_2(Tin, E, Tout, RH) :-
         )
     ).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % The input to the following group of predicates are the components
     % of a two-, three- or four-node in which the height of the indicated
@@ -2266,7 +2250,7 @@ fix_4node_t3(E0, E1, E2, T0, T1, T2, T3, Tout, RH) :-
         % RH = no
     ).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.union(SetA, SetB) = Set :-
     set_tree234.union(SetA, SetB, Set).
@@ -2346,7 +2330,7 @@ set_tree234.power_union_2(four(E0, E1, E2, T0, T1, T2, T3), !Union) :-
     set_tree234.union(E2, !Union),
     set_tree234.power_union_2(T3, !Union).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.intersect(SetA, SetB) = Set :-
     set_tree234.intersect(SetA, SetB, Set).
@@ -2437,7 +2421,7 @@ set_tree234.power_intersect(Sets) = Intersect :-
 set_tree234.power_intersect(Sets, Intersect) :-
     Intersect = set_tree234.intersect_list(set_tree234.to_sorted_list(Sets)).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
     % `set_tree234.difference(SetA, SetB, Set)' is true iff `Set' is the
     % set containing all the elements of `SetA' except those that
@@ -2472,7 +2456,7 @@ set_tree234.difference_2(four(E0, E1, E2, T0, T1, T2, T3), !Set) :-
     set_tree234.delete(E2, !Set),
     set_tree234.difference_2(T3, !Set).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.count(empty) = 0.
 set_tree234.count(two(_, T0, T1)) = N :-
@@ -2506,7 +2490,7 @@ set_tree234.height(Tree, Height) :-
         Height = T0Height + 1
     ).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.fold(Pred, Tree, !A) :-
     set_tree234.foldl(Pred, Tree, !A).
@@ -2671,7 +2655,7 @@ set_tree234.foldl6(Pred, four(E0, E1, E2, T0, T1, T2, T3), !A, !B, !C, !D,
     Pred(E2, !A, !B, !C, !D, !E, !F),
     set_tree234.foldl6(Pred, T3, !A, !B, !C, !D, !E, !F).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.all_true(Pred, T) :-
     (
@@ -2699,7 +2683,7 @@ set_tree234.all_true(Pred, T) :-
         set_tree234.all_true(Pred, T3)
     ).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.map(Pred, SetA, SetB) :-
     set_tree234.map_pred(Pred, SetA, [], ListB),
@@ -2774,7 +2758,7 @@ set_tree234.map_func(Func, Tin, !List) :-
     !:List = [N2 | !.List],
     set_tree234.map_func(Func, T3, !List).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.filter_map(Pred, SetA, SetB) :-
     set_tree234.filter_map_pred(Pred, SetA, [], ListB),
@@ -2887,7 +2871,7 @@ set_tree234.filter_map_func(Func, Tin, !List) :-
     ),
     set_tree234.filter_map_func(Func, T3, !List).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
 
 set_tree234.filter(Pred, Set) = TrueSet :-
     % XXX This should be more efficient.
@@ -2961,4 +2945,4 @@ set_tree234.divide_by_set(DivideBySet, Set, TrueSet, FalseSet) :-
     set_tree234.divide(set_tree234.contains(DivideBySet), Set,
         TrueSet, FalseSet).
 
-%------------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%

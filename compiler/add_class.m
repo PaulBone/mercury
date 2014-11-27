@@ -13,7 +13,7 @@
 :- import_module hlds.hlds_pred.
 :- import_module hlds.make_hlds.make_hlds_passes.
 :- import_module hlds.make_hlds.qual_info.
-:- import_module mdbcomp.prim_data.
+:- import_module mdbcomp.sym_name.
 :- import_module parse_tree.error_util.
 :- import_module parse_tree.prog_data.
 
@@ -684,7 +684,7 @@ produce_instance_method_clause(PredOrFunc, Context, Status, InstanceClause,
         warn_singletons(!.ModuleInfo, SimpleCallId, VarSet, Goal, !Specs),
 
         % Warn about variables with overlapping scopes.
-        warn_overlap(Warnings, VarSet, SimpleCallId, !Specs)
+        add_quant_warnings(SimpleCallId, VarSet, Warnings, !Specs)
     ).
 
 :- pred pred_method_with_no_modes_error(pred_info::in,
@@ -709,7 +709,8 @@ pred_method_with_no_modes_error(PredInfo, !Specs) :-
 undefined_type_class_error(ClassName, Arity, Context, Description, !Specs) :-
     Pieces = [words("Error:"), words(Description), words("for"),
         sym_name_and_arity(ClassName / Arity),
-        words("without preceding typeclass declaration."), nl],
+        words("without corresponding"), decl("typeclass"), words("declaration."),
+        nl],
     Msg = simple_msg(Context, [always(Pieces)]),
     Spec = error_spec(severity_error, phase_parse_tree_to_hlds, [Msg]),
     !:Specs = [Spec | !.Specs].
