@@ -1238,15 +1238,15 @@ find_transitive_module_dependencies_2(KeepGoing, DependenciesType, ModuleLocn,
                 ),
                 module_names_to_index_set(set.to_sorted_list(ImportsToCheck),
                     ImportsToCheckSet, !Info),
-                ImportingModule = !.Info ^ importing_module,
-                !Info ^ importing_module := yes(ModuleName),
+                ImportingModules = !.Info ^ importing_modules,
+                !Info ^ importing_modules := [ModuleName | ImportingModules],
                 Modules1 = insert(Modules0, ModuleIndex),
                 deps_set_foldl3_maybe_stop_at_error(KeepGoing,
                     find_transitive_module_dependencies_2(KeepGoing,
                         DependenciesType, ModuleLocn),
                     Globals, ImportsToCheckSet, Success, Modules1, Modules,
                     !Info, !IO),
-                !Info ^ importing_module := ImportingModule
+                !Info ^ importing_modules := ImportingModules
             else
                 Success = yes,
                 Modules = Modules0

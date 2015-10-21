@@ -156,9 +156,9 @@
                 % to a `.err' file during this invocation of mmc.
                 error_file_modules      :: set(module_name),
 
-                % Used for reporting which module imported a nonexistent
-                % module.
-                importing_module        :: maybe(module_name),
+                % Used for reporting the chain of modules which imported a
+                % nonexistent module.
+                importing_modules       :: list(module_name),
 
                 % Targets specified on the command line.
                 command_line_targets    :: set(pair(module_name, target_type)),
@@ -372,7 +372,7 @@ make_process_args(Globals, DetectedGradeFlags, Variables, OptionArgs,
             ShouldRebuildModuleDeps,
             KeepGoing,
             set.init,
-            no,
+            [],
             set.list_to_set(ClassifiedTargets),
             AnalysisRepeat,
             no

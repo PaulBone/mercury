@@ -235,8 +235,8 @@ do_get_module_dependencies(Globals, RebuildModuleDeps, ModuleName,
                 io.write_string("' to generate dependencies: ", !IO),
                 io.write_string(Message, !IO),
                 io.write_string(".\n", !IO),
-                maybe_write_importing_module(ModuleName,
-                    !.Info ^ importing_module, !IO)
+                maybe_write_importing_modules(ModuleName,
+                    !.Info ^ importing_modules, !IO)
             )
         else
             true
@@ -836,8 +836,8 @@ make_module_dependencies(Globals, ModuleName, !Info, !IO) :-
             io.write_string("** Error reading file `", !IO),
             io.write_string(SourceFileName, !IO),
             io.write_string("' to generate dependencies.\n", !IO),
-            maybe_write_importing_module(ModuleName, !.Info ^ importing_module,
-                !IO),
+            maybe_write_importing_modules(ModuleName,
+                !.Info ^ importing_modules, !IO),
 
             % Display the contents of the `.err' file, then remove it
             % so we don't leave `.err' files lying around for nonexistent
@@ -951,16 +951,31 @@ cleanup_module_dep_files(Globals, SubModuleNames, !Info, !IO) :-
                 make_module_dep_file_extension, !Info, !IO)
         ), SubModuleNames, !Info, !IO).
 
-:- pred maybe_write_importing_module(module_name::in, maybe(module_name)::in,
+:- pred maybe_write_importing_modules(module_name::in, list(module_name)::in,
     io::di, io::uo) is det.
 
-maybe_write_importing_module(_, no, !IO).
-maybe_write_importing_module(ModuleName, yes(ImportingModuleName), !IO) :-
+maybe_write_importing_modules(_, [], !IO).
+maybe_write_importing_modules(ModuleName,
+        [ImportingModuleName | ImportingModuleNames], !IO) :-
     io.write_string("** Module `", !IO),
     write_sym_name(ModuleName, !IO),
-    io.write_string("' is imported or included by module `", !IO),
-    write_sym_name(ImportingModuleName, !IO),
-    io.write_string("'.\n", !IO).
+    io.write_string("' is imported or included by the chain of modules: ", !IO),
+    write_importing_modules_chain(
+        [ImportingModuleName | ImportingModuleNames], !IO),
+    io.write_string(".\n", !IO).
+
+:- pred write_importing_modules_chain(list(module_name)::in(non_empty_list),
+    io::di, io::uo) is det.
+
+write_importing_modules_chain([Module | Modules], !IO) :-
+    (
+        Modules = [],
+        format("`%s'", [s(sym_name_to_escaped_string(Module))], !IO)
+    ;
+        Modules = [_ | _],
+        write_importing_modules_chain(Modules, !IO),
+        format(" -> `%s'", [s(sym_name_to_escaped_string(Module))], !IO)
+    ).
 
 %-----------------------------------------------------------------------------%
 :- end_module make.module_dep_file.
