@@ -301,13 +301,39 @@ mark_tail_calls_in_goal(Info, FoundTailCalls, Errors, Goal0, Goal,
     (
         ( GoalExpr0 = call_foreign_proc(_, _, _, _, _, _, _)
         ; GoalExpr0 = generic_call(_, _, _, _, _)
-        ; GoalExpr0 = scope(_, _)
         ; GoalExpr0 = negation(_)
         ),
-        not_at_tail(AtTail0, AtTail),
         Goal = Goal0,
+        not_at_tail(AtTail0, AtTail),
         FoundTailCalls = not_found_tail_calls,
         Errors = []
+    ;
+        GoalExpr0 = scope(Reason, SubGoal0),
+        (
+            ( Reason = exist_quant(_)
+            ; Reason = promise_solutions(_, _)
+            ; Reason = commit(_)
+            ),
+            not_at_tail(AtTail0, AtTail1),
+            mark_tail_calls_in_goal(Info, FoundTailCalls, Errors,
+                SubGoal0, SubGoal, AtTail1, AtTail)
+        ;
+            ( Reason = promise_purity(_)
+            ; Reason = barrier(_)
+            ; Reason = from_ground_term(_, _)
+            ; Reason = trace_goal(_, _, _, _, _)
+            ; Reason = loop_control(_, _, _)
+            ),
+            mark_tail_calls_in_goal(Info, FoundTailCalls, Errors,
+                SubGoal0, SubGoal, AtTail0, AtTail)
+        ;
+            ( Reason = require_detism(_)
+            ; Reason = require_complete_switch(_)
+            ; Reason = require_switch_arms_detism(_, _)
+            ),
+            unexpected($file, $pred, "unexpected scope kind")
+        ),
+        Goal = hlds_goal(scope(Reason, SubGoal), GoalInfo0)
     ;
         GoalExpr0 = unify(LHS, _, _, Unify0, _),
         Goal = Goal0,
