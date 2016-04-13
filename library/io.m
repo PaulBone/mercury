@@ -1309,29 +1309,29 @@
 
     % make_temp(Name, !IO) creates an empty file whose name is different
     % to the name of any existing file. Name is bound to the name of the file.
-    % It is the responsibility of the program to delete the file when it is
-    % no longer needed.
+    % It is the responsibility of the caller to delete the file when it
+    % is no longer required.
     %
     % The file is placed in the directory returned by temp_directory/3.
     %
-    % This is insecure on the Erlang backend, file permissions are not set
-    % properly.
+    % This is insecure on the Erlang backend as it does not set file
+    % permissions correctly.
     %
 :- pred make_temp(string::out, io::di, io::uo) is det.
 
     % make_temp(Dir, Prefix, Name, !IO) creates an empty file whose
     % name is different to the name of any existing file. The file will reside
-    % in the directory specified by `Dir' and will have a prefix using up to
-    % the first 5 characters of `Prefix'. Name is bound to the name of the
-    % file. It is the responsibility of the program to delete the file
-    % when it is no longer needed.
+    % in the directory specified by Dir and will have a prefix using up to
+    % the first 5 characters of Prefix. Name is bound to the name of the
+    % file.  It is the responsibility of the caller to delete the file when it
+    % is no longer required.
     %
     % The C# backend has the following limitations:
     %   + Dir is ignored.
     %   + Prefix is ignored.
     %
-    % This is insecure on the Erlang backend, file permissions are not set
-    % properly.
+    % This is insecure on the Erlang backend as it does not set file
+    % permissions correctly.
     %
 :- pred make_temp(string::in, string::in, string::out, io::di, io::uo)
     is det.
@@ -1363,6 +1363,12 @@
     %
 :- pred make_temp_directory(string::in, string::in, string::out,
     io::di, io::uo) is det.
+
+    % Test if the make_temp_directory predicates are available.  This is false
+    % for the Erlang backends and either C backend without support for
+    % mkdtemp(3).
+    %
+:- pred have_make_temp_directory is semidet.
 
     % temp_directory(DirName, !IO)
     %
@@ -10716,8 +10722,42 @@ import java.nio.file.attribute.PosixFilePermissions;
 
 %---------------------------------------------------------------------------%
 
+:- pragma foreign_proc("C",
+    have_make_temp_directory,
+    [will_not_call_mercury, promise_pure, thread_safe],
+"
+#ifdef MR_HAVE_MKDTEMP
+    SUCCESS_INDICATOR = MR_TRUE;
+#else
+    SUCCESS_INDICATOR = MR_FALSE;
+#endif
+").
+
+:- pragma foreign_proc("Java",
+    have_make_temp_directory,
+    [will_not_call_mercury, promise_pure, thread_safe],
+"
+    SUCCESS_INDICATOR = true;
+").
+
+:- pragma foreign_proc("C#",
+    have_make_temp_directory,
+    [will_not_call_mercury, promise_pure, thread_safe],
+"
+    SUCCESS_INDICATOR = true;
+").
+
+:- pragma foreign_proc("Erlang",
+    have_make_temp_directory,
+    [will_not_call_mercury, promise_pure, thread_safe],
+"
+    SUCCESS_INDICATOR = false
+").
+
+%---------------------------------------------------------------------------%
+
 temp_directory(Dir, !IO) :-
-    % If using a Java or C# backend then use their API to get the location of
+    % If using the Java or C# backend then use their API to get the location of
     % temporary files.
     system_temp_dir(Dir0, OK, !IO),
     ( if OK = 1 then
