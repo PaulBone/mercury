@@ -1312,10 +1312,11 @@
     % It is the responsibility of the caller to delete the file when it
     % is no longer required.
     %
-    % The file is placed in the directory returned by temp_directory/3.
+    % The file is placed in the directory returned by get_temp_directory/3.
     %
-    % This is insecure on the Erlang backend as it does not set file
-    % permissions correctly.
+    % On the Erlang backend, this does not attempt to create the file with
+    % restrictive permissions (600 on Unix-like systems) and therefore should
+    % not be used when security is required.
     %
 :- pred make_temp(string::out, io::di, io::uo) is det.
 
@@ -1327,11 +1328,12 @@
     % is no longer required.
     %
     % The C# backend has the following limitations:
-    %   + Dir is ignored.
-    %   + Prefix is ignored.
+    %   - Dir is ignored.
+    %   - Prefix is ignored.
     %
-    % This is insecure on the Erlang backend as it does not set file
-    % permissions correctly.
+    % On the Erlang backend, this does not attempt to create the file with
+    % restrictive permissions (600 on Unix-like systems) and therefore should
+    % not be used when security is required.
     %
 :- pred make_temp(string::in, string::in, string::out, io::di, io::uo)
     is det.
@@ -1355,9 +1357,10 @@
     % longer needed.
     %
     % The C# backend has the following limitations:
-    %   + It is insecure as as the file permissions are not set and the call
-    %     does not test for an existing directory.
-    %   + Prefix is ignored.
+    %   - It does not attempt to create the file with restrictive permissions
+    %     (600 on Unix-like systems) and therefore should not be used when
+    %     security is required.
+    %   - Prefix is ignored.
     %
     % This is unimplemented on the Erlang backend.
     %
@@ -1370,7 +1373,7 @@
     %
 :- pred have_make_temp_directory is semidet.
 
-    % temp_directory(DirName, !IO)
+    % get_temp_directory(DirName, !IO)
     %
     % DirName is the name of a directory where applications should put
     % temporary files.
@@ -1390,7 +1393,7 @@
     %    value of this property is typically "/tmp" or "/var/tmp";
     %    on Microsoft Windows systems it is typically "c:\\temp".
     %
-:- pred temp_directory(string::out, io::di, io::uo) is det.
+:- pred get_temp_directory(string::out, io::di, io::uo) is det.
 
     % remove_file(FileName, Result, !IO) attempts to remove the file
     % `FileName', binding Result to ok/0 if it succeeds, or error/1 if it
@@ -10368,7 +10371,7 @@ io.setenv(Var, Value) :-
 %---------------------------------------------------------------------------%
 
 make_temp(Name, !IO) :-
-    temp_directory(Dir, !IO),
+    get_temp_directory(Dir, !IO),
     make_temp(Dir, "mtmp", Name, !IO).
 
 make_temp(Dir, Prefix, Name, !IO) :-
@@ -10381,7 +10384,7 @@ make_temp(Dir, Prefix, Name, !IO) :-
     ).
 
 make_temp_directory(DirName, !IO) :-
-    temp_directory(Dir, !IO),
+    get_temp_directory(Dir, !IO),
     make_temp_directory(Dir, "mtmp", DirName, !IO).
 
 make_temp_directory(Dir, Prefix, DirName, !IO) :-
@@ -10756,7 +10759,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 
 %---------------------------------------------------------------------------%
 
-temp_directory(Dir, !IO) :-
+get_temp_directory(Dir, !IO) :-
     % If using the Java or C# backend then use their API to get the location of
     % temporary files.
     system_temp_dir(Dir0, OK, !IO),
