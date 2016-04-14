@@ -10376,10 +10376,11 @@ make_temp(Name, !IO) :-
 
 make_temp(Dir, Prefix, Name, !IO) :-
     do_make_temp(Dir, Prefix, char_to_string(dir.directory_separator),
-        Name, Err, Message, !IO),
-    ( if Err = 0 then
-        true
-    else
+        Name, Okay, Message, !IO),
+    (
+        Okay = yes
+    ;
+        Okay = no,
         throw_io_error(Message)
     ).
 
@@ -10389,17 +10390,18 @@ make_temp_directory(DirName, !IO) :-
 
 make_temp_directory(Dir, Prefix, DirName, !IO) :-
     do_make_temp_directory(Dir, Prefix,
-        char_to_string(dir.directory_separator), DirName, Err, Message, !IO),
-    ( if Err = 0 then
-        true
-    else
+        char_to_string(dir.directory_separator), DirName, Okay, Message, !IO),
+    (
+        Okay = yes
+    ;
+        Okay = no,
         throw_io_error(Message)
     ).
 
 %-----------------------------------------------------------------------%
 
 :- pred io.do_make_temp(string::in, string::in, string::in,
-    string::out, int::out, string::out, io::di, io::uo) is det.
+    string::out, bool::out, string::out, io::di, io::uo) is det.
 
 % XXX The code for io.make_temp assumes POSIX. It uses the functions open(),
 % close(), and getpid() and the macros EEXIST, O_WRONLY, O_CREAT, and O_EXCL.
@@ -10425,7 +10427,7 @@ make_temp_directory(Dir, Prefix, DirName, !IO) :-
 
 :- pragma foreign_proc("C",
     io.do_make_temp(Dir::in, Prefix::in, Sep::in, FileName::out,
-        Error::out, ErrorMessage::out, _IO0::di, _IO::uo),
+        Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io,
         does_not_affect_liveness],
 "
@@ -10439,7 +10441,7 @@ make_temp_directory(Dir, Prefix, DirName, !IO) :-
         ML_maybe_make_err_msg(MR_TRUE, errno,
             ""error opening temporary file: "", MR_ALLOC_ID,
             ErrorMessage);
-        Error = -1;
+        Okay = MR_NO;
     } else {
         do {
             err = close(fd);
@@ -10447,7 +10449,7 @@ make_temp_directory(Dir, Prefix, DirName, !IO) :-
         ML_maybe_make_err_msg(err, errno,
             ""error closing temporary file: "", MR_ALLOC_ID,
             ErrorMessage);
-        Error = err;
+        Okay = err == 0 ? MR_YES : MR_NO;
     }
 #else
     /*
@@ -10496,7 +10498,7 @@ make_temp_directory(Dir, Prefix, DirName, !IO) :-
         ML_maybe_make_err_msg(MR_TRUE, errno,
             ""error opening temporary file: "", MR_ALLOC_ID,
             ErrorMessage);
-        Error = -1;
+        Okay = MR_NO;
     }  else {
         do {
             err = close(fd);
@@ -10504,25 +10506,25 @@ make_temp_directory(Dir, Prefix, DirName, !IO) :-
         ML_maybe_make_err_msg(err, errno,
             ""error closing temporary file: "", MR_ALLOC_ID,
             ErrorMessage);
-        Error = err;
+        Okay = err == 0 ? MR_YES : MR_NO;
     }
 #endif
 ").
 
 :- pragma foreign_proc("C#",
     io.do_make_temp(_Dir::in, _Prefix::in, _Sep::in, FileName::out,
-        Error::out, ErrorMessage::out, _IO0::di, _IO::uo),
+        Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe],
 "{
     try {
         FileName = System.IO.Path.GetTempFileName();
-        Error = 0;
+        Okay = mr_bool.YES;
         ErrorMessage = """";
     }
     catch (System.Exception e)
     {
         FileName = """";
-        Error = -1;
+        Okay = mr_bool.NO;
         ErrorMessage = e.Message;
     }
 }").
@@ -10542,7 +10544,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 
 :- pragma foreign_proc("Java",
     io.do_make_temp(Dir::in, Prefix::in, _Sep::in, FileName::out,
-        Error::out, ErrorMessage::out, _IO0::di, _IO::uo),
+        Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe,
         may_not_duplicate],
 "
@@ -10557,18 +10559,18 @@ import java.nio.file.attribute.PosixFilePermissions;
         dir_path = Paths.get(Dir);
         new_file = Files.createTempFile(dir_path, Prefix, null);
         FileName = new_file.toAbsolutePath().toString();
-        Error = 0;
+        Okay = bool.YES;
         ErrorMessage = """";
     } catch (java.lang.Exception e) {
         FileName = """";
-        Error = -1;
+        Okay = bool.NO;
         ErrorMessage = e.toString();
     }
 ").
 
 :- pragma foreign_proc("Erlang",
     io.do_make_temp(Dir::in, Prefix::in, Sep::in, FileName::out,
-        Error::out, ErrorMessage::out, _IO0::di, _IO::uo),
+        Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io,
         does_not_affect_liveness],
 "
@@ -10600,11 +10602,11 @@ import java.nio.file.attribute.PosixFilePermissions;
     of
         {ok, FileName0} ->
             FileName = list_to_binary(FileName0),
-            Error = 0,
+            Okay = {yes},
             ErrorMessage = <<>>;
         {error, Reason} ->
             FileName = <<>>,
-            Error = -1,
+            Okay = {no},
             ErrorMessage = list_to_binary(Reason)
     end
 ").
@@ -10641,11 +10643,11 @@ import java.nio.file.attribute.PosixFilePermissions;
 %-----------------------------------------------------------------------%
 
 :- pred io.do_make_temp_directory(string::in, string::in, string::in,
-    string::out, int::out, string::out, io::di, io::uo) is det.
+    string::out, bool::out, string::out, io::di, io::uo) is det.
 
 :- pragma foreign_proc("C",
     io.do_make_temp_directory(Dir::in, Prefix::in, Sep::in, DirName::out,
-        Error::out, ErrorMessage::out, _IO0::di, _IO::uo),
+        Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io,
         does_not_affect_liveness],
 "
@@ -10659,14 +10661,14 @@ import java.nio.file.attribute.PosixFilePermissions;
         ML_maybe_make_err_msg(MR_TRUE, errno,
             ""error creating temporary directory: "", MR_ALLOC_ID,
             ErrorMessage);
-        Error = -1;
+        Okay = MR_NO;
     } else {
         ErrorMessage = MR_make_string_const("""");
-        Error = 0;
+        Okay = MR_YES;
     }
 #else
     #warning ""Your system does not have mkdtemp""
-    Error = -1;
+    Okay = MR_NO;
     ErrorMessage =
         MR_make_string_const(""Your system does not have mkdtemp"");
     DirName = MR_make_string_const("""");
@@ -10675,7 +10677,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 
 :- pragma foreign_proc("C#",
     io.do_make_temp_directory(Dir::in, _Prefix::in, _Sep::in, DirName::out,
-        Error::out, ErrorMessage::out, _IO0::di, _IO::uo),
+        Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe],
 "{
     try {
@@ -10686,20 +10688,20 @@ import java.nio.file.attribute.PosixFilePermissions;
          *   2. We cannot atomically test for and create a directory
          */
         Directory.CreateDirectory(DirName);
-        Error = 0;
+        Okay = mr_bool.YES;
         ErrorMessage = """";
     }
     catch (System.Exception e)
     {
         DirName = """";
-        Error = -1;
+        Okay = mr_bool.NO;
         ErrorMessage = e.Message;
     }
 }").
 
 :- pragma foreign_proc("Java",
     io.do_make_temp_directory(Dir::in, Prefix::in, _Sep::in, DirName::out,
-        Error::out, ErrorMessage::out, _IO0::di, _IO::uo),
+        Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe,
         may_not_duplicate],
 "
@@ -10714,11 +10716,11 @@ import java.nio.file.attribute.PosixFilePermissions;
         dir_path = Paths.get(Dir);
         new_file = Files.createTempDirectory(dir_path, Prefix);
         DirName = new_file.toAbsolutePath().toString();
-        Error = 0;
+        Okay = bool.YES;
         ErrorMessage = """";
     } catch (java.lang.Exception e) {
         DirName = """";
-        Error = -1;
+        Okay = bool.NO;
         ErrorMessage = e.toString();
     }
 ").
