@@ -10400,7 +10400,7 @@ make_temp_directory(Dir, Prefix, DirName, !IO) :-
 
 %-----------------------------------------------------------------------%
 
-:- pred io.do_make_temp(string::in, string::in, string::in,
+:- pred do_make_temp(string::in, string::in, string::in,
     string::out, bool::out, string::out, io::di, io::uo) is det.
 
 % XXX The code for io.make_temp assumes POSIX. It uses the functions open(),
@@ -10426,7 +10426,7 @@ make_temp_directory(Dir, Prefix, DirName, !IO) :-
 ").
 
 :- pragma foreign_proc("C",
-    io.do_make_temp(Dir::in, Prefix::in, Sep::in, FileName::out,
+    do_make_temp(Dir::in, Prefix::in, Sep::in, FileName::out,
         Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io,
         does_not_affect_liveness],
@@ -10512,7 +10512,7 @@ make_temp_directory(Dir, Prefix, DirName, !IO) :-
 ").
 
 :- pragma foreign_proc("C#",
-    io.do_make_temp(_Dir::in, _Prefix::in, _Sep::in, FileName::out,
+    do_make_temp(_Dir::in, _Prefix::in, _Sep::in, FileName::out,
         Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe],
 "{
@@ -10543,7 +10543,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 % since Java is capable of locating the default temp directory itself.
 
 :- pragma foreign_proc("Java",
-    io.do_make_temp(Dir::in, Prefix::in, _Sep::in, FileName::out,
+    do_make_temp(Dir::in, Prefix::in, _Sep::in, FileName::out,
         Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe,
         may_not_duplicate],
@@ -10569,7 +10569,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 ").
 
 :- pragma foreign_proc("Erlang",
-    io.do_make_temp(Dir::in, Prefix::in, Sep::in, FileName::out,
+    do_make_temp(Dir::in, Prefix::in, Sep::in, FileName::out,
         Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io,
         does_not_affect_liveness],
@@ -10642,11 +10642,11 @@ import java.nio.file.attribute.PosixFilePermissions;
 
 %-----------------------------------------------------------------------%
 
-:- pred io.do_make_temp_directory(string::in, string::in, string::in,
+:- pred do_make_temp_directory(string::in, string::in, string::in,
     string::out, bool::out, string::out, io::di, io::uo) is det.
 
 :- pragma foreign_proc("C",
-    io.do_make_temp_directory(Dir::in, Prefix::in, Sep::in, DirName::out,
+    do_make_temp_directory(Dir::in, Prefix::in, Sep::in, DirName::out,
         Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io,
         does_not_affect_liveness],
@@ -10676,7 +10676,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 ").
 
 :- pragma foreign_proc("C#",
-    io.do_make_temp_directory(Dir::in, _Prefix::in, _Sep::in, DirName::out,
+    do_make_temp_directory(Dir::in, _Prefix::in, _Sep::in, DirName::out,
         Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe],
 "{
@@ -10700,7 +10700,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 }").
 
 :- pragma foreign_proc("Java",
-    io.do_make_temp_directory(Dir::in, Prefix::in, _Sep::in, DirName::out,
+    do_make_temp_directory(Dir::in, Prefix::in, _Sep::in, DirName::out,
         Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe,
         may_not_duplicate],
