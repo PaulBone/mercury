@@ -1348,9 +1348,6 @@
     % Throws an io.error exception if the temporary directory could not be
     % created.
     %
-    % On the C# backend this is insecure as the file permissions are not set
-    % and this call does not test for an existing directory.
-    %
     % On the Java backend this is insecure as the file permissions are not set.
     %
     % This is unimplemented on the Erlang backend.
@@ -1368,11 +1365,7 @@
     % Throws an io.error exception if the temporary directory could not be
     % created.
     %
-    % The C# backend has the following limitations:
-    %   - It does not attempt to create the file with restrictive permissions
-    %     (600 on Unix-like systems) and therefore should not be used when
-    %     security is required.
-    %   - Prefix is ignored.
+    % The C# backend Prefix is ignored.
     %
     % On the Java backend this is insecure as the file permissions are not set.
     %
@@ -1878,6 +1871,7 @@
 ").
 
 :- pragma foreign_decl("C#", "
+using System;
 using System.IO;
 using System.Security.AccessControl;
 using System.Security.Principal;
