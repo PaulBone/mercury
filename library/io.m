@@ -1873,8 +1873,16 @@
 :- pragma foreign_decl("C#", "
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
+
+#if __MonoCS__
+        // int chmod(const char *path, mode_t mode);
+        [DllImport("libc", SetLastError=true, EntryPoint="chmod",
+            CallingConvention=CallingConvention.Cdecl)]
+        static extern int sys_chmod (string path, uint mode);
+#endif
 ").
 
 :- pragma foreign_code("C#", "
@@ -10680,38 +10688,65 @@ import java.util.Random;
         Okay::out, ErrorMessage::out, _IO0::di, _IO::uo),
     [will_not_call_mercury, promise_pure, tabled_for_io, thread_safe],
 "{
-    try {
+    try
+    {
         DateTime utcNow = DateTime.UtcNow;
         DirName = Path.Combine(Dir, Path.GetRandomFileName());
 
-        // obtain the owner of the temporary directory, on any recent system
-        // this should be the current user, should work on any platform
-        // supporting .NET 2.0 or later
-        IdentityReference currentUser =
-            new DirectoryInfo(Dir).GetAccessControl(AccessControlSections.Owner)
-                                  .GetOwner(typeof(SecurityIdentifier));
-
-        DirectorySecurity security = new DirectorySecurity();
-        // Make the directory only accessible by the current user
-        security.AddAccessRule(new FileSystemAccessRule(currentUser,
-            FileSystemRights.ListDirectory |
-            FileSystemRights.Read |
-            FileSystemRights.Modify,
-            InheritanceFlags.None,
-            PropagationFlags.None,
-            AccessControlType.Allow));
-
-        DirectoryInfo TempDirInfo = Directory.CreateDirectory(DirName, security);
-        // Check if this was really created by us
-        if (TempDirInfo.CreationTimeUtc >= utcNow)
+        DirectoryInfo tempDirInfo;
+        switch (Environment.OSVersion.Platform)
         {
-            Okay = mr_bool.YES;
-            ErrorMessage = """";
+            case PlatformID.Win32NT:
+                // obtain the owner of the temporary directory
+                IdentityReference tempInfo =
+                    new DirectoryInfo(Dir)
+                        .GetAccessControl(AccessControlSections.Owner)
+                        .GetOwner(typeof(SecurityIdentifier));
+
+                DirectorySecurity security = new DirectorySecurity();
+                security.AddAccessRule(
+                    new FileSystemAccessRule(tempInfo,
+                        FileSystemRights.ListDirectory
+                            | FileSystemRights.Read
+                            | FileSystemRights.Modify,
+                        InheritanceFlags.None,
+                        PropagationFlags.None,
+                        AccessControlType.Allow
+                    )
+                );
+                tempDirInfo = Directory.CreateDirectory(DirName, security);
+                break;
+
+            case PlatformID.Unix:
+            case (PlatformID)6: // MacOSX:
+                tempDirInfo = Directory.CreateDirectory(DirName);
+                sys_chmod(DirName, 0x7 << 6);
+                break;
+
+            default:
+                tempDirInfo = null;
+                break;
+        }
+
+        if (tempDirInfo != null)
+        {
+            // Check if this was really created by us
+            if (tempDirInfo.CreationTimeUtc >= utcNow)
+            {
+                Okay = mr_bool.YES;
+                ErrorMessage = """";
+            }
+            else
+            {
+                Okay = mr_bool.NO;
+                ErrorMessage = string.Format(""{0} already exists"", DirName);
+            }
         }
         else
         {
             Okay = mr_bool.NO;
-            ErrorMessage = string.Format(""{0} already exists"", DirName);
+            ErrorMessage = ""Changing access is not supported for: "" +
+                Environment.OSVersion;
         }
     }
     catch (System.Exception e)
