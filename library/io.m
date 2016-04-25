@@ -1876,13 +1876,6 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
 using System.Security.Principal;
-
-#if __MonoCS__
-        // int chmod(const char *path, mode_t mode);
-        [DllImport("libc", SetLastError=true, EntryPoint="chmod",
-            CallingConvention=CallingConvention.Cdecl)]
-        static extern int sys_chmod (string path, uint mode);
-#endif
 ").
 
 :- pragma foreign_code("C#", "
@@ -1916,6 +1909,13 @@ using System.Security.Principal;
     // a byte order mark.
     static readonly System.Text.Encoding text_encoding =
         new System.Text.UTF8Encoding(false);
+
+#if __MonoCS__
+    // int chmod(const char *path, mode_t mode);
+    [DllImport(""libc"", SetLastError=true, EntryPoint=""chmod"",
+        CallingConvention=CallingConvention.Cdecl)]
+    static extern int ML_sys_chmod (string path, uint mode);
+#endif
 ").
 
 :- pragma foreign_code("Java",
@@ -10720,7 +10720,7 @@ import java.util.Random;
             case PlatformID.Unix:
             case (PlatformID)6: // MacOSX:
                 tempDirInfo = Directory.CreateDirectory(DirName);
-                sys_chmod(DirName, 0x7 << 6);
+                ML_sys_chmod(DirName, 0x7 << 6);
                 break;
 
             default:
