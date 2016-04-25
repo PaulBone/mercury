@@ -85,10 +85,14 @@ Changes to the Mercury language:
       require_switch_arms_erroneous
       require_switch_arms_failure
 
-  If `Goal' is switch on `Var', then e.g. `require_switch_arms_det [Var] Goal'
-  tells the compiler to require all the arms of that switch to have
-  determinisms at least as tight as det, and to generate error messages
+  `require_switch_arms_<determinism> [Var] Goal' tells the compiler to require
+  `Goal' to be a switch on `Var' in which all the switch arms have determinisms
+  at least as tight as <determininism>, and to generate error messages
   for any violations of this requirement.
+
+* We have changed the meaning of require_complete_switch scopes slightly:
+  the compiler now generates an error if the goal inside the scope
+  is not a switch on the named variable.
 
 * We have added an extension to include external files
   in pragma foreign_decl and pragma foreign_code declarations.
@@ -128,6 +132,11 @@ Changes to the Mercury standard library:
 
 * We have added temp_directory/3, make_temp_directory/3 and
   make_temp_directory/5 predicates to the io module.
+
+* We have added a variant of io.set_environment_var that returns an io.res
+  value rather than throwing an exception. We have added the predicate
+  io.have_set_environment_var/0 that tests for the ability to set
+  environment variables on the current platform.
 
 * We have added a module for discrete interval encoding trees, which are a
   highly efficient set implementation for fat sets.  This module is a
@@ -271,6 +280,14 @@ Changes to the Mercury standard library:
 
    - reverse_prepend/2
    - reverse_prepend/3
+   - take_while/4
+   - take_while/3
+   - take_while/2
+   - drop_while/3
+   - drop_while/2
+
+* The takewhile/4 predicate has been deprecated in the list module,
+  take_while/4 can be used instead.
 
 * The following predicate and function in the builtin module have been
   deprecated and will be removed in a future release:

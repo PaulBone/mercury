@@ -575,7 +575,6 @@ puritycheck(Verbose, Stats, !HLDS, !Specs, !IO) :-
     module_info_get_globals(!.HLDS, Globals),
     PurityErrors = contains_errors(Globals, PuritySpecs),
     maybe_write_out_errors(Verbose, Globals, !HLDS, !Specs, !IO),
-    maybe_report_stats(Stats, !IO),
     (
         PurityErrors = yes,
         maybe_write_string(Verbose,
@@ -687,6 +686,7 @@ modecheck(Verbose, Stats, !HLDS, FoundModeError, SafeToContinue,
         !Specs, !IO) :-
     module_info_get_globals(!.HLDS, Globals),
     maybe_write_out_errors(Verbose, Globals, !HLDS, !Specs, !IO),
+    maybe_write_string(Verbose, "% Mode-checking clauses...\n", !IO),
     globals.lookup_bool_option(Globals, benchmark_modes, BenchmarkModes),
     (
         BenchmarkModes = yes,

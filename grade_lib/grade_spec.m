@@ -44,9 +44,7 @@
     ;       svar_datarep
     ;       svar_target
     ;       svar_nested_funcs
-    ;       svar_gcc_regs_use
-    ;       svar_gcc_gotos_use
-    ;       svar_gcc_labels_use
+    ;       svar_gcc_conf
     ;       svar_low_tag_bits_use
     ;       svar_stack_len
     ;       svar_trail
@@ -67,7 +65,7 @@
     ;       svar_term_size_prof
     ;       svar_debug
     ;       svar_ssdebug
-    ;       svar_lldebug
+    ;       svar_target_debug
     ;       svar_rbmm
     ;       svar_rbmm_debug
     ;       svar_rbmm_prof
@@ -116,14 +114,12 @@
     ;       svalue_nested_funcs_no
     ;       svalue_nested_funcs_yes
 
-    ;       svalue_gcc_regs_use_no
-    ;       svalue_gcc_regs_use_yes
-
-    ;       svalue_gcc_gotos_use_no
-    ;       svalue_gcc_gotos_use_yes
-
-    ;       svalue_gcc_labels_use_no
-    ;       svalue_gcc_labels_use_yes
+    ;       svalue_gcc_conf_none       % used for non-LLDS backends
+    ;       svalue_gcc_conf_reg
+    ;       svalue_gcc_conf_jump
+    ;       svalue_gcc_conf_fast
+    ;       svalue_gcc_conf_asm_jump
+    ;       svalue_gcc_conf_asm_fast
 
     ;       svalue_low_tag_bits_use_0
             % If we are using 0 low primary tag bits, then the data
@@ -153,8 +149,9 @@
     ;       svalue_minmodel_own_stack
     ;       svalue_minmodel_own_stack_debug
 
-    ;       svalue_thread_safe_no
-    ;       svalue_thread_safe_yes
+    ;       svalue_thread_safe_c_no
+    ;       svalue_thread_safe_c_yes
+    ;       svalue_thread_safe_target_native
 
     ;       svalue_gc_none
     ;       svalue_gc_bdw
@@ -189,8 +186,8 @@
     ;       svalue_ssdebug_no
     ;       svalue_ssdebug_yes
 
-    ;       svalue_lldebug_no
-    ;       svalue_lldebug_yes
+    ;       svalue_target_debug_no
+    ;       svalue_target_debug_yes
 
     ;       svalue_rbmm_no
     ;       svalue_rbmm_yes
@@ -304,15 +301,15 @@ init_solver_var_specs(SpecsVersion) = Specs :-
             svalue_stack_len_extend],
         GcPrefOrder =
             [svalue_gc_none, svalue_gc_bdw, svalue_gc_target_native,
-            svalue_gc_accurate, svalue_gc_bdw_debug, svalue_gc_history]
+            svalue_gc_bdw_debug, svalue_gc_accurate, svalue_gc_history]
     ;
         SpecsVersion = specs_version_1,
         StackLenPrefOrder =
             [svalue_stack_len_segments, svalue_stack_len_std,
             svalue_stack_len_extend],
         GcPrefOrder =
-            [svalue_gc_bdw, svalue_gc_target_native, svalue_gc_accurate,
-            svalue_gc_bdw_debug, svalue_gc_none, svalue_gc_history]
+            [svalue_gc_bdw, svalue_gc_target_native, svalue_gc_bdw_debug,
+            svalue_gc_none, svalue_gc_accurate, svalue_gc_history]
     ),
 
     Specs = [
@@ -350,12 +347,15 @@ init_solver_var_specs(SpecsVersion) = Specs :-
         solver_var_spec(svar_nested_funcs,
             [svalue_nested_funcs_no, svalue_nested_funcs_yes]),
 
-        solver_var_spec(svar_gcc_regs_use,
-            [svalue_gcc_regs_use_yes, svalue_gcc_regs_use_no]),
-        solver_var_spec(svar_gcc_gotos_use,
-            [svalue_gcc_gotos_use_yes, svalue_gcc_gotos_use_no]),
-        solver_var_spec(svar_gcc_labels_use,
-            [svalue_gcc_labels_use_yes, svalue_gcc_labels_use_no]),
+        solver_var_spec(svar_gcc_conf,
+            % XXX The order of preference here is partially speed,
+            % partially how well the grade is tested.
+            [svalue_gcc_conf_asm_fast,
+            svalue_gcc_conf_reg,
+            svalue_gcc_conf_none,
+            svalue_gcc_conf_fast,
+            svalue_gcc_conf_jump,
+            svalue_gcc_conf_asm_jump]),
 
         solver_var_spec(svar_pregen,
             [svalue_pregen_no, svalue_pregen_yes]),
@@ -376,7 +376,8 @@ init_solver_var_specs(SpecsVersion) = Specs :-
             svalue_minmodel_own_stack, svalue_minmodel_own_stack_debug]),
 
         solver_var_spec(svar_thread_safe,
-            [svalue_thread_safe_no, svalue_thread_safe_yes]),
+            [svalue_thread_safe_c_no, svalue_thread_safe_c_yes,
+            svalue_thread_safe_target_native]),
 
         solver_var_spec(svar_gc,
             GcPrefOrder),
@@ -399,8 +400,8 @@ init_solver_var_specs(SpecsVersion) = Specs :-
             [svalue_debug_none, svalue_debug_debug, svalue_debug_decldebug]),
         solver_var_spec(svar_ssdebug,
             [svalue_ssdebug_no, svalue_ssdebug_yes]),
-        solver_var_spec(svar_lldebug,
-            [svalue_lldebug_no, svalue_lldebug_yes]),
+        solver_var_spec(svar_target_debug,
+            [svalue_target_debug_no, svalue_target_debug_yes]),
 
         solver_var_spec(svar_rbmm,
             [svalue_rbmm_no, svalue_rbmm_yes]),
@@ -461,6 +462,17 @@ init_requirement_specs = [
         "Using the ELDS backend requires targeting Erlang.",
         (svar_backend `being` svalue_backend_elds) `implies_that`
         (svar_target `is_one_of` [svalue_target_erlang])
+    ),
+
+    requirement_spec(
+        "The use of gcc extensions makes sense only for the LLDS backend.",
+        (svar_backend `being` svalue_backend_mlds) `implies_that`
+        (svar_gcc_conf `is_one_of` [svalue_gcc_conf_none])
+    ),
+    requirement_spec(
+        "The use of gcc extensions makes sense only for the LLDS backend.",
+        (svar_backend `being` svalue_backend_elds) `implies_that`
+        (svar_gcc_conf `is_one_of` [svalue_gcc_conf_none])
     ),
 
 % Requirements of values of svar_datarep.
@@ -526,22 +538,28 @@ init_requirement_specs = [
     ),
 
     requirement_spec(
-        "Generated C# is always thread safe.",
-        (svar_target `being` svalue_target_csharp) `implies_that`
-        (svar_thread_safe `is_one_of` [svalue_thread_safe_yes])
+        "C does not have its own native threading model.",
+        (svar_target `being` svalue_target_c) `implies_that`
+        (svar_thread_safe `is_one_of`
+            [svalue_thread_safe_c_no, svalue_thread_safe_c_yes])
     ),
     requirement_spec(
-        "Generated Java is always thread safe.",
-        (svar_target `being` svalue_target_java) `implies_that`
-        (svar_thread_safe `is_one_of` [svalue_thread_safe_yes])
+        "Generating C# implies using the C# threading model.",
+        (svar_target `being` svalue_target_csharp) `implies_that`
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_target_native])
     ),
-    % Generated Erlang is also always thread safe, but library/thread.m
+    requirement_spec(
+        "Generating Java implies using the Java threading model.",
+        (svar_target `being` svalue_target_java) `implies_that`
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_target_native])
+    ),
+    % XXX Generated Erlang is also always thread safe, but library/thread.m
     % does not (yet) have Erlang implementations of its foreign_procs,
     % so the program cannot create new threads.
     requirement_spec(
-        "Targeting Erlang does not (yet) allow new threads to be created.",
+        "Generating Erlang implies using the Erlang threading model.",
         (svar_target `being` svalue_target_erlang) `implies_that`
-        (svar_thread_safe `is_one_of` [svalue_thread_safe_no])
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_target_native])
     ),
 
 % These are covered by a single requirement from spf back to target.
@@ -573,60 +591,34 @@ init_requirement_specs = [
         (svar_target `is_one_of` [svalue_target_c])
     ),
 
-% Requirements of values of svar_gcc_regs_use.
+% Requirements of values of svar_gcc_conf.
+    % These requirements are expressed in reverse.
     requirement_spec(
         "Using gcc register extensions requires them to be available.",
-        (svar_gcc_regs_use `being` svalue_gcc_regs_use_yes) `implies_that`
-        (svar_ac_gcc_regs_avail `is_one_of` [svalue_ac_gcc_regs_avail_yes])
+        (svar_ac_gcc_regs_avail `being` svalue_ac_gcc_regs_avail_no)
+            `implies_that`
+        (svar_gcc_conf `is_one_of`
+            [svalue_gcc_conf_none,
+            svalue_gcc_conf_jump,
+            svalue_gcc_conf_asm_jump])
     ),
-    requirement_spec(
-        "Using gcc register extensions requires targeting C.",
-        (svar_gcc_regs_use `being` svalue_gcc_regs_use_yes) `implies_that`
-        (svar_target `is_one_of` [svalue_target_c])
-    ),
-    requirement_spec(
-        "Using gcc register extensions requires the LLDS backend.",
-        (svar_gcc_regs_use `being` svalue_gcc_regs_use_yes) `implies_that`
-        (svar_backend `is_one_of` [svalue_backend_llds])
-    ),
-
-% Requirements of values of svar_gcc_gotos_use.
     requirement_spec(
         "Using gcc nonlocal gotos requires them to be available.",
-        (svar_gcc_gotos_use `being` svalue_gcc_gotos_use_yes) `implies_that`
-        (svar_ac_gcc_gotos_avail `is_one_of` [svalue_ac_gcc_gotos_avail_yes])
+        (svar_ac_gcc_gotos_avail `being` svalue_ac_gcc_gotos_avail_no)
+            `implies_that`
+        (svar_gcc_conf `is_one_of`
+            [svalue_gcc_conf_none,
+            svalue_gcc_conf_reg])
     ),
-    requirement_spec(
-        "Using gcc nonlocal gotos requires targeting C.",
-        (svar_gcc_gotos_use `being` svalue_gcc_gotos_use_yes) `implies_that`
-        (svar_target `is_one_of` [svalue_target_c])
-    ),
-    requirement_spec(
-        "Using gcc nonlocal gotos requires the LLDS backend.",
-        (svar_gcc_gotos_use `being` svalue_gcc_gotos_use_yes) `implies_that`
-        (svar_backend `is_one_of` [svalue_backend_llds])
-    ),
-
-% Requirements of values of svar_gcc_labels_use.
     requirement_spec(
         "Using gcc asm labels requires them to be available.",
-        (svar_gcc_labels_use `being` svalue_gcc_labels_use_yes) `implies_that`
-        (svar_ac_gcc_labels_avail `is_one_of` [svalue_ac_gcc_labels_avail_yes])
-    ),
-    requirement_spec(
-        "Using gcc asm labels requires using gcc nonlocal gotos.",
-        (svar_gcc_labels_use `being` svalue_gcc_labels_use_yes) `implies_that`
-        (svar_gcc_gotos_use `is_one_of` [svalue_gcc_gotos_use_yes])
-    ),
-    requirement_spec(
-        "Using gcc asm labels requires targeting C.",
-        (svar_gcc_labels_use `being` svalue_gcc_labels_use_yes) `implies_that`
-        (svar_target `is_one_of` [svalue_target_c])
-    ),
-    requirement_spec(
-        "Using gcc asm labels requires the LLDS backend.",
-        (svar_gcc_labels_use `being` svalue_gcc_labels_use_yes) `implies_that`
-        (svar_backend `is_one_of` [svalue_backend_llds])
+        (svar_ac_gcc_labels_avail `being` svalue_ac_gcc_labels_avail_no)
+            `implies_that`
+        (svar_gcc_conf `is_one_of`
+            [svalue_gcc_conf_none,
+            svalue_gcc_conf_reg,
+            svalue_gcc_conf_jump,
+            svalue_gcc_conf_fast])
     ),
 
 % Requirements of values of svar_pregen.
@@ -636,12 +628,81 @@ init_requirement_specs = [
         (svar_target `is_one_of` [svalue_target_c])
     ),
     requirement_spec(
+        "Pregenerated code always uses none, reg, asm_fast or hlc.",
+        (svar_pregen `being` svalue_pregen_yes) `implies_that`
+        (svar_gcc_conf `is_one_of`
+            [svalue_gcc_conf_none, svalue_gcc_conf_reg,
+            svalue_gcc_conf_asm_fast])
+    ),
+    requirement_spec(
         "Pregenerated code uses 2 low tag bits.",
         (svar_pregen `being` svalue_pregen_yes) `implies_that`
         (svar_low_tag_bits_use `is_one_of` [svalue_low_tag_bits_use_2])
     ),
+    % XXX We should require stack segments on llds.
+    % With version 1 of the requirements, we prefer stack segments when
+    % possible, and with the llds backend, they are possible,
+    % but this is not as good as a requirement, since it can be overridden.
+    % Unfortunately, we don't (yet) support implications with *two*
+    % conditions, such as "pregen=yes and backend=llds implies stack segments".
+    % XXX Should we relax the following restriction?
     requirement_spec(
-        "Pregenerated code uses boxed double-precision floats.",
+        "Pregenerated code never uses a trail.",
+        (svar_pregen `being` svalue_pregen_yes) `implies_that`
+        (svar_trail `is_one_of` [svalue_trail_no])
+    ),
+    requirement_spec(
+        "Pregenerated code never uses minimal model.",
+        (svar_pregen `being` svalue_pregen_yes) `implies_that`
+        (svar_minmodel `is_one_of` [svalue_minmodel_no])
+    ),
+    requirement_spec(
+        "Pregenerated code never supports thread safety.",
+        (svar_pregen `being` svalue_pregen_yes) `implies_that`
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_c_no])
+    ),
+    requirement_spec(
+        "Pregenerated code always uses the Boehm garbage collector.",
+        (svar_pregen `being` svalue_pregen_yes) `implies_that`
+        (svar_gc `is_one_of` [svalue_gc_bdw])
+    ),
+    requirement_spec(
+        "Pregenerated code never supports deep profiling.",
+        (svar_pregen `being` svalue_pregen_yes) `implies_that`
+        (svar_deep_prof `is_one_of` [svalue_deep_prof_no])
+    ),
+    requirement_spec(
+        "Pregenerated code never supports mprof-style profiling.",
+        (svar_pregen `being` svalue_pregen_yes) `implies_that`
+        (svar_mprof_call `is_one_of` [svalue_mprof_call_no])
+    ),
+    requirement_spec(
+        "Pregenerated code never supports term size profiling.",
+        (svar_pregen `being` svalue_pregen_yes) `implies_that`
+        (svar_term_size_prof `is_one_of` [svalue_term_size_prof_no])
+    ),
+    requirement_spec(
+        "Pregenerated code never supports debugging.",
+        (svar_pregen `being` svalue_pregen_yes) `implies_that`
+        (svar_debug `is_one_of` [svalue_debug_none])
+    ),
+    requirement_spec(
+        "Pregenerated code never supports source-to-source debugging.",
+        (svar_pregen `being` svalue_pregen_yes) `implies_that`
+        (svar_ssdebug `is_one_of` [svalue_ssdebug_no])
+    ),
+    requirement_spec(
+        "Pregenerated code never supports target language debugging.",
+        (svar_pregen `being` svalue_pregen_yes) `implies_that`
+        (svar_target_debug `is_one_of` [svalue_target_debug_no])
+    ),
+    requirement_spec(
+        "Pregenerated code never supports region based memory management.",
+        (svar_pregen `being` svalue_pregen_yes) `implies_that`
+        (svar_rbmm `is_one_of` [svalue_rbmm_no])
+    ),
+    requirement_spec(
+        "Pregenerated code always uses boxed double-precision floats.",
         (svar_pregen `being` svalue_pregen_yes) `implies_that`
         (svar_merc_float `is_one_of` [svalue_merc_float_is_boxed_c_double])
     ),
@@ -750,15 +811,15 @@ init_requirement_specs = [
         "Minimal model tabling does not respect thread safety.",
         (svar_minmodel `being` svalue_minmodel_stack_copy)
             `implies_that`
-        (svar_thread_safe `is_one_of` [svalue_thread_safe_no])
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_c_no])
     ),
     requirement_spec(
         "Minimal model tabling does not respect thread safety.",
         (svar_minmodel `being` svalue_minmodel_stack_copy_debug)
             `implies_that`
-        (svar_thread_safe `is_one_of` [svalue_thread_safe_no])
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_c_no])
     ),
-    % XXX Do svalue_minmodel_own_stack{,_debug} imply svalue_thread_safe_no?
+    % XXX Do svalue_minmodel_own_stack{,_debug} imply svalue_thread_safe_c_no?
     % For now, since the implementation of own stack minimal model
     % is not yet complete, we need not include its requirements in the list,
     % and not including them should make constraint solving a tiny bit faster.
@@ -785,14 +846,19 @@ init_requirement_specs = [
         (svar_target `is_one_of` [svalue_target_c])
     ),
     requirement_spec(
-        "Accurate gc requires the MLDS backend.",
+        "Accurate gc conflicts with threading.",
         (svar_gc `being` svalue_gc_accurate) `implies_that`
-        (svar_backend `is_one_of` [svalue_backend_mlds])
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_c_no])
     ),
     requirement_spec(
         "History gc requires targeting C.",
         (svar_gc `being` svalue_gc_history) `implies_that`
         (svar_target `is_one_of` [svalue_target_c])
+    ),
+    requirement_spec(
+        "History gc conflicts with threading.",
+        (svar_gc `being` svalue_gc_history) `implies_that`
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_c_no])
     ),
 
 % Requirements of values of svar_deep_prof.
@@ -805,6 +871,11 @@ init_requirement_specs = [
         "Deep profiling interferes with minimal model tabling.",
         (svar_deep_prof `being` svalue_deep_prof_yes) `implies_that`
         (svar_minmodel `is_one_of` [svalue_minmodel_no])
+    ),
+    requirement_spec(
+        "Deep profiling does not work for multithreaded programs.",
+        (svar_deep_prof `being` svalue_deep_prof_yes) `implies_that`
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_c_no])
     ),
     requirement_spec(
         "Deep profiling is incompatible with mprof call profiling.",
@@ -832,6 +903,11 @@ init_requirement_specs = [
         "Mprof call profiling interferes with minimal model tabling.",
         (svar_mprof_call `being` svalue_mprof_call_yes) `implies_that`
         (svar_minmodel `is_one_of` [svalue_minmodel_no])
+    ),
+    requirement_spec(
+        "Mprof call profiling does not work for multithreaded programs.",
+        (svar_mprof_call `being` svalue_mprof_call_yes) `implies_that`
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_c_no])
     ),
 
 % Requirements of values of svar_mprof_time.
@@ -869,7 +945,7 @@ init_requirement_specs = [
     requirement_spec(
         "Threadscope style profiling requires thread safe code.",
         (svar_tscope_prof `being` svalue_tscope_prof_yes) `implies_that`
-        (svar_thread_safe `is_one_of` [svalue_thread_safe_yes])
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_c_yes])
     ),
 
 % Requirements of values of svar_term_size_prof.
@@ -883,6 +959,16 @@ init_requirement_specs = [
         (svar_term_size_prof `being` svalue_term_size_prof_words) `implies_that`
         (svar_backend `is_one_of` [svalue_backend_llds])
     ),
+    requirement_spec(
+        "Term size profiling is incompatible with thread safety.",
+        (svar_term_size_prof `being` svalue_term_size_prof_cells) `implies_that`
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_c_no])
+    ),
+    requirement_spec(
+        "Term size profiling is incompatible with thread safety.",
+        (svar_term_size_prof `being` svalue_term_size_prof_words) `implies_that`
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_c_no])
+    ),
 
 % Requirements of values of svar_debug.
     requirement_spec(
@@ -895,20 +981,32 @@ init_requirement_specs = [
         (svar_debug `being` svalue_debug_decldebug) `implies_that`
         (svar_backend `is_one_of` [svalue_backend_llds])
     ),
+    requirement_spec(
+        "Debugging does not work for multithreaded programs.",
+        (svar_debug `being` svalue_debug_debug) `implies_that`
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_c_no])
+    ),
+    requirement_spec(
+        "Declarative debugging does not work for multithreaded programs.",
+        (svar_debug `being` svalue_debug_decldebug) `implies_that`
+        (svar_thread_safe `is_one_of` [svalue_thread_safe_c_no])
+    ),
 
-% Requirements of values of svar_lldebug.
+% Requirements of values of svar_ssdebug.
     requirement_spec(
         "Source-to-source debugging does not make sense for the LLDS backend.",
         (svar_ssdebug `being` svalue_ssdebug_yes) `implies_that`
         (svar_backend `is_one_of` [svalue_backend_mlds, svalue_backend_elds])
     ),
-
-% Requirements of values of svar_lldebug.
     requirement_spec(
-        "Low level debugging applies only to the LLDS backend.",
-        (svar_lldebug `being` svalue_lldebug_yes) `implies_that`
-        (svar_backend `is_one_of` [svalue_backend_llds])
+        "Source-to-source debugging does not work for multithreaded programs.",
+        (svar_ssdebug `being` svalue_ssdebug_yes) `implies_that`
+        (svar_thread_safe `is_one_of`
+            [svalue_thread_safe_c_no, svalue_thread_safe_target_native])
     ),
+
+% Requirements of values of svar_target_debug.
+    % None. It should be applicable in all cases.
 
 % Requirements of values of svar_rbmm.
     requirement_spec(

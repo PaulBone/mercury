@@ -486,16 +486,19 @@
             % of simplification.
 
     ;       require_complete_switch(prog_var)
-            % If the wrapped subgoal is a switch on the given variable,
-            % require it have arms for every function symbol in the type
-            % of that variable. If it does not, report an error.
+            % Require the wrapped subgoal to be a switch on the given variable
+            % that has an arm for every function symbol that the variable
+            % could be bound to at this point in the code. If it does not,
+            % or if the wrapped subgoal is not a switch on the given variable,
+            % then report an error.
             % This scope reason should not exist after the first invocation
             % of simplification.
 
     ;       require_switch_arms_detism(prog_var, determinism)
-            % If the wrapped subgoal is a switch on the given variable,
-            % require every arm of that switch to have the specified
-            % determinism. If it does not, report an error.
+            % Require the wrapped subgoal to be a switch on the given variable,
+            % and require every arm of that switch to have a determinism
+            % that promises at least as much as the specified determinism.
+            % If either condition is not satisfied, report an error.
             % This scope reason should not exist after the first invocation
             % of simplification.
 
