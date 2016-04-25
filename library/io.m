@@ -10747,10 +10747,8 @@ import java.util.Random;
 "{
     try
     {
-        DateTime utcNow = DateTime.UtcNow;
         DirName = Path.Combine(Dir, Path.GetRandomFileName());
 
-        DirectoryInfo tempDirInfo;
         switch (Environment.OSVersion.Platform)
         {
             case PlatformID.Win32NT:
@@ -10771,44 +10769,30 @@ import java.util.Random;
                         AccessControlType.Allow
                     )
                 );
-                tempDirInfo = Directory.CreateDirectory(DirName, security);
+                Directory.CreateDirectory(DirName, security);
+                ErrorMessage = string.Empty;
+                Okay = mr_bool.YES;
                 break;
 
             case PlatformID.Unix:
             case (PlatformID)6: // MacOSX:
-                tempDirInfo = Directory.CreateDirectory(DirName);
+                Directory.CreateDirectory(DirName);
                 ML_sys_chmod(DirName, 0x7 << 6);
+                ErrorMessage = string.Empty;
+                Okay = mr_bool.YES;
                 break;
 
             default:
-                tempDirInfo = null;
-                break;
-        }
-
-        if (tempDirInfo != null)
-        {
-            // Check if this was really created by us
-            if (tempDirInfo.CreationTimeUtc >= utcNow)
-            {
-                Okay = mr_bool.YES;
-                ErrorMessage = """";
-            }
-            else
-            {
                 Okay = mr_bool.NO;
-                ErrorMessage = string.Format(""{0} already exists"", DirName);
-            }
-        }
-        else
-        {
-            Okay = mr_bool.NO;
-            ErrorMessage = ""Changing access is not supported for: "" +
-                Environment.OSVersion;
+                ErrorMessage =
+                    ""Changing folder permissions is not supported for: "" +
+                    Environment.OSVersion;
+                break;
         }
     }
     catch (System.Exception e)
     {
-        DirName = """";
+        DirName = string.Empty;
         Okay = mr_bool.NO;
         ErrorMessage = e.Message;
     }
