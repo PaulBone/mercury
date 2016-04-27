@@ -47,50 +47,54 @@
 
 :- type grade_vars
     --->    grade_vars(
-                grade_var_backend,
-                grade_var_datarep,
-                grade_var_target,
-                grade_var_nested_funcs,
-                grade_var_gcc_conf,
-                grade_var_low_tag_bits_use,
-                grade_var_stack_len,
-                grade_var_trail,
-                grade_var_trail_segments,
-                grade_var_minmodel,
-                grade_var_thread_safe,
-                grade_var_gc,
-                grade_var_deep_prof,
-                grade_var_mprof_call,
-                grade_var_mprof_time,
-                grade_var_mprof_memory,
-                grade_var_tscope_prof,
-                grade_var_term_size_prof,
-                grade_var_debug,
-                grade_var_ssdebug,
-                grade_var_target_debug,
-                grade_var_rbmm,
-                grade_var_rbmm_debug,
-                grade_var_rbmm_prof,
-                grade_var_merc_file,
-                grade_var_pregen,
-                grade_var_merc_float
+                gv_pregen               :: grade_var_pregen,
+                gv_backend              :: grade_var_backend,
+                gv_target               :: grade_var_target,
+                gv_datarep              :: grade_var_datarep,
+                gv_nested_funcs         :: grade_var_nested_funcs,
+                gv_gcc_conf             :: grade_var_gcc_conf,
+                gv_low_tag_bits_use     :: grade_var_low_tag_bits_use,
+                gv_stack_len            :: grade_var_stack_len,
+                gv_trail                :: grade_var_trail,
+                gv_trail_segments       :: grade_var_trail_segments,
+                gv_minmodel             :: grade_var_minmodel,
+                gv_thread_safe          :: grade_var_thread_safe,
+                gv_gc                   :: grade_var_gc,
+                gv_deep_prof            :: grade_var_deep_prof,
+                gv_mprof_call           :: grade_var_mprof_call,
+                gv_mprof_time           :: grade_var_mprof_time,
+                gv_mprof_memory         :: grade_var_mprof_memory,
+                gv_tscope_prof          :: grade_var_tscope_prof,
+                gv_term_size_prof       :: grade_var_term_size_prof,
+                gv_debug                :: grade_var_debug,
+                gv_ssdebug              :: grade_var_ssdebug,
+                gv_target_debug         :: grade_var_target_debug,
+                gv_rbmm                 :: grade_var_rbmm,
+                gv_rbmmm_debug          :: grade_var_rbmm_debug,
+                gv_rbmm_prof            :: grade_var_rbmm_prof,
+                gv_merc_file            :: grade_var_merc_file,
+                gv_merc_float           :: grade_var_merc_float
             ).
+
+:- type grade_var_pregen
+    --->    grade_var_pregen_no
+    ;       grade_var_pregen_yes.
 
 :- type grade_var_backend
     --->    grade_var_backend_mlds
     ;       grade_var_backend_llds
     ;       grade_var_backend_elds.
 
-:- type grade_var_datarep
-    --->    grade_var_datarep_heap_cells
-    ;       grade_var_datarep_classes
-    ;       grade_var_datarep_erlang.
-
 :- type grade_var_target
     --->    grade_var_target_c
     ;       grade_var_target_csharp
     ;       grade_var_target_java
     ;       grade_var_target_erlang.
+
+:- type grade_var_datarep
+    --->    grade_var_datarep_heap_cells
+    ;       grade_var_datarep_classes
+    ;       grade_var_datarep_erlang.
 
 :- type grade_var_nested_funcs
     --->    grade_var_nested_funcs_no
@@ -196,10 +200,6 @@
     --->    grade_var_merc_file_no
     ;       grade_var_merc_file_yes.
 
-:- type grade_var_pregen
-    --->    grade_var_pregen_no
-    ;       grade_var_pregen_yes.
-
 :- type grade_var_merc_float
     --->    grade_var_merc_float_is_boxed_c_double
     ;       grade_var_merc_float_is_unboxed_c_double
@@ -223,11 +223,12 @@ success_map_to_grade_vars(!.SuccMap) = GradeVars :-
     map.det_remove(svar_ac_gcc_labels_avail, _GccLabelsAvail, !SuccMap),
     map.det_remove(svar_ac_low_tag_bits_avail, _LowTagBitsAvail, !SuccMap),
     map.det_remove(svar_ac_size_of_double, _SizeOfDouble, !SuccMap),
-
     map.det_remove(svar_ac_merc_file, MercFile, !SuccMap),
+
+    map.det_remove(svar_pregen, Pregen, !SuccMap),
     map.det_remove(svar_backend, Backend, !SuccMap),
-    map.det_remove(svar_datarep, DataRep, !SuccMap),
     map.det_remove(svar_target, Target, !SuccMap),
+    map.det_remove(svar_datarep, DataRep, !SuccMap),
     map.det_remove(svar_nested_funcs, NestedFuncs, !SuccMap),
     map.det_remove(svar_gcc_conf, GccConf, !SuccMap),
     map.det_remove(svar_low_tag_bits_use, LowTagBitsUse, !SuccMap),
@@ -249,11 +250,18 @@ success_map_to_grade_vars(!.SuccMap) = GradeVars :-
     map.det_remove(svar_rbmm, RBMM, !SuccMap),
     map.det_remove(svar_rbmm_debug, RBMMDebug, !SuccMap),
     map.det_remove(svar_rbmm_prof, RBMMProf, !SuccMap),
-    map.det_remove(svar_pregen, Pregen, !SuccMap),
     map.det_remove(svar_request_single_prec_float, _ReqSinglePrecFloat,
         !SuccMap),
     map.det_remove(svar_merc_float, MercFloat, !SuccMap),
     expect(map.is_empty(!.SuccMap), $pred, "unexpected entries in SuccMap"),
+
+    ( if Pregen = svalue_pregen_no then
+        GradeVarPregen = grade_var_pregen_no
+    else if Pregen = svalue_pregen_yes then
+        GradeVarPregen = grade_var_pregen_yes
+    else
+        unexpected($pred, "unexpected value of Pregen")
+    ),
 
     ( if Backend = svalue_backend_mlds then
         GradeVarBackend = grade_var_backend_mlds
@@ -263,16 +271,6 @@ success_map_to_grade_vars(!.SuccMap) = GradeVars :-
         GradeVarBackend = grade_var_backend_elds
     else
         unexpected($pred, "unexpected value of Backend")
-    ),
-
-    ( if DataRep = svalue_datarep_heap_cells then
-        GradeVarDataRep = grade_var_datarep_heap_cells
-    else if DataRep = svalue_datarep_classes then
-        GradeVarDataRep = grade_var_datarep_classes
-    else if DataRep = svalue_datarep_erlang then
-        GradeVarDataRep = grade_var_datarep_erlang
-    else
-        unexpected($pred, "unexpected value of DataRep")
     ),
 
     ( if Target = svalue_target_c then
@@ -285,6 +283,16 @@ success_map_to_grade_vars(!.SuccMap) = GradeVars :-
         GradeVarTarget = grade_var_target_erlang
     else
         unexpected($pred, "unexpected value of Target")
+    ),
+
+    ( if DataRep = svalue_datarep_heap_cells then
+        GradeVarDataRep = grade_var_datarep_heap_cells
+    else if DataRep = svalue_datarep_classes then
+        GradeVarDataRep = grade_var_datarep_classes
+    else if DataRep = svalue_datarep_erlang then
+        GradeVarDataRep = grade_var_datarep_erlang
+    else
+        unexpected($pred, "unexpected value of DataRep")
     ),
 
     ( if NestedFuncs = svalue_nested_funcs_no then
@@ -495,14 +503,6 @@ success_map_to_grade_vars(!.SuccMap) = GradeVars :-
         unexpected($pred, "unexpected value of MercFile")
     ),
 
-    ( if Pregen = svalue_pregen_no then
-        GradeVarPregen = grade_var_pregen_no
-    else if Pregen = svalue_pregen_yes then
-        GradeVarPregen = grade_var_pregen_yes
-    else
-        unexpected($pred, "unexpected value of Pregen")
-    ),
-
     ( if MercFloat = svalue_merc_float_is_boxed_c_double then
         GradeVarMercFloat = grade_var_merc_float_is_boxed_c_double
     else if MercFloat = svalue_merc_float_is_unboxed_c_double then
@@ -513,9 +513,8 @@ success_map_to_grade_vars(!.SuccMap) = GradeVars :-
         unexpected($pred, "unexpected value of MercFloat")
     ),
 
-    GradeVars = grade_vars(
-        GradeVarBackend, GradeVarDataRep,
-        GradeVarTarget, GradeVarNestedFuncs,
+    GradeVars = grade_vars(GradeVarPregen, GradeVarBackend,
+        GradeVarTarget, GradeVarDataRep, GradeVarNestedFuncs,
         GradeVarGccConf, GradeVarLowTagBitsUse, GradeVarStackLen,
         GradeVarTrail, GradeVarTrailSegments,
         GradeVarMinimalModel, GradeVarThreadSafe, GradeVarGc,
@@ -524,7 +523,7 @@ success_map_to_grade_vars(!.SuccMap) = GradeVars :-
         GradeVarTScopeProf, GradeVarTermSizeProf,
         GradeVarDebug, GradeVarSSDebug, GradeVarTargetDebug,
         GradeVarRBMM, GradeVarRBMMDebug, GradeVarRBMMProf,
-        GradeVarMercFile, GradeVarPregen, GradeVarMercFloat
+        GradeVarMercFile, GradeVarMercFloat
     ).
 
 %---------------------------------------------------------------------------%

@@ -1073,17 +1073,15 @@ redirect_output(_ModuleName, MaybeErrorStream, !Info, !IO) :-
     % Write the output to a temporary file first, so it's easy to just print
     % the part of the error file that relates to the current command. It will
     % be appended to the error file later.
-
-    io.make_temp(ErrorFileName, !IO),
-    io.open_output(ErrorFileName, ErrorFileRes, !IO),
+    open_temp_output(ErrorFileResult, !IO),
     (
-        ErrorFileRes = ok(ErrorOutputStream),
+        ErrorFileResult = ok({_ErrorFileName, ErrorOutputStream}),
         MaybeErrorStream = yes(ErrorOutputStream)
     ;
-        ErrorFileRes = error(IOError),
+        ErrorFileResult = error(ErrorMessage),
         MaybeErrorStream = no,
         with_locked_stdout(!.Info,
-            write_error_opening_output(ErrorFileName, IOError), !IO)
+            write_error_creating_temp_file(ErrorMessage), !IO)
     ).
 
 unredirect_output(Globals, ModuleName, ErrorOutputStream, !Info, !IO) :-
@@ -1181,6 +1179,12 @@ write_error_opening_output(FileName, Error, !IO) :-
 write_error_opening_file(FileName, Error, !IO) :-
     io.format("Error opening `%s': %s\n",
         [s(FileName), s(io.error_message(Error))], !IO).
+
+:- pred write_error_creating_temp_file(string::in, io::di, io::uo) is det.
+
+write_error_creating_temp_file(ErrorMessage, !IO) :-
+    io.write_string(ErrorMessage, !IO),
+    io.nl(!IO).
 
 %-----------------------------------------------------------------------------%
 
