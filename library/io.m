@@ -10799,6 +10799,7 @@ import java.util.Random;
                 Okay = mr_bool.YES;
                 break;
 
+#if __MonoCS__
             case PlatformID.Unix:
             case (PlatformID)6: // MacOSX:
                 Directory.CreateDirectory(DirName);
@@ -10806,6 +10807,7 @@ import java.util.Random;
                 ErrorMessage = string.Empty;
                 Okay = mr_bool.YES;
                 break;
+#endif
 
             default:
                 Okay = mr_bool.NO;
