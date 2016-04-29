@@ -1931,9 +1931,9 @@ using System.Security.Principal;
 
 #if __MonoCS__
     // int chmod(const char *path, mode_t mode);
-    [DllImport(""libc"", SetLastError=true, EntryPoint=""chmod"",
+    [DllImport(""libc"", SetLastError=true, EntryPoint=""mkdir"",
         CallingConvention=CallingConvention.Cdecl)]
-    static extern int ML_sys_chmod (string path, uint mode);
+    static extern int ML_sys_mkdir (string path, uint mode);
 #endif
 ").
 
@@ -10802,10 +10802,19 @@ import java.util.Random;
 #if __MonoCS__
             case PlatformID.Unix:
             case (PlatformID)6: // MacOSX:
-                Directory.CreateDirectory(DirName);
-                ML_sys_chmod(DirName, 0x7 << 6);
-                ErrorMessage = string.Empty;
-                Okay = mr_bool.YES;
+                int errorNo = ML_sys_mkdir(DirName, 0x7 << 6);
+                if (errorNo == 0)
+                {
+                    ErrorMessage = string.Empty;
+                    Okay = mr_bool.YES;
+                }
+                else
+                {
+                    ErrorMessage = string.Format(
+                        ""Creating directory {0} failed with: {1:X}"",
+                            DirName, errorNo);
+                    Okay = mr_bool.NO;
+                }
                 break;
 #endif
 
