@@ -2,6 +2,7 @@
 % vim: ft=mercury ts=4 sw=4 et
 %-----------------------------------------------------------------------------%
 % Copyright (C) 1996-2011 The University of Melbourne.
+% Copyright (C) 2017 The Mercury Team.
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %-----------------------------------------------------------------------------%
@@ -964,15 +965,6 @@
     --->    pragma_info_require_tail_recursion(
                 rtr_proc_id             :: pred_name_arity_mpf_mmode,
                 rtr_require_tailrec     :: require_tail_recursion
-
-                % This parameter only makes sense when options contains
-                % either rtro_mutual_rec_only or rtro_all_recursion.
-                % TODO, currently unused, may be used later to implement one
-                % of Zoltan's suggestions here:
-                % http://www.mercurylang.org/list-archives/developers/
-                %   2015-November/016482.html
-                % rtr_maybe_scc           :: maybe(list(
-                %                             pred_name_arity_mpf_mmode))
             ).
 
     % Evaluation method pragmas.

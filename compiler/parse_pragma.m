@@ -2,6 +2,7 @@
 % vim: ft=mercury ts=4 sw=4 expandtab
 %---------------------------------------------------------------------------%
 % Copyright (C) 1996-2011 The University of Melbourne.
+% Copyright (C) 2017 The Mercury Team.
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %---------------------------------------------------------------------------%
@@ -1098,7 +1099,8 @@ parse_pragma_require_tail_recursion(ModuleName, PragmaTerms, _ErrorTerm,
             ( if list_term_to_term_list(OptionsTerm, OptionsTerms)
             then
                 parse_pragma_require_tail_recursion_options(OptionsTerms,
-                    have_not_seen_none, no, no, [], Context, MaybeOptions)
+                    have_not_seen_none, no, no, ModuleName, VarSet, [],
+                    Context, MaybeOptions)
             else
                 OptionsContext = get_term_context(OptionsTerm),
                 Pieces1 = [words("Error: expected attribute list for"),
@@ -1155,11 +1157,12 @@ parse_pragma_require_tail_recursion(ModuleName, PragmaTerms, _ErrorTerm,
 
 :- pred parse_pragma_require_tail_recursion_options(list(term)::in,
     seen_none::in, maybe(warning_or_error)::in,
-    maybe(require_tail_recursion_type)::in, list(error_spec)::in,
-    prog_context::in, maybe1(require_tail_recursion)::out) is det.
+    maybe(require_tail_recursion_type)::in, module_name::in, varset::in,
+    list(error_spec)::in, prog_context::in,
+    maybe1(require_tail_recursion)::out) is det.
 
 parse_pragma_require_tail_recursion_options([], SeenNone, MaybeWarnOrError,
-        MaybeType, !.Specs, Context, MaybeRTR) :-
+        MaybeType, _, _, !.Specs, Context, MaybeRTR) :-
     (
         SeenNone = seen_none,
         % Check for conflicts with "none" option.
@@ -1174,7 +1177,7 @@ parse_pragma_require_tail_recursion_options([], SeenNone, MaybeWarnOrError,
         ),
         (
             MaybeType = yes(Type0),
-            require_tailrec_type_string(Type0, TypeString),
+            TypeString = format_require_tailrec_type_simple(Type0),
             SpecB = conflicting_attributes_error("none", TypeString,
                 Context),
             !:Specs = [SpecB | !.Specs]
@@ -1212,59 +1215,66 @@ parse_pragma_require_tail_recursion_options([], SeenNone, MaybeWarnOrError,
         )
     ).
 parse_pragma_require_tail_recursion_options([Term | Terms], SeenNone0,
-        MaybeWarnOrError0, MaybeType0, !.Specs, PragmaContext, MaybeRTR) :-
-    (
-        Term = functor(Functor, _Args, Context),
-        ( if
-            Functor = atom(Name),
-            warning_or_error_string(WarnOrError, Name)
-        then
+        MaybeWarnOrError0, MaybeType0, ModuleName, Varset, !.Specs,
+        PragmaContext, MaybeRTR) :-
+    ( if
+        Term = functor(atom(Name), [], Context),
+        warning_or_error_string(WarnOrError, Name)
+    then
+        (
+            MaybeWarnOrError0 = no,
+            MaybeWarnOrError = yes(WarnOrError)
+        ;
+            MaybeWarnOrError0 = yes(WarnOrErrorFirst),
+            warning_or_error_string(WarnOrErrorFirst,
+                WarnOrErrorFirstString),
+            Spec = conflicting_attributes_error(Name,
+                WarnOrErrorFirstString, Context),
+            MaybeWarnOrError = MaybeWarnOrError0,
+            !:Specs = [Spec | !.Specs]
+        ),
+        MaybeType = MaybeType0,
+        SeenNone = SeenNone0
+    else if
+        Term = functor(atom(Name), Args, Context),
+        ( Name = only_self_recursion_must_be_tail_str
+        ; Name = both_self_and_mutual_recursion_must_be_tail_str
+        ; Name = scc_must_be_tail_str
+        )
+    then
+        parse_require_tailrec_type(ModuleName, Varset, Name, Args, Context,
+            MaybeType1),
+        (
+            MaybeType1 = ok1(Type),
             (
-                MaybeWarnOrError0 = no,
-                MaybeWarnOrError = yes(WarnOrError)
-            ;
-                MaybeWarnOrError0 = yes(WarnOrErrorFirst),
-                warning_or_error_string(WarnOrErrorFirst,
-                    WarnOrErrorFirstString),
-                Spec = conflicting_attributes_error(Name,
-                    WarnOrErrorFirstString, Context),
-                MaybeWarnOrError = MaybeWarnOrError0,
-                !:Specs = [Spec | !.Specs]
-            ),
-            MaybeType = MaybeType0,
-            SeenNone = SeenNone0
-        else if
-            Functor = atom(Name),
-            require_tailrec_type_string(Type, Name)
-        then
-            (
-                MaybeType0 = no,
-                MaybeType = yes(Type)
-            ;
                 MaybeType0 = yes(TypeFirst),
-                require_tailrec_type_string(TypeFirst, TypeFirstString),
+                TypeFirstString =
+                    format_require_tailrec_type_simple(TypeFirst),
                 Spec = conflicting_attributes_error(Name,
                     TypeFirstString, Context),
                 MaybeType = MaybeType0,
                 !:Specs = [Spec | !.Specs]
-            ),
-            MaybeWarnOrError = MaybeWarnOrError0,
-            SeenNone = SeenNone0
-        else if
-            Functor = atom("none")
-        then
-            SeenNone = seen_none,
-            MaybeWarnOrError = MaybeWarnOrError0,
+            ;
+                MaybeType0 = no,
+                MaybeType = yes(Type)
+            )
+        ;
+            MaybeType1 = error1(NewSpecs),
+            !:Specs = NewSpecs ++ !.Specs,
             MaybeType = MaybeType0
-        else
-            Spec = pragma_require_tailrec_unknown_term_error(Term, Context),
-            !:Specs = [Spec | !.Specs],
-            SeenNone = SeenNone0,
-            MaybeType = MaybeType0,
-            MaybeWarnOrError = MaybeWarnOrError0
-        )
-    ;
-        Term = variable(_, Context),
+        ),
+        MaybeWarnOrError = MaybeWarnOrError0,
+        SeenNone = SeenNone0
+    else if
+        Term = functor(atom("none"), [], _Context)
+    then
+        SeenNone = seen_none,
+        MaybeWarnOrError = MaybeWarnOrError0,
+        MaybeType = MaybeType0
+    else
+        ( Term = functor(_, _, Context)
+        ; Term = variable(_, Context)
+        ),
         Spec = pragma_require_tailrec_unknown_term_error(Term, Context),
         !:Specs = [Spec | !.Specs],
         SeenNone = SeenNone0,
@@ -1272,7 +1282,55 @@ parse_pragma_require_tail_recursion_options([Term | Terms], SeenNone0,
         MaybeWarnOrError = MaybeWarnOrError0
     ),
     parse_pragma_require_tail_recursion_options(Terms, SeenNone,
-        MaybeWarnOrError, MaybeType, !.Specs, PragmaContext, MaybeRTR).
+        MaybeWarnOrError, MaybeType, ModuleName, Varset, !.Specs,
+        PragmaContext, MaybeRTR).
+
+:- pred parse_require_tailrec_type(module_name::in, varset::in, string::in,
+    list(term)::in, context::in,
+    maybe1(require_tail_recursion_type)::out) is det.
+
+parse_require_tailrec_type(ModuleName, VarSet, Name, Args, Context,
+        MaybeType) :-
+    ( if
+        Name = only_self_recursion_must_be_tail_str,
+        Args = []
+    then
+        MaybeType = ok1(only_self_recursion_must_be_tail)
+    else if
+        Name = both_self_and_mutual_recursion_must_be_tail_str,
+        Args = []
+    then
+        MaybeType = ok1(both_self_and_mutual_recursion_must_be_tail)
+    else if
+        Name = scc_must_be_tail_str
+    then
+        ( if Args = [functor(atom("[|]"), SCCProcTerms, _)] then
+            ContextPieces = cord.from_list([words("In"),
+                pragma_decl("require_tail_recursion"), words("declaration:")]),
+            map((pred(T::in, R::out) is det :-
+                parse_arity_or_modes(ModuleName, T, T, VarSet, ContextPieces,
+                    R)
+                ), SCCProcTerms, SCCProcMaybes),
+            MaybeSCCProcs = list_maybe1s_to_maybe1_list(SCCProcMaybes),
+            (
+                MaybeSCCProcs = ok1(SCCProcs),
+                MaybeType = ok1(scc_must_be_tail(SCCProcs))
+            ;
+                MaybeSCCProcs = error1(Errors),
+                MaybeType = error1(Errors)
+            )
+        else
+            Pieces = [words("Error: scc argument must be a list of " ++
+                "procedures")],
+            Message = simple_msg(Context, [always(Pieces)]),
+            MaybeType = error1([error_spec(severity_error,
+                phase_term_to_parse_tree, [Message])])
+        )
+    else
+        Term = functor(atom(Name), Args, Context),
+        MaybeType = error1([
+            pragma_require_tailrec_unknown_term_error(Term, Context)])
+    ).
 
 :- func conflicting_attributes_error(string, string, prog_context) =
     error_spec.

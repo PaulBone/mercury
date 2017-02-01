@@ -2,6 +2,7 @@
 % vim: ft=mercury ts=4 sw=4 et
 %-----------------------------------------------------------------------------%
 % Copyright (C) 1999-2009 The University of Melbourne.
+% Copyright (C) 2016-2017 The Mercury Team.
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %-----------------------------------------------------------------------------%
@@ -651,6 +652,9 @@ maybe_warn_tailcalls(TCallInfo, CodeAddr, Markers, Context, !InBodyInfo) :-
             TailrecType = only_self_recursion_must_be_tail
             % XXX: Currently this has no effect since all tailcalls on MLDS
             % are direct tail calls.
+        ;
+            TailrecType = scc_must_be_tail(_)
+            % XXX: Same as above.
         )
     then
         (

@@ -1,7 +1,7 @@
 %---------------------------------------------------------------------------%
 % vim: ft=mercury ts=4 sw=4 et
 %---------------------------------------------------------------------------%
-% Copyright (C) 2015 The Mercury team.
+% Copyright (C) 2015, 2017 The Mercury team.
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %---------------------------------------------------------------------------%
@@ -1153,7 +1153,8 @@ mercury_output_pragma_require_tail_recursion(Lang, RequireTR, !IO) :-
     ;
         Info = enable_tailrec_warnings(WarnOrError, Type, _),
         warning_or_error_string(WarnOrError, WarnOrErrorStr),
-        require_tailrec_type_string(Type, TypeStr),
+        TypeStr = format_require_tailrec_type(
+            format_pred_name_arity_mpf_mmode(Lang), Type),
 
         format(":- pragma warn_tail_recursion(%s, [%s, %s]).\n",
             [s(ProcSpecStr), s(WarnOrErrorStr), s(TypeStr)], !IO)

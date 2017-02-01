@@ -1,7 +1,7 @@
 %---------------------------------------------------------------------------%
 % vim: ft=mercury ts=4 sw=4 et
 %---------------------------------------------------------------------------%
-% Copyright (C) 2016 The Mercury team.
+% Copyright (C) 2016-2017 The Mercury team.
 % This file may only be copied under the terms of the GNU General
 % Public License - see the file COPYING in the Mercury distribution.
 %---------------------------------------------------------------------------%
@@ -18,6 +18,7 @@
 :- import_module libs.compiler_util.
 :- import_module libs.rat.
 :- import_module parse_tree.prog_data.
+:- import_module parse_tree.prog_item.
 :- import_module parse_tree.set_of_var.
 
 :- import_module assoc_list.
@@ -31,6 +32,7 @@
 :- implementation.
 
 :- import_module require.
+:- import_module string.
 
 %---------------------------------------------------------------------------%
 %
@@ -465,18 +467,41 @@ eval_method_to_table_type(EvalMethod) = TableTypeStr :-
 
 :- type require_tail_recursion_type
     --->    only_self_recursion_must_be_tail
-    ;       both_self_and_mutual_recursion_must_be_tail.
+    ;       both_self_and_mutual_recursion_must_be_tail
+    ;       scc_must_be_tail(list(pred_name_arity_mpf_mmode)).
 
-:- pred require_tailrec_type_string(require_tail_recursion_type, string).
-:- mode require_tailrec_type_string(in, out) is det.
-:- mode require_tailrec_type_string(out, in) is semidet.
+:- func format_require_tailrec_type(func(pred_name_arity_mpf_mmode) = string,
+    require_tail_recursion_type) = string.
+
+:- func format_require_tailrec_type_simple(require_tail_recursion_type) =
+    string.
+
+:- func only_self_recursion_must_be_tail_str = string.
+:- func both_self_and_mutual_recursion_must_be_tail_str = string.
+:- func scc_must_be_tail_str = string.
 
 :- implementation.
 
-require_tailrec_type_string(only_self_recursion_must_be_tail,
-    "self_recursion_only").
-require_tailrec_type_string(both_self_and_mutual_recursion_must_be_tail,
-    "self_or_mutual_recursion").
+format_require_tailrec_type(_, only_self_recursion_must_be_tail) =
+    only_self_recursion_must_be_tail_str.
+format_require_tailrec_type(_, both_self_and_mutual_recursion_must_be_tail) =
+    both_self_and_mutual_recursion_must_be_tail_str.
+format_require_tailrec_type(NameFmt, scc_must_be_tail(SCCProcs)) =
+    format(", %s(%s)", [s(scc_must_be_tail_str),
+        s(join_list(", ", map(NameFmt, SCCProcs)))]).
+
+format_require_tailrec_type_simple(only_self_recursion_must_be_tail) =
+    only_self_recursion_must_be_tail_str.
+format_require_tailrec_type_simple(
+        both_self_and_mutual_recursion_must_be_tail) =
+    both_self_and_mutual_recursion_must_be_tail_str.
+format_require_tailrec_type_simple(scc_must_be_tail(_)) =
+    scc_must_be_tail_str.
+
+only_self_recursion_must_be_tail_str = "self_recursion_only".
+both_self_and_mutual_recursion_must_be_tail_str =
+    "self_or_mutual_recursion".
+scc_must_be_tail_str = "scc".
 
 %---------------------------------------------------------------------------%
 :- end_module parse_tree.prog_data_pragma.
