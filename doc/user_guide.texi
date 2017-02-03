@@ -6616,7 +6616,18 @@ options files with @samp{--make}.
 @sp 1
 @item --warn-non-tail-recursion
 @findex --warn-non-tail-recursion
+Warn about any recursive calls that are not tail recursive.
+Implies the next two options.
+
+@sp 1
+@item --warn-non-tail-recursion-self
+@findex --warn-non-tail-recursion-self
 Warn about any directly recursive calls that are not tail recursive.
+
+@sp 1
+@item --warn-non-tail-recursion-mutual
+@findex --warn-non-tail-recursion-mutual
+Warn about any mutually recursive calls that are not tail recursive.
 
 @sp 1
 @item --no-warn-target-code
