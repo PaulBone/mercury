@@ -44,6 +44,8 @@
 :- pred code_address_is_for_this_function(mlds_code_addr::in,
     mlds_module_name::in, mlds_entity_name::in) is semidet.
 
+:- func code_address_get_proc_label(mlds_code_addr) = mlds_proc_label.
+
 %-----------------------------------------------------------------------------%
 %
 % Routines that deal with statements.
@@ -222,6 +224,12 @@ code_address_is_for_this_function(CodeAddr, ModuleName, FuncName) :-
     % Check that the function name (PredLabel, ProcId, MaybeSeqNum) matches.
     ProcLabel = mlds_proc_label(PredLabel, ProcId),
     FuncName = entity_function(PredLabel, ProcId, MaybeSeqNum, _).
+
+code_address_get_proc_label(CodeAddr) = ProcLabel :-
+    ( CodeAddr = code_addr_proc(QualifiedProcLabel, _)
+    ; CodeAddr = code_addr_internal(QualifiedProcLabel, _, _)
+    ),
+    QualifiedProcLabel = qual(_, _, ProcLabel).
 
 %-----------------------------------------------------------------------------%
 %

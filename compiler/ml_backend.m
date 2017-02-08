@@ -23,6 +23,7 @@
 %-----------------------------------------------------------------------------%
 
 :- include_module mlds.
+:- include_module ml_dependency_graph.
 :- include_module ml_target_util.
 :- include_module ml_util.
 
