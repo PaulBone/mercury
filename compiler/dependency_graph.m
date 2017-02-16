@@ -29,6 +29,7 @@
 
 :- import_module digraph.
 :- import_module list.
+:- import_module set.
 
 %-----------------------------------------------------------------------%
 
@@ -67,12 +68,15 @@
     %
 :- func dependency_info_get_condensed_ordering(dependency_info(T)) = list(T).
 
+:- func dependency_info_get_scc(dependency_info(T), T) = set(T).
+
 %-----------------------------------------------------------------------%
 %-----------------------------------------------------------------------%
 
 :- implementation.
 
-:- import_module set.
+:- import_module require.
+:- import_module string.
 
 %-----------------------------------------------------------------------%
 
@@ -101,6 +105,23 @@ dependency_info_get_ordering(DepInfo) = DepInfo ^ dep_ord.
 
 dependency_info_get_condensed_ordering(DepInfo) =
     list.condense(dependency_info_get_ordering(DepInfo)).
+
+%-----------------------------------------------------------------------%
+
+dependency_info_get_scc(DepInfo, Node) =
+    get_scc(Node, atsort(DepInfo ^ dep_graph)).
+
+:- func get_scc(T, list(set(T))) = set(T).
+
+get_scc(Node, []) =
+    unexpected($file, $pred,
+        format("Node (%s) not in graph", [s(string(Node))])).
+get_scc(Node, [SCC | SCCs]) =
+    ( if contains(SCC, Node) then
+        SCC
+    else
+        get_scc(Node, SCCs)
+    ).
 
 %-----------------------------------------------------------------------%
 %-----------------------------------------------------------------------%
