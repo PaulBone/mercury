@@ -89,15 +89,18 @@
 :- import_module hlds.hlds_pred.
 :- import_module hlds.mark_tail_calls.
 :- import_module libs.compiler_util.
+:- import_module libs.dependency_graph.
 :- import_module libs.options.
 :- import_module mdbcomp.
 :- import_module mdbcomp.sym_name.
+:- import_module ml_backend.ml_dependency_graph.
 :- import_module ml_backend.ml_util.
 :- import_module parse_tree.prog_data.
 :- import_module parse_tree.prog_data_pragma.
 
 :- import_module bool.
 :- import_module maybe.
+:- import_module require.
 :- import_module set.
 
 %-----------------------------------------------------------------------------%
@@ -105,16 +108,29 @@
 ml_mark_tailcalls(Globals, ModuleInfo, Specs, !MLDS) :-
     Defns0 = !.MLDS ^ mlds_defns,
     ModuleName = mercury_module_name_to_mlds(!.MLDS ^ mlds_name),
-    globals.lookup_bool_option(Globals, warn_non_tail_recursion,
-        WarnTailCallsBool),
+    globals.lookup_bool_option(Globals, warn_non_tail_recursion_self,
+        WarnTailCallsSelfBool),
+    globals.lookup_bool_option(Globals, warn_non_tail_recursion_mutual,
+        WarnTailCallsMutualBool),
     (
-        WarnTailCallsBool = yes,
-        WarnTailCalls = warn_tail_calls
+        WarnTailCallsSelfBool = yes,
+        WarnTailCallsMutualBool = yes,
+        WarnTailCalls = warn_tail_calls_both
     ;
-        WarnTailCallsBool = no,
+        WarnTailCallsSelfBool = yes,
+        WarnTailCallsMutualBool = no,
+        WarnTailCalls = warn_tail_calls_self
+    ;
+        WarnTailCallsSelfBool = no,
+        WarnTailCallsMutualBool = yes,
+        WarnTailCalls = warn_tail_calls_mutual
+    ;
+        WarnTailCallsSelfBool = no,
+        WarnTailCallsMutualBool = no,
         WarnTailCalls = do_not_warn_tail_calls
     ),
-    mark_tailcalls_in_defns(ModuleInfo, ModuleName, WarnTailCalls,
+    DepInfo = ml_make_dependency_info(Defns0),
+    mark_tailcalls_in_defns(ModuleInfo, ModuleName, WarnTailCalls, DepInfo,
         Defns0, Defns, [], Specs),
     !MLDS ^ mlds_defns := Defns.
 
@@ -190,7 +206,9 @@ not_at_tail(not_at_tail_have_not_seen_reccall,
     --->    tailcall_info(
                 tci_module_info             :: module_info,
                 tci_module_name             :: mlds_module_name,
+                tci_dep_info                :: ml_dependency_info,
                 tci_function_name           :: mlds_entity_name,
+                tci_scc                     :: set(mlds_proc_label),
                 tci_maybe_pred_info         :: maybe(pred_info),
                 tci_locals                  :: locals,
                 tci_warn_tail_calls         :: warn_tail_calls,
@@ -198,7 +216,9 @@ not_at_tail(not_at_tail_have_not_seen_reccall,
             ).
 
 :- type warn_tail_calls
-    --->    warn_tail_calls
+    --->    warn_tail_calls_self
+    ;       warn_tail_calls_mutual
+    ;       warn_tail_calls_both
     ;       do_not_warn_tail_calls.
 
 %-----------------------------------------------------------------------------%
@@ -224,20 +244,22 @@ not_at_tail(not_at_tail_have_not_seen_reccall,
 %   at the current point.
 
 :- pred mark_tailcalls_in_defns(module_info::in, mlds_module_name::in,
-    warn_tail_calls::in, list(mlds_defn)::in, list(mlds_defn)::out,
+    warn_tail_calls::in, ml_dependency_info::in,
+    list(mlds_defn)::in, list(mlds_defn)::out,
     list(error_spec)::in, list(error_spec)::out) is det.
 
-mark_tailcalls_in_defns(ModuleInfo, ModuleName, WarnTailCalls,
+mark_tailcalls_in_defns(ModuleInfo, ModuleName, WarnTailCalls, DepInfo,
         !Defns, !Specs) :-
     list.map_foldl(
-        mark_tailcalls_in_defn(ModuleInfo, ModuleName, WarnTailCalls),
+        mark_tailcalls_in_defn(ModuleInfo, ModuleName, WarnTailCalls,
+            DepInfo),
         !Defns, !Specs).
 
 :- pred mark_tailcalls_in_defn(module_info::in, mlds_module_name::in,
-    warn_tail_calls::in, mlds_defn::in, mlds_defn::out,
+    warn_tail_calls::in, ml_dependency_info::in, mlds_defn::in, mlds_defn::out,
     list(error_spec)::in, list(error_spec)::out) is det.
 
-mark_tailcalls_in_defn(ModuleInfo, ModuleName, WarnTailCalls,
+mark_tailcalls_in_defn(ModuleInfo, ModuleName, WarnTailCalls, DepInfo,
         Defn0, Defn, !Specs) :-
     Defn0 = mlds_defn(Name, Context, Flags, DefnBody0),
     (
@@ -261,8 +283,20 @@ mark_tailcalls_in_defn(ModuleInfo, ModuleName, WarnTailCalls,
             MaybePredProcId = no,
             MaybePredInfo = no
         ),
-        TCallInfo = tailcall_info(ModuleInfo, ModuleName, Name,
-            MaybePredInfo, Locals, WarnTailCalls, MaybeRequireTailrecInfo),
+        (
+            Name = entity_function(PredLabel, ProcId, _, _),
+            SCC = dependency_info_get_scc(DepInfo,
+                mlds_proc_label(PredLabel, ProcId))
+        ;
+            ( Name = entity_type(_, _)
+            ; Name = entity_data(_)
+            ; Name = entity_export(_)
+            ),
+            unexpected($file, $pred, "A non-function name for a function")
+        ),
+        TCallInfo = tailcall_info(ModuleInfo, ModuleName, DepInfo, Name,
+            SCC, MaybePredInfo, Locals, WarnTailCalls,
+            MaybeRequireTailrecInfo),
         mark_tailcalls_in_function_body(TCallInfo, AtTail,
             FuncBody0, FuncBody, !Specs),
         DefnBody = mlds_function(MaybePredProcId, Params, FuncBody,
@@ -276,9 +310,9 @@ mark_tailcalls_in_defn(ModuleInfo, ModuleName, WarnTailCalls,
         ClassDefn0 = mlds_class_defn(Kind, Imports, BaseClasses, Implements,
             TypeParams, CtorDefns0, MemberDefns0),
         mark_tailcalls_in_defns(ModuleInfo, ModuleName, WarnTailCalls,
-            CtorDefns0, CtorDefns, !Specs),
+            DepInfo, CtorDefns0, CtorDefns, !Specs),
         mark_tailcalls_in_defns(ModuleInfo, ModuleName, WarnTailCalls,
-            MemberDefns0, MemberDefns, !Specs),
+            DepInfo, MemberDefns0, MemberDefns, !Specs),
         ClassDefn = mlds_class_defn(Kind, Imports, BaseClasses, Implements,
             TypeParams, CtorDefns, MemberDefns),
         DefnBody = mlds_class(ClassDefn),
@@ -389,9 +423,10 @@ mark_tailcalls_in_stmt(TCallInfo, Context, AtTailAfter0, AtTailBefore,
         ModuleInfo = TCallInfo ^ tci_module_info,
         ModuleName = TCallInfo ^ tci_module_name,
         WarnTailCalls = TCallInfo ^ tci_warn_tail_calls,
+        DepInfo = TCallInfo ^ tci_dep_info,
         Specs0 = !.InBodyInfo ^ tibi_specs,
         mark_tailcalls_in_defns(ModuleInfo, ModuleName, WarnTailCalls,
-            Defns0, Defns, Specs0, Specs),
+            DepInfo, Defns0, Defns, Specs0, Specs),
         !InBodyInfo ^ tibi_specs := Specs,
         Locals = TCallInfo ^ tci_locals,
         NewTCallInfo = TCallInfo ^ tci_locals := [local_defns(Defns) | Locals],
@@ -491,66 +526,112 @@ mark_tailcalls_in_stmt_call(TCallInfo, Context, AtTailAfter, AtTailBefore,
         Stmt0, Stmt, !InBodyInfo) :-
     Stmt0 = ml_stmt_call(Sig, CalleeRval, MaybeObj, Args,
         CallReturnLvals, CallKind0, Markers),
-    ModuleName = TCallInfo ^ tci_module_name,
-    FuncName = TCallInfo ^ tci_function_name,
 
-    % Check if we can mark this call as a tail call.
     ( if
-        CallKind0 = ordinary_call,
-        CalleeRval = ml_const(mlconst_code_addr(CalleeCodeAddr)),
-        % Currently, we can turn self-recursive calls into tail calls,
-        % but we cannot do the same with mutually-recursive calls.
-        % We therefore require the callee to be the same function
-        % as the caller.
-        code_address_is_for_this_function(CalleeCodeAddr, ModuleName, FuncName)
+        CalleeRval = ml_const(mlconst_code_addr(CalleeCodeAddr))
     then
-        !InBodyInfo ^ tibi_found := found_recursive_call,
-        ( if
-            % We must be in a tail position.
-            AtTailAfter = at_tail(ReturnStmtRvals),
+        % Is this a self or mutual call?
+        SelfOrMutual = is_self_or_mutual_call(TCallInfo, CallKind0,
+            CalleeCodeAddr),
 
-            % The values returned in this call must match those returned
-            % by the `return' statement that follows.
-            call_returns_same_local_lvals_as_return_stmt(ReturnStmtRvals,
-                CallReturnLvals),
-
-            % The call must not take the address of any local variables
-            % or nested functions.
-            Locals = TCallInfo ^ tci_locals,
-            may_maybe_rval_yield_dangling_stack_ref(MaybeObj, Locals) =
-                will_not_yield_dangling_stack_ref,
-            may_rvals_yield_dangling_stack_ref(Args, Locals) =
-                will_not_yield_dangling_stack_ref,
-
-            % The call must not be to a function nested within this function.
-            may_rval_yield_dangling_stack_ref(CalleeRval, Locals) =
-                will_not_yield_dangling_stack_ref
-        then
-            % Mark this call as a tail call.
-            Stmt = ml_stmt_call(Sig, CalleeRval, MaybeObj, Args,
-                CallReturnLvals, tail_call, Markers),
-            AtTailBefore = not_at_tail_seen_reccall
-        else
-            (
-                AtTailAfter = not_at_tail_seen_reccall
-            ;
-                (
-                    AtTailAfter = not_at_tail_have_not_seen_reccall
-                ;
-                    % This might happen if one of the other tests above fails.
-                    % If so, a warning may be useful.
-                    AtTailAfter = at_tail(_)
-                ),
-                maybe_warn_tailcalls(TCallInfo, CalleeCodeAddr, Markers,
-                    Context, !InBodyInfo)
+        % Check if we can mark this call as a tail call.
+        (
+            ( SelfOrMutual = self_call
+            ; SelfOrMutual = mutual_call
             ),
+
+            !InBodyInfo ^ tibi_found := found_recursive_call,
+            ( if
+                % We must be in a tail position.
+                AtTailAfter = at_tail(ReturnStmtRvals),
+
+                % Currently, we can turn self-recursive calls into tail
+                % calls, but we cannot do the same with mutually-recursive
+                % calls.
+                SelfOrMutual = self_call,
+
+                % The values returned in this call must match those returned
+                % by the `return' statement that follows.
+                call_returns_same_local_lvals_as_return_stmt(ReturnStmtRvals,
+                    CallReturnLvals),
+
+                % The call must not take the address of any local variables
+                % or nested functions.
+                Locals = TCallInfo ^ tci_locals,
+                may_maybe_rval_yield_dangling_stack_ref(MaybeObj, Locals) =
+                    will_not_yield_dangling_stack_ref,
+                may_rvals_yield_dangling_stack_ref(Args, Locals) =
+                    will_not_yield_dangling_stack_ref,
+
+                % The call must not be to a function nested within this
+                % function.
+                may_rval_yield_dangling_stack_ref(CalleeRval, Locals) =
+                    will_not_yield_dangling_stack_ref
+            then
+                % Mark this call as a tail call.
+                Stmt = ml_stmt_call(Sig, CalleeRval, MaybeObj, Args,
+                    CallReturnLvals, tail_call, Markers),
+                AtTailBefore = not_at_tail_seen_reccall
+            else
+                (
+                    AtTailAfter = not_at_tail_seen_reccall
+                ;
+                    (
+                        AtTailAfter = not_at_tail_have_not_seen_reccall
+                    ;
+                        % This might happen if one of the other tests above
+                        % fails.  If so, a warning may be useful.
+                        AtTailAfter = at_tail(_)
+                    ),
+                    maybe_warn_tailcalls(TCallInfo, CalleeCodeAddr,
+                        SelfOrMutual, Markers, Context, !InBodyInfo)
+                ),
+                Stmt = Stmt0,
+                AtTailBefore = not_at_tail_seen_reccall
+            )
+        ;
+            SelfOrMutual = other_call,
+
+            % Leave this call unchanged.
             Stmt = Stmt0,
-            AtTailBefore = not_at_tail_seen_reccall
+            not_at_tail(AtTailAfter, AtTailBefore)
         )
     else
-        % Leave this call unchanged.
+        % Not a plain call, leave it unchanged.
         Stmt = Stmt0,
         not_at_tail(AtTailAfter, AtTailBefore)
+    ).
+
+:- type self_or_mutual_call
+    --->    self_call
+    ;       mutual_call
+    ;       other_call.
+
+:- inst self_or_mutual_call
+    --->    self_call
+    ;       mutual_call.
+
+:- func is_self_or_mutual_call(tailcall_info, ml_call_kind, mlds_code_addr) =
+    self_or_mutual_call.
+
+is_self_or_mutual_call(TCallInfo, CallKind0, CalleeCodeAddr) = SelfOrMutual :-
+    CallerModuleName = TCallInfo ^ tci_module_name,
+    CallerFunctionName = TCallInfo ^ tci_function_name,
+    ( if
+        CallKind0 = ordinary_call,
+        CalleeProcLabel = code_address_get_proc_label(CalleeCodeAddr),
+        contains(TCallInfo ^ tci_scc, CalleeProcLabel)
+    then
+        ( if
+            code_address_is_for_this_function(CalleeCodeAddr,
+                CallerModuleName, CallerFunctionName)
+        then
+            SelfOrMutual = self_call
+        else
+            SelfOrMutual = mutual_call
+        )
+    else
+        SelfOrMutual = other_call
     ).
 
 :- pred mark_tailcalls_in_cases(tailcall_info::in,
@@ -599,60 +680,28 @@ mark_tailcalls_in_default(TCallInfo, AtTailAfter, AtTailBefore,
 %-----------------------------------------------------------------------------%
 
 :- pred maybe_warn_tailcalls(tailcall_info::in, mlds_code_addr::in,
-    set(ml_call_marker)::in, mlds_context::in,
-    tc_in_body_info::in, tc_in_body_info::out) is det.
+    self_or_mutual_call::in(self_or_mutual_call), set(ml_call_marker)::in,
+    mlds_context::in, tc_in_body_info::in, tc_in_body_info::out) is det.
 
-maybe_warn_tailcalls(TCallInfo, CodeAddr, Markers, Context, !InBodyInfo) :-
+maybe_warn_tailcalls(TCallInfo, CodeAddr, SelfOrMutual, Markers, Context,
+        !InBodyInfo) :-
     WarnTailCalls = TCallInfo ^ tci_warn_tail_calls,
     MaybeRequireTailrecInfo = TCallInfo ^ tci_maybe_require_tailrec,
-    ( if
-        % Trivially reject the common case.
-        WarnTailCalls = do_not_warn_tail_calls,
-        MaybeRequireTailrecInfo = no
-    then
-        true
-    else if
-        require_complete_switch [WarnTailCalls]
+    ShouldWarn = should_warn_tailcall(WarnTailCalls, MaybeRequireTailrecInfo,
+        SelfOrMutual),
+    (
+        ShouldWarn = swt_none
+    ;
         (
-            WarnTailCalls = do_not_warn_tail_calls,
-
-            % We always warn/error if the pragma says so.
-            MaybeRequireTailrecInfo = yes(RequireTailrecInfo),
-            RequireTailrecInfo = enable_tailrec_warnings(WarnOrError,
-                TailrecType, _)
+            ShouldWarn = swt_error,
+            WarnOrError = we_error
         ;
-            WarnTailCalls = warn_tail_calls,
-
-            % if warnings are enabled then we check the pragma.  We check
-            % that it doesn't disable warnings and also determine whether
-            % this should be a warning or error.
-            require_complete_switch [MaybeRequireTailrecInfo]
-            (
-                MaybeRequireTailrecInfo = no,
-                % Choose some defaults.
-                WarnOrError = we_warning,
-                TailrecType = both_self_and_mutual_recursion_must_be_tail
-            ;
-                MaybeRequireTailrecInfo = yes(RequireTailrecInfo),
-                require_complete_switch [RequireTailrecInfo]
-                (
-                    RequireTailrecInfo =
-                        enable_tailrec_warnings(WarnOrError, TailrecType, _)
-                ;
-                    RequireTailrecInfo = suppress_tailrec_warnings(_),
-                    false
-                )
-            )
+            ShouldWarn = swt_warning,
+            WarnOrError = we_warning
         ),
-        require_complete_switch [TailrecType]
-        (
-            TailrecType = both_self_and_mutual_recursion_must_be_tail
-        ;
-            TailrecType = only_self_recursion_must_be_tail
-            % XXX: Currently this has no effect since all tailcalls on MLDS
-            % are direct tail calls.
-        )
-    then
+        ( SelfOrMutual = self_call
+        ; SelfOrMutual = mutual_call
+        ),
         (
             CodeAddr = code_addr_proc(QualProcLabel, _Sig)
         ;
@@ -679,9 +728,58 @@ maybe_warn_tailcalls(TCallInfo, CodeAddr, Markers, Context, !InBodyInfo) :-
                 !InBodyInfo ^ tibi_specs := Specs
             )
         )
-    else
-        true
     ).
+
+:- type should_warn_tailcall
+    --->    swt_none
+    ;       swt_warning
+    ;       swt_error.
+
+:- func should_warn_tailcall(warn_tail_calls::in,
+        maybe(require_tail_recursion)::in,
+        self_or_mutual_call::in(self_or_mutual_call)) =
+    (should_warn_tailcall::out) is det.
+
+should_warn_tailcall(do_not_warn_tail_calls, no, _) = swt_none.
+should_warn_tailcall(warn_tail_calls_self, no, SelfOrMutual) = ShouldWarn :-
+    (
+        SelfOrMutual = self_call,
+        ShouldWarn = swt_warning
+    ;
+        SelfOrMutual = mutual_call,
+        ShouldWarn = swt_none
+    ).
+should_warn_tailcall(warn_tail_calls_mutual, no, SelfOrMutual) = ShouldWarn :-
+    (
+        SelfOrMutual = self_call,
+        ShouldWarn = swt_none
+    ;
+        SelfOrMutual = mutual_call,
+        ShouldWarn = swt_warning
+    ).
+should_warn_tailcall(warn_tail_calls_both, no, _) = swt_warning.
+should_warn_tailcall(_, yes(suppress_tailrec_warnings(_)), _) = swt_none.
+should_warn_tailcall(_, yes(
+            enable_tailrec_warnings(WarnOrError, RecType, _)), SelfOrMutual)
+        = ShouldWarn :-
+    (
+        RecType = only_self_recursion_must_be_tail,
+        (
+            SelfOrMutual = self_call,
+            ShouldWarn = warn_or_error_should_warn(WarnOrError)
+        ;
+            SelfOrMutual = mutual_call,
+            ShouldWarn = swt_none
+        )
+    ;
+        RecType = both_self_and_mutual_recursion_must_be_tail,
+        ShouldWarn = warn_or_error_should_warn(WarnOrError)
+    ).
+
+:- func warn_or_error_should_warn(warning_or_error) = should_warn_tailcall.
+
+warn_or_error_should_warn(we_error) = swt_error.
+warn_or_error_should_warn(we_warning) = swt_warning.
 
 %-----------------------------------------------------------------------------%
 
