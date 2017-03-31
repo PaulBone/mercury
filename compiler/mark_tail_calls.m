@@ -271,30 +271,27 @@ maybe_warn_non_tail_rec_call(MaybePragma, WarnSelfRecOpt, WarnMutualRecOpt)
             MaybeWarnNonTailRecCall = do_not_warn_non_tail_rec_calls
         ;
             Pragma = enable_tailrec_warnings(WoE, Type, _Context),
-            MaybeWarnNonTailRecCall = warn_non_tail_rec_calls(WoE, Type)
+            WarnSelfRec = warn_non_tail_self_rec_calls_opt,
+            (
+                Type = only_self_recursion_must_be_tail,
+                WarnMutualRec = do_not_warn_non_tail_mutual_rec_calls_opt
+            ;
+                Type = both_self_and_mutual_recursion_must_be_tail,
+                WarnMutualRec = warn_non_tail_mutual_rec_calls_opt
+            ),
+            MaybeWarnNonTailRecCall = warn_non_tail_rec_calls(WoE,
+                WarnSelfRec, WarnMutualRec)
         )
     ;
         MaybePragma = no,
-        (
+        ( if
             WarnSelfRecOpt = do_not_warn_non_tail_self_rec_calls_opt,
-            (
-                WarnMutualRecOpt = do_not_warn_non_tail_mutual_rec_calls_opt,
-                MaybeWarnNonTailRecCall = do_not_warn_non_tail_rec_calls
-            ;
-                WarnMutualRecOpt = warn_non_tail_mutual_rec_calls_opt,
-                unexpected($file, $pred, "TODO")
-            )
-        ;
-            WarnSelfRecOpt = warn_non_tail_self_rec_calls_opt,
-            (
-                WarnMutualRecOpt = do_not_warn_non_tail_mutual_rec_calls_opt,
-                Type = only_self_recursion_must_be_tail
-            ;
-                WarnMutualRecOpt = warn_non_tail_mutual_rec_calls_opt,
-                Type = both_self_and_mutual_recursion_must_be_tail
-            ),
+            WarnMutualRecOpt = do_not_warn_non_tail_mutual_rec_calls_opt
+        then
+            MaybeWarnNonTailRecCall = do_not_warn_non_tail_rec_calls
+        else
             MaybeWarnNonTailRecCall = warn_non_tail_rec_calls(we_warning,
-                Type)
+                WarnSelfRecOpt, WarnMutualRecOpt)
         )
     ).
 
@@ -372,6 +369,9 @@ mark_tail_rec_calls_in_proc_for_llds_code_gen(ModuleInfo, PredId, ProcId,
     ;       add_goal_feature_self_for_debug
     ;       add_goal_feature_self_or_mutual.
 
+    % These two types correspond to the command line options for self and
+    % mutual non-tail call warnings.
+    %
 :- type warn_non_tail_self_rec_calls_opt
     --->    do_not_warn_non_tail_self_rec_calls_opt
     ;       warn_non_tail_self_rec_calls_opt.
@@ -536,7 +536,8 @@ find_maybe_output_args_2(ModuleInfo, [Type | Types], [Mode | Modes],
     --->    do_not_warn_non_tail_rec_calls
     ;       warn_non_tail_rec_calls(
                 warning_or_error,
-                require_tail_recursion_type
+                warn_non_tail_self_rec_calls_opt,
+                warn_non_tail_mutual_rec_calls_opt
             ).
 
     % Has any self-recursive tail call been found so far?
@@ -955,14 +956,15 @@ maybe_report_nontail_recursive_call(CalleePredId, SelfOrMutRec, Context,
             WarnNonTailRecCalls = do_not_warn_non_tail_rec_calls
         ;
             WarnNonTailRecCalls = warn_non_tail_rec_calls(WarnOrError,
-                RecType),
+                WarnSelfRec, WarnMutualRec),
             ( if
-                require_complete_switch [RecType]
+                require_complete_switch [SelfOrMutRec]
                 (
-                    RecType = only_self_recursion_must_be_tail,
-                    SelfOrMutRec = call_is_self_rec
+                    SelfOrMutRec = call_is_self_rec,
+                    WarnSelfRec = warn_non_tail_self_rec_calls_opt
                 ;
-                    RecType = both_self_and_mutual_recursion_must_be_tail
+                    SelfOrMutRec = call_is_mutual_rec,
+                    WarnMutualRec = warn_non_tail_mutual_rec_calls_opt
                 )
             then
                 report_nontail_recursive_call(CalleePredId, SelfOrMutRec,
