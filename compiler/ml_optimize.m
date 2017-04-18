@@ -537,6 +537,8 @@ stmt_is_self_recursive_call_replaceable_with_jump_to_top(ModuleName, FuncName,
     % this optimization if we are optimizing a member function call.
     % XXX We don't generate managed C++ anymore. Is this a problem for
     % the other MLDS target languages?
+    % This has already been checked if CallKind = tail_call, but we need to
+    % re-test it for CallKind = no_return_call, see ml_tailcall.m.
     MaybeObject = no,
 
     % Is this a self-recursive call?
