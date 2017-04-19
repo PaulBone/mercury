@@ -94,6 +94,18 @@
     scc_map(pred_proc_id)::in, proc_info::in, proc_info::out,
     list(error_spec)::in, list(error_spec)::out) is det.
 
+%---------------------%
+
+    % Mark and generate warnings for both self and mutual tail recursive
+    % calls in the module.
+    %
+    % Any calls marked by this predicate are considered "candidate" tail
+    % calls.  The MLDS backend itself will do further checking and generate
+    % additional warnings if it finds they cannot be tail calls.
+    %
+:- pred mark_and_warn_tail_rec_calls_in_module_for_mlds_code_gen(
+    hlds_dependency_info::in, module_info::in, module_info::out) is det.
+
 %---------------------------------------------------------------------------%
 %
 % These predicates are exported for ml_tailcall.m; see above for the reason.
@@ -159,56 +171,8 @@
 %---------------------------------------------------------------------------%
 
 mark_self_and_mutual_tail_rec_calls_in_module(DepInfo, !ModuleInfo) :-
-    AddGoalFeature = add_goal_feature_self_or_mutual,
-    WarnNonTailRecParams = no_warnings_non_tail_rec_params,
-    get_bottom_up_sccs_with_entry_points(!.ModuleInfo, DepInfo,
-        BottomUpSCCsEntryPoints),
-    mark_tail_rec_calls_in_sccs(AddGoalFeature, WarnNonTailRecParams,
-        BottomUpSCCsEntryPoints, !ModuleInfo).
-
-:- pred mark_tail_rec_calls_in_sccs(add_goal_feature::in,
-    warn_non_tail_rec_params::in,
-    list(scc_with_entry_points)::in, module_info::in, module_info::out) is det.
-
-mark_tail_rec_calls_in_sccs(_AddGoalFeature, _WarnNonTailRecParams,
-        [], !ModuleInfo).
-mark_tail_rec_calls_in_sccs(AddGoalFeature, WarnNonTailRecParams,
-        [SCCEntry | SCCEntries], !ModuleInfo) :-
-    SCCEntry = scc_with_entry_points(SCC, _CalledFromHigherSCC, _Exported),
-    mark_tail_rec_calls_in_scc(AddGoalFeature, WarnNonTailRecParams,
-        SCC, set.to_sorted_list(SCC), !ModuleInfo),
-    mark_tail_rec_calls_in_sccs(AddGoalFeature, WarnNonTailRecParams,
-        SCCEntries, !ModuleInfo).
-
-:- pred mark_tail_rec_calls_in_scc(add_goal_feature::in,
-    warn_non_tail_rec_params::in,
-    set(pred_proc_id)::in, list(pred_proc_id)::in,
-    module_info::in, module_info::out) is det.
-
-mark_tail_rec_calls_in_scc(_AddGoalFeature, _WarnNonTailRecParams, _SCC,
-        [], !ModuleInfo).
-mark_tail_rec_calls_in_scc(AddGoalFeature, WarnNonTailRecParams, SCC,
-        [PredProcId | PredProcIds], !ModuleInfo) :-
-    PredProcId = proc(PredId, ProcId),
-    module_info_get_preds(!.ModuleInfo, PredTable0),
-    map.lookup(PredTable0, PredId, PredInfo0),
-    pred_info_get_proc_table(PredInfo0, ProcTable0),
-    map.lookup(ProcTable0, ProcId, ProcInfo0),
-
-    maybe_override_warn_params_for_proc(ProcInfo0,
-        WarnNonTailRecParams, WarnNonTailRecParamsForProc),
-
-    do_mark_tail_rec_calls_in_proc(AddGoalFeature, WarnNonTailRecParamsForProc,
-        !.ModuleInfo, SCC, PredId, ProcId, PredInfo0, ProcInfo0, ProcInfo,
-        _WasProcChanged, [], _Specs),
-
-    map.det_update(ProcId, ProcInfo, ProcTable0, ProcTable),
-    pred_info_set_proc_table(ProcTable, PredInfo0, PredInfo),
-    map.det_update(PredId, PredInfo, PredTable0, PredTable),
-    module_info_set_preds(PredTable, !ModuleInfo),
-
-    mark_tail_rec_calls_in_scc(AddGoalFeature, WarnNonTailRecParams, SCC,
-        PredProcIds, !ModuleInfo).
+    mark_self_and_mutual_tail_rec_calls_in_module(DepInfo,
+        no_warnings_non_tail_rec_params, !ModuleInfo).
 
 %---------------------------------------------------------------------------%
 %---------------------------------------------------------------------------%
@@ -346,6 +310,78 @@ mark_tail_rec_calls_in_proc_for_llds_code_gen(ModuleInfo, PredId, ProcId,
     do_mark_tail_rec_calls_in_proc(AddGoalFeature, WarnNonTailRecParamsForProc,
         ModuleInfo, SCC, PredId, ProcId, PredInfo, !ProcInfo,
         _WasProcChanged, !Specs).
+
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+
+mark_and_warn_tail_rec_calls_in_module_for_mlds_code_gen(DepInfo,
+        !ModuleInfo) :-
+    AddGoalFeature = add_goal_feature_self_or_mutual,
+    module_info_get_globals(!.ModuleInfo, Globals),
+    mark_tail_rec_call_options_for_llds_code_gen(Globals, _,
+        WarnNonTailRecParams),
+    get_bottom_up_sccs_with_entry_points(!.ModuleInfo, DepInfo,
+        BottomUpSCCsEntryPoints),
+    mark_tail_rec_calls_in_sccs(AddGoalFeature, WarnNonTailRecParams,
+        BottomUpSCCsEntryPoints, !ModuleInfo).
+
+%---------------------------------------------------------------------------%
+%---------------------------------------------------------------------------%
+
+:- pred mark_self_and_mutual_tail_rec_calls_in_module(hlds_dependency_info::in,
+    warn_non_tail_rec_params::in, module_info::in, module_info::out) is det.
+
+mark_self_and_mutual_tail_rec_calls_in_module(DepInfo, WarnNonTailRecParams,
+        !ModuleInfo) :-
+    AddGoalFeature = add_goal_feature_self_or_mutual,
+    get_bottom_up_sccs_with_entry_points(!.ModuleInfo, DepInfo,
+        BottomUpSCCsEntryPoints),
+    mark_tail_rec_calls_in_sccs(AddGoalFeature, WarnNonTailRecParams,
+        BottomUpSCCsEntryPoints, !ModuleInfo).
+
+:- pred mark_tail_rec_calls_in_sccs(add_goal_feature::in,
+    warn_non_tail_rec_params::in,
+    list(scc_with_entry_points)::in, module_info::in, module_info::out) is det.
+
+mark_tail_rec_calls_in_sccs(_AddGoalFeature, _WarnNonTailRecParams,
+        [], !ModuleInfo).
+mark_tail_rec_calls_in_sccs(AddGoalFeature, WarnNonTailRecParams,
+        [SCCEntry | SCCEntries], !ModuleInfo) :-
+    SCCEntry = scc_with_entry_points(SCC, _CalledFromHigherSCC, _Exported),
+    mark_tail_rec_calls_in_scc(AddGoalFeature, WarnNonTailRecParams,
+        SCC, set.to_sorted_list(SCC), !ModuleInfo),
+    mark_tail_rec_calls_in_sccs(AddGoalFeature, WarnNonTailRecParams,
+        SCCEntries, !ModuleInfo).
+
+:- pred mark_tail_rec_calls_in_scc(add_goal_feature::in,
+    warn_non_tail_rec_params::in,
+    set(pred_proc_id)::in, list(pred_proc_id)::in,
+    module_info::in, module_info::out) is det.
+
+mark_tail_rec_calls_in_scc(_AddGoalFeature, _WarnNonTailRecParams, _SCC,
+        [], !ModuleInfo).
+mark_tail_rec_calls_in_scc(AddGoalFeature, WarnNonTailRecParams, SCC,
+        [PredProcId | PredProcIds], !ModuleInfo) :-
+    PredProcId = proc(PredId, ProcId),
+    module_info_get_preds(!.ModuleInfo, PredTable0),
+    map.lookup(PredTable0, PredId, PredInfo0),
+    pred_info_get_proc_table(PredInfo0, ProcTable0),
+    map.lookup(ProcTable0, ProcId, ProcInfo0),
+
+    maybe_override_warn_params_for_proc(ProcInfo0,
+        WarnNonTailRecParams, WarnNonTailRecParamsForProc),
+
+    do_mark_tail_rec_calls_in_proc(AddGoalFeature, WarnNonTailRecParamsForProc,
+        !.ModuleInfo, SCC, PredId, ProcId, PredInfo0, ProcInfo0, ProcInfo,
+        _WasProcChanged, [], _Specs),
+
+    map.det_update(ProcId, ProcInfo, ProcTable0, ProcTable),
+    pred_info_set_proc_table(ProcTable, PredInfo0, PredInfo),
+    map.det_update(PredId, PredInfo, PredTable0, PredTable),
+    module_info_set_preds(PredTable, !ModuleInfo),
+
+    mark_tail_rec_calls_in_scc(AddGoalFeature, WarnNonTailRecParams, SCC,
+        PredProcIds, !ModuleInfo).
 
 %---------------------------------------------------------------------------%
 %---------------------------------------------------------------------------%

@@ -60,7 +60,9 @@
 :- import_module backend_libs.base_typeclass_info.
 :- import_module backend_libs.type_class_info.
 :- import_module backend_libs.type_ctor_info.
+:- import_module hlds.hlds_dependency_graph.
 :- import_module hlds.mark_static_terms.            % HLDS -> HLDS
+:- import_module hlds.mark_tail_calls.              % HLDS -> HLDS
 :- import_module libs.file_util.
 :- import_module libs.options.
 :- import_module ml_backend.add_trail_ops.          % HLDS -> HLDS
@@ -127,6 +129,9 @@ mlds_backend(!HLDS, !:MLDS, Specs, !DumpInfo, !IO) :-
     % which is used by ml_unify_gen.m when outputting closure layout structs.
     map_args_to_regs(Verbose, Stats, !HLDS, !IO),
     maybe_dump_hlds(!.HLDS, 425, "args_to_regs", !DumpInfo, !IO),
+
+    mark_tail_calls(Verbose, Stats, !HLDS, !IO),
+    maybe_dump_hlds(!.HLDS, 430, "mark_tail_calls", !DumpInfo, !IO),
 
     maybe_write_string(Verbose, "% Converting HLDS to MLDS...\n", !IO),
     ml_code_gen(!HLDS, !:MLDS),
@@ -350,6 +355,19 @@ mlds_gen_rtti_data(HLDS, !MLDS) :-
     GlobalData0 = !.MLDS ^ mlds_global_defns,
     add_rtti_datas_to_mlds(HLDS, RttiDatas, GlobalData0, GlobalData),
     !MLDS ^ mlds_global_defns := GlobalData.
+
+%---------------------------------------------------------------------------%
+
+:- pred mark_tail_calls(bool::in, bool::in,
+    module_info::in, module_info::out, io::di, io::uo) is det.
+
+mark_tail_calls(Verbose, Stats, !HLDS, !IO) :-
+    maybe_write_string(Verbose, "% Marking tail calls...\n", !IO),
+    maybe_flush_output(Verbose, !IO),
+    module_info_rebuild_dependency_info(!HLDS, DepInfo),
+    mark_and_warn_tail_rec_calls_in_module_for_mlds_code_gen(DepInfo, !HLDS),
+    maybe_write_string(Verbose, "% done.\n", !IO),
+    maybe_report_stats(Stats, !IO).
 
 %---------------------------------------------------------------------------%
 %
