@@ -365,6 +365,7 @@ mlds_gen_rtti_data(HLDS, !MLDS) :-
 mark_tail_calls(Verbose, Stats, !HLDS, !IO) :-
     maybe_write_string(Verbose, "% Marking tail calls...\n", !IO),
     maybe_flush_output(Verbose, !IO),
+    % We also use this dependency information in ml_gen_preds.
     module_info_rebuild_dependency_info(!HLDS, DepInfo),
     mark_and_warn_tail_rec_calls_in_module_for_mlds_code_gen(DepInfo, !HLDS),
     maybe_write_string(Verbose, "% done.\n", !IO),
