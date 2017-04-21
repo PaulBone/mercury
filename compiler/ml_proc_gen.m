@@ -286,22 +286,85 @@ ml_gen_code(!ModuleInfo, ConstStructMap, FuncDefns, !GlobalData) :-
         module_info_rebuild_dependency_info(!ModuleInfo, DepInfo)
     ),
     get_bottom_up_sccs_with_entry_points(!.ModuleInfo, DepInfo, SCCs),
-    ml_gen_sccs(ConstStructMap, SCCs, [], FuncDefns,
+    TailCallOpts = get_tailcall_options(!.ModuleInfo),
+    ml_gen_sccs(TailCallOpts, ConstStructMap, SCCs, [], FuncDefns,
         !ModuleInfo, !GlobalData).
 
-:- pred ml_gen_sccs(ml_const_struct_map::in,
+:- type optimize_tailcalls
+    --->    optimize_tailcalls(
+                ot_self             :: optimize_self_tailcalls,
+                ot_mutual           :: optimize_mutual_tailcalls
+            ).
+
+:- type optimize_self_tailcalls
+    --->    dont_optimize_self_tailcalls
+    ;       optimize_self_tailcalls.
+
+:- type optimize_mutual_tailcalls
+    --->    dont_optimize_mutual_tailcalls
+    ;       optimize_mutual_tailcalls_goto
+    ;       optimize_mutual_tailcalls_switch.
+
+:- func get_tailcall_options(module_info) = optimize_tailcalls.
+
+get_tailcall_options(ModuleInfo) = optimize_tailcalls(OptSelf, OptMutual) :-
+    module_info_get_globals(ModuleInfo, Globals),
+
+    globals.lookup_bool_option(Globals, optimize_tailcalls, OptSelfBool),
+    (
+        OptSelfBool = yes,
+        OptSelf = optimize_self_tailcalls
+    ;
+        OptSelfBool = no,
+        OptSelf = dont_optimize_self_tailcalls
+    ),
+
+    globals.lookup_bool_option(Globals, optimize_mutual_tailcalls_goto,
+        OptMutualGotoBool),
+    globals.lookup_bool_option(Globals, optimize_mutual_tailcalls_switch,
+        OptMutualSwitchBool),
+    (
+        OptMutualGotoBool = no,
+        OptMutualSwitchBool = no,
+        OptMutual = dont_optimize_mutual_tailcalls
+    ;
+        OptMutualGotoBool = no,
+        OptMutualSwitchBool = yes,
+        OptMutual = optimize_mutual_tailcalls_switch
+    ;
+        OptMutualGotoBool = yes,
+        OptMutualSwitchBool = no,
+        OptMutual = optimize_mutual_tailcalls_goto
+    ;
+        OptMutualGotoBool = yes,
+        OptMutualSwitchBool = yes,
+        unexpected($file, $pred,
+            "goto and switch options are mutually exclusive")
+    ).
+
+:- pred ml_gen_sccs(optimize_tailcalls::in, ml_const_struct_map::in,
     list(scc_with_entry_points)::in,
     list(mlds_function_defn)::in, list(mlds_function_defn)::out,
     module_info::in, module_info::out,
     ml_global_data::in, ml_global_data::out) is det.
 
-ml_gen_sccs(_, [], !CodeDefns, !ModuleInfo, !GlobalData).
-ml_gen_sccs(ConstStructMap, [SCC | SCCs], !CodeDefns, !ModuleInfo,
-        !GlobalData) :-
+ml_gen_sccs(_, _, [], !CodeDefns, !ModuleInfo, !GlobalData).
+ml_gen_sccs(OptimizeTailcalls, ConstStructMap, [SCC | SCCs], !CodeDefns,
+        !ModuleInfo, !GlobalData) :-
     PredProcIds = SCC ^ swep_scc_procs,
-    set.fold3(ml_maybe_gen_proc(ConstStructMap), PredProcIds,
-        !CodeDefns, !ModuleInfo, !GlobalData),
-    ml_gen_sccs(ConstStructMap, SCCs, !CodeDefns, !ModuleInfo, !GlobalData).
+    OptimizeMutualTailcalls = OptimizeTailcalls ^ ot_mutual,
+    (
+        OptimizeMutualTailcalls = dont_optimize_mutual_tailcalls,
+        set.fold3(ml_maybe_gen_proc(ConstStructMap), PredProcIds,
+            !CodeDefns, !ModuleInfo, !GlobalData)
+    ;
+        ( OptimizeMutualTailcalls = optimize_mutual_tailcalls_goto
+        ; OptimizeMutualTailcalls = optimize_mutual_tailcalls_switch
+        ),
+        sorry($file, $pred, "Sorry")
+    ),
+    ml_gen_sccs(OptimizeTailcalls, ConstStructMap, SCCs, !CodeDefns,
+        !ModuleInfo, !GlobalData).
 
 :- pred ml_maybe_gen_proc(ml_const_struct_map::in, pred_proc_id::in,
     list(mlds_function_defn)::in, list(mlds_function_defn)::out,

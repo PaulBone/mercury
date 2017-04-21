@@ -814,6 +814,9 @@
 
     %   - MLDS
     ;       optimize_tailcalls
+    ;       optimize_mutual_tailcalls
+    ;       optimize_mutual_tailcalls_goto
+    ;       optimize_mutual_tailcalls_switch
     ;       optimize_initializations
     ;       eliminate_local_vars
     ;       generate_trail_ops_inline
@@ -846,9 +849,6 @@
     ;       procs_per_c_function
     ;       everything_in_one_c_function
     ;       local_thread_engine_base
-
-    %   - IL
-    %   (none yet)
 
     %   - Erlang
     ;       erlang_switch_on_strings_as_atoms
@@ -1704,6 +1704,9 @@ option_defaults_2(optimization_option, [
 
     % MLDS
     optimize_tailcalls                  -   bool(no),
+    optimize_mutual_tailcalls           -   maybe_string_special,
+    optimize_mutual_tailcalls_goto      -   bool(no),
+    optimize_mutual_tailcalls_switch    -   bool(no),
     optimize_initializations            -   bool(no),
     eliminate_local_vars                -   bool(no),
     generate_trail_ops_inline           -   bool(yes),
@@ -2682,6 +2685,8 @@ long_option("mlds-optimise",        optimize).
 long_option("mlds-peephole",        optimize_peep).
 long_option("optimize-tailcalls",   optimize_tailcalls).
 long_option("optimise-tailcalls",   optimize_tailcalls).
+long_option("optimize-mutual-tailcalls", optimize_mutual_tailcalls).
+long_option("optimise-mutual-tailcalls", optimize_mutual_tailcalls).
 long_option("optimize-initializations", optimize_initializations).
 long_option("optimise-initializations", optimize_initializations).
 long_option("eliminate-local-vars", eliminate_local_vars).
@@ -3170,6 +3175,34 @@ special_handler(Option, SpecialData, !.OptionTable, Result) :-
             map.set(warn_non_tail_recursion_self, bool(WarnSelfRec),
                 !OptionTable),
             map.set(warn_non_tail_recursion_mutual, bool(WarnMutualRec),
+                !OptionTable)
+        ;
+            Option = optimize_mutual_tailcalls,
+            SpecialData = maybe_string(MaybeTailcalls0),
+            (
+                MaybeTailcalls0 = yes(Tailcalls0),
+                Tailcalls = to_lower(Tailcalls0),
+                (
+                    Tailcalls = "none",
+                    TailcallsGoto = no,
+                    TailcallsSwitch = no
+                ;
+                    Tailcalls = "goto",
+                    TailcallsGoto = yes,
+                    TailcallsSwitch = no
+                ;
+                    Tailcalls = "switch",
+                    TailcallsGoto = no,
+                    TailcallsSwitch = yes
+                )
+            ;
+                MaybeTailcalls0 = no,
+                TailcallsGoto = no,
+                TailcallsSwitch = no
+            ),
+            map.set(optimize_mutual_tailcalls_goto, bool(TailcallsGoto),
+                !OptionTable),
+            map.set(optimize_mutual_tailcalls_switch, bool(TailcallsSwitch),
                 !OptionTable)
         ;
             Option = infer_all,
