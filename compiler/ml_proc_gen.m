@@ -379,8 +379,10 @@ ml_maybe_gen_proc(ConstStructMap, PredProcId, !FuncDefns, !ModuleInfo,
     map.lookup(PredTable, PredId, PredInfo),
     pred_info_get_status(PredInfo, PredStatus),
 
-    % How can some modes be imported but not others, I don't totally
-    % understand this but I've coppied the original code.
+    % Some predicates can have some imported and some non-imported modes.
+    % This happens for special predicates (unify and compare).  Their in, in
+    % modes are imported bout any modes involving a non-ground inst are
+    % generated as needed.
     ( if PredStatus = pred_status(status_external(_)) then
         NonImportedProcIds = pred_info_procids(PredInfo)
     else
