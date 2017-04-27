@@ -352,11 +352,12 @@ get_tailcall_options(ModuleInfo) = optimize_tailcalls(OptSelf, OptMutual) :-
 ml_gen_sccs(_, _, [], !CodeDefns, !ModuleInfo, !GlobalData).
 ml_gen_sccs(OptimizeTailcalls, ConstStructMap, [SCC | SCCs], !CodeDefns,
         !ModuleInfo, !GlobalData) :-
-    PredProcIds = SCC ^ swep_scc_procs,
+    PredProcIds0 = SCC ^ swep_scc_procs,
+    filter(ml_should_gen_proc(!.ModuleInfo), PredProcIds0, PredProcIds),
     OptimizeMutualTailcalls = OptimizeTailcalls ^ ot_mutual,
     (
         OptimizeMutualTailcalls = dont_optimize_mutual_tailcalls,
-        set.fold3(ml_maybe_gen_proc(ConstStructMap), PredProcIds,
+        set.fold3(ml_gen_proc(ConstStructMap), PredProcIds,
             !CodeDefns, !ModuleInfo, !GlobalData)
     ;
         ( OptimizeMutualTailcalls = optimize_mutual_tailcalls_goto
@@ -367,63 +368,54 @@ ml_gen_sccs(OptimizeTailcalls, ConstStructMap, [SCC | SCCs], !CodeDefns,
     ml_gen_sccs(OptimizeTailcalls, ConstStructMap, SCCs, !CodeDefns,
         !ModuleInfo, !GlobalData).
 
-:- pred ml_maybe_gen_proc(ml_const_struct_map::in, pred_proc_id::in,
-    list(mlds_function_defn)::in, list(mlds_function_defn)::out,
-    module_info::in, module_info::out,
-    ml_global_data::in, ml_global_data::out) is det.
+:- pred ml_should_gen_proc(module_info::in, pred_proc_id::in) is semidet.
 
-ml_maybe_gen_proc(ConstStructMap, PredProcId, !FuncDefns, !ModuleInfo,
-        !GlobalData) :-
-    PredProcId = proc(PredId, ProcId),
-    module_info_get_preds(!.ModuleInfo, PredTable),
-    map.lookup(PredTable, PredId, PredInfo),
-    pred_info_get_status(PredInfo, PredStatus),
+ml_should_gen_proc(ModuleInfo, proc(PredId, ProcId)) :-
+    require_det (
+        module_info_get_preds(ModuleInfo, PredTable),
+        map.lookup(PredTable, PredId, PredInfo),
+        pred_info_get_status(PredInfo, PredStatus),
 
-    % Some predicates can have some imported and some non-imported modes.
-    % This happens for special predicates (unify and compare).  Their in, in
-    % modes are imported bout any modes involving a non-ground inst are
-    % generated as needed.
-    ( if PredStatus = pred_status(status_external(_)) then
-        NonImportedProcIds = pred_info_procids(PredInfo)
-    else
-        NonImportedProcIds = pred_info_non_imported_procids(PredInfo)
+        % Some predicates can have some imported and some non-imported
+        % modes.  This happens for special predicates (unify and compare).
+        % Their in, in modes are imported bout any modes involving a
+        % non-ground inst are generated as needed.
+        ( if PredStatus = pred_status(status_external(_)) then
+            NonImportedProcIds = pred_info_procids(PredInfo)
+        else
+            NonImportedProcIds = pred_info_non_imported_procids(PredInfo)
+        )
     ),
 
-    ( if
-        PredStatus \= pred_status(status_imported(_)),
+    PredStatus \= pred_status(status_imported(_)),
 
-        % We generate incorrect and unnecessary code for the external
-        % special preds which are pseudo_imported, so just ignore them.
-        not (
-            is_unify_or_compare_pred(PredInfo),
-            PredStatus =
-                pred_status(status_external(status_pseudo_imported))
-        ),
+    % We generate incorrect and unnecessary code for the external
+    % special preds which are pseudo_imported, so just ignore them.
+    not (
+        is_unify_or_compare_pred(PredInfo),
+        PredStatus =
+            pred_status(status_external(status_pseudo_imported))
+    ),
 
-        member(ProcId, NonImportedProcIds)
-    then
-        trace [io(!IO)] (
-            write_proc_progress_message("% Generating MLDS code for ",
-                PredProcId, !.ModuleInfo, !IO)
-        ),
-        ml_gen_proc(ConstStructMap, PredId, ProcId, !FuncDefns, !ModuleInfo,
-            !GlobalData)
-    else
-        true
-    ).
+    member(ProcId, NonImportedProcIds).
 
 %-----------------------------------------------------------------------------%
 %
 % Code for handling individual procedures.
 %
 
-:- pred ml_gen_proc(ml_const_struct_map::in, pred_id::in, proc_id::in,
+:- pred ml_gen_proc(ml_const_struct_map::in, pred_proc_id::in,
     list(mlds_function_defn)::in, list(mlds_function_defn)::out,
     module_info::in, module_info::out,
     ml_global_data::in, ml_global_data::out) is det.
 
-ml_gen_proc(ConstStructMap, PredId, ProcId, !FunctionDefns, !ModuleInfo,
+ml_gen_proc(ConstStructMap, PredProcId, !FunctionDefns, !ModuleInfo,
         !GlobalData) :-
+    trace [io(!IO)] (
+        write_proc_progress_message("% Generating MLDS code for ",
+            PredProcId, !.ModuleInfo, !IO)
+    ),
+
     % The specification of the HLDS allows goal_infos to overestimate
     % the set of non-locals. Such overestimates are bad for us for two reasons:
     %
@@ -437,6 +429,7 @@ ml_gen_proc(ConstStructMap, PredId, ProcId, !FunctionDefns, !ModuleInfo,
     %   repeatedly, once for each containing goal. Quantification does just one
     %   traversal.
 
+    proc(PredId, ProcId) = PredProcId,
     module_info_pred_proc_info(!.ModuleInfo, PredId, ProcId,
         PredInfo, ProcInfo0),
     requantify_proc_general(ordinary_nonlocals_no_lambda, ProcInfo0, ProcInfo),
@@ -533,7 +526,7 @@ ml_gen_proc(ConstStructMap, PredId, ProcId, !FunctionDefns, !ModuleInfo,
         _ModuleName, PlainFuncName),
     MLDS_ProcContext = mlds_make_context(ProcContext),
     DeclFlags = ml_gen_proc_decl_flags(!.ModuleInfo, PredId, ProcId),
-    MaybePredProcId = yes(proc(PredId, ProcId)),
+    MaybePredProcId = yes(PredProcId),
     proc_info_get_maybe_require_tailrec_info(ProcInfo0,
         MaybeRequireTailrecInfo),
     pred_info_get_attributes(PredInfo, Attributes),
