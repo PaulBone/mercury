@@ -288,7 +288,7 @@ ml_gen_code(!ModuleInfo, ConstStructMap, FuncDefns, !GlobalData) :-
     ),
     get_bottom_up_sccs_with_entry_points(!.ModuleInfo, DepInfo, SCCs),
     TailCallOpts = get_tailcall_options(!.ModuleInfo),
-    ml_gen_sccs(TailCallOpts, ConstStructMap, SCCs, [], FuncDefns,
+    list.foldl3(ml_gen_scc(TailCallOpts, ConstStructMap), SCCs, [], FuncDefns,
         !ModuleInfo, !GlobalData).
 
 :- type optimize_tailcalls
@@ -343,15 +343,14 @@ get_tailcall_options(ModuleInfo) = optimize_tailcalls(OptSelf, OptMutual) :-
             "goto and switch options are mutually exclusive")
     ).
 
-:- pred ml_gen_sccs(optimize_tailcalls::in, ml_const_struct_map::in,
-    list(scc_with_entry_points)::in,
+:- pred ml_gen_scc(optimize_tailcalls::in, ml_const_struct_map::in,
+    scc_with_entry_points::in,
     list(mlds_function_defn)::in, list(mlds_function_defn)::out,
     module_info::in, module_info::out,
     ml_global_data::in, ml_global_data::out) is det.
 
-ml_gen_sccs(_, _, [], !CodeDefns, !ModuleInfo, !GlobalData).
-ml_gen_sccs(OptimizeTailcalls, ConstStructMap, [SCC | SCCs], !CodeDefns,
-        !ModuleInfo, !GlobalData) :-
+ml_gen_scc(OptimizeTailcalls, ConstStructMap, SCC, !CodeDefns, !ModuleInfo,
+        !GlobalData) :-
     PredProcIds0 = SCC ^ swep_scc_procs,
     filter(ml_should_gen_proc(!.ModuleInfo), PredProcIds0, PredProcIds),
     OptimizeMutualTailcalls = OptimizeTailcalls ^ ot_mutual,
@@ -364,9 +363,7 @@ ml_gen_sccs(OptimizeTailcalls, ConstStructMap, [SCC | SCCs], !CodeDefns,
         ; OptimizeMutualTailcalls = optimize_mutual_tailcalls_switch
         ),
         sorry($file, $pred, "Sorry")
-    ),
-    ml_gen_sccs(OptimizeTailcalls, ConstStructMap, SCCs, !CodeDefns,
-        !ModuleInfo, !GlobalData).
+    ).
 
 :- pred ml_should_gen_proc(module_info::in, pred_proc_id::in) is semidet.
 
