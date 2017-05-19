@@ -59,6 +59,7 @@
 :- import_module parse_tree.prog_data_foreign.
 :- import_module parse_tree.prog_data_pragma.
 :- import_module parse_tree.prog_foreign.
+:- import_module parse_tree.prog_rename.
 :- import_module parse_tree.prog_type.
 
 :- import_module bool.
@@ -72,6 +73,7 @@
 :- import_module require.
 :- import_module set.
 :- import_module std_util.
+:- import_module varset.
 
 %-----------------------------------------------------------------------------%
 %-----------------------------------------------------------------------------%
@@ -356,13 +358,25 @@ ml_gen_scc(OptimizeTailcalls, ConstStructMap, SCC, !CodeDefns, !ModuleInfo,
     OptimizeMutualTailcalls = OptimizeTailcalls ^ ot_mutual,
     (
         OptimizeMutualTailcalls = dont_optimize_mutual_tailcalls,
+
         set.fold3(ml_gen_proc(ConstStructMap), PredProcIds,
             !CodeDefns, !ModuleInfo, !GlobalData)
     ;
         ( OptimizeMutualTailcalls = optimize_mutual_tailcalls_goto
         ; OptimizeMutualTailcalls = optimize_mutual_tailcalls_switch
         ),
-        sorry($file, $pred, "Sorry")
+
+        % Find the Tail SCCs.
+        ProcsCalledFromAbove = (SCC ^ swep_called_from_higher_sccs)
+            `intersect` PredProcIds,
+        TSCCDepInfo = build_proc_dependency_graph(!.ModuleInfo, PredProcIds,
+            only_tail_calls),
+        get_bottom_up_sccs_with_entry_points(!.ModuleInfo, TSCCDepInfo,
+            TSCCsEntries),
+
+        foldl3(ml_gen_tscc(OptimizeTailcalls, ConstStructMap,
+                ProcsCalledFromAbove),
+            TSCCsEntries, !CodeDefns, !ModuleInfo, !GlobalData)
     ).
 
 :- pred ml_should_gen_proc(module_info::in, pred_proc_id::in) is semidet.
@@ -395,6 +409,170 @@ ml_should_gen_proc(ModuleInfo, proc(PredId, ProcId)) :-
     ),
 
     member(ProcId, NonImportedProcIds).
+
+:- pred ml_gen_tscc(optimize_tailcalls::in, ml_const_struct_map::in,
+    set(pred_proc_id)::in, scc_with_entry_points::in,
+    list(mlds_defn)::in, list(mlds_defn)::out,
+    module_info::in, module_info::out,
+    ml_global_data::in, ml_global_data::out) is det.
+
+ml_gen_tscc(OptimizeTailcalls, ConstStructMap, SCCProcsCalledFromAbove,
+        TSCC, !CodeDefns, !ModuleInfo, !GlobalData) :-
+    Procs = TSCC ^ swep_scc_procs,
+    ( if empty(Procs) then
+        unexpected($file, $pred, "Empty TSCC")
+    else if is_singleton(Procs, Proc) then
+        % TODO: Do TCO
+        ml_gen_proc(ConstStructMap, Proc, !CodeDefns, !ModuleInfo,
+            !GlobalData)
+    else if
+        % We cannot perform mutual TCO if any of the procedures is nondet.
+        some [EachProc] (
+            set.member(EachProc, Procs),
+            require_det (
+                module_info_proc_info(!.ModuleInfo, EachProc, ProcInfo),
+                CodeModel = proc_info_interface_code_model(ProcInfo)
+            ),
+            CodeModel = model_non
+        )
+    then
+        fold3(ml_gen_proc(ConstStructMap), Procs, !CodeDefns, !ModuleInfo,
+            !GlobalData)
+    else
+        % Do TCO for mutual recursion
+        ml_gen_tscc_procs(OptimizeTailcalls, ConstStructMap,
+            SCCProcsCalledFromAbove, Procs, !CodeDefns, !ModuleInfo,
+            !GlobalData)
+    ).
+
+:- pred ml_gen_tscc_procs(optimize_tailcalls::in, ml_const_struct_map::in,
+    set(pred_proc_id)::in, set(pred_proc_id)::in,
+    list(mlds_defn)::in, list(mlds_defn)::out,
+    module_info::in, module_info::out,
+    ml_global_data::in, ml_global_data::out) is det.
+
+ml_gen_tscc_procs(OptimizeTailcalls, ConstStructMap,
+        SCCProcsCalledFromAbove, ProcsSet, !CodeDefns, !ModuleInfo,
+        !GlobalData) :-
+    % Find the common varsets and build a mapping to do renaming.
+    Procs0 = set.to_sorted_list(ProcsSet),
+    (
+        Procs0 = [FirstProc0 | RestProcs0],
+        renaming_first_proc(FirstProc0, FirstProc, OutputVars, Varset0,
+            Vartypes0, !ModuleInfo),
+        % Rename the vars in the other procs as needed,
+        map_foldl3(renaming_rest_proc(OutputVars), RestProcs0, RestProcs,
+            Varset0, Varset, Vartypes0, Vartypes, !ModuleInfo),
+        Procs = [FirstProc | RestProcs]
+    ;
+        Procs0 = [],
+        unexpected($file, $pred, "empty TSCC")
+    ),
+
+    % Allocate labels or tokens.
+    foldl2((pred(P::in, M0::in, M::out, N0::in, N::out) is det :-
+            det_insert(P ^ rp_pred_proc_id, N0, M0, M),
+            N = N0 + 1
+        ), Procs, init, LabelMap, 0, NumProcs),
+
+    % Build declrations for the output variables and the final return
+    % statement.
+    % XXX: Do preds/functions need to agree about which variables to return
+    % or copy?  Actually handle it in the wrapper.
+    % Figure out what the fields in !Info for output variables do.
+
+    % Build the main body,
+    map(ml_gen_proc_in_tscc, Procs, Defns)
+
+    % For eacn entry procedure, build a wrapper and setup the inputs, give
+    % it the correct name..
+
+    true.
+
+:- type renamed_proc
+    --->    renamed_proc(
+                rp_pred_proc_id :: pred_proc_id,
+                rp_goal         :: hlds_goal,
+                rp_head_vars    :: list(prog_var)
+            ).
+
+    % Don't actually do any renaming, return the varset and vartypes, these
+    % are used as the initial varset and vartypes for the whole TSCC.  Also
+    % return the list of output variables which will be the output variables
+    % in the whole TSCC.
+    %
+:- pred renaming_first_proc(pred_proc_id::in, renamed_proc::out,
+    list(prog_var)::out, prog_varset::out, vartypes::out,
+    module_info::in, module_info::out) is det.
+
+renaming_first_proc(proc(PredId, ProcId), Proc, OutputVars, Varset, Vartypes,
+        !ModuleInfo) :-
+    module_info_pred_proc_info(!.ModuleInfo, PredId, ProcId,
+        PredInfo, ProcInfo0),
+
+    % See ml_gen_proc for why we requantify.
+    requantify_proc_general(ordinary_nonlocals_no_lambda, ProcInfo0, ProcInfo),
+    module_info_set_pred_proc_info(PredId, ProcId, PredInfo, ProcInfo,
+        !ModuleInfo),
+
+    proc_info_get_varset(ProcInfo, Varset),
+    proc_info_get_vartypes(ProcInfo, Vartypes),
+    proc_info_get_headvars(ProcInfo, HeadVars),
+    proc_info_get_argmodes(ProcInfo, ArgModes),
+    HeadTypes = map(map.lookup(Vartypes), HeadVars),
+    modes_to_top_functor_modes(!.ModuleInfo, ArgModes, HeadTypes,
+        TopFunctorModes),
+    filter_map_corresponding(
+        (pred(Var::in, top_out::in, Var::out) is semidet),
+        HeadVars, TopFunctorModes, OutputVars),
+
+    proc_info_get_goal(ProcInfo, Goal),
+    Proc = renamed_proc(proc(PredId, ProcId), Goal, HeadVars).
+
+:- pred renaming_rest_proc(list(prog_var)::in, pred_proc_id::in,
+    renamed_proc::out, prog_varset::in, prog_varset::out,
+    vartypes::in, vartypes::out, module_info::in, module_info::out) is det.
+
+renaming_rest_proc(TSCCOutputs, proc(PredId, ProcId), Proc, !Varset,
+        !Vartypes, !ModuleInfo) :-
+    renaming_first_proc(proc(PredId, ProcId), _, ProcOutputs, ProcVarset0,
+        ProcVartypes, !ModuleInfo),
+
+    % Map each output onto its TSCCOutput,
+    foldl_corresponding(det_insert, ProcOutputs, TSCCOutputs,
+        init, Renaming0),
+    % Map other colliding variables to new fresh variables.
+    ProcVarset = ProcVarset0 `delete_vars` ProcOutputs,
+    merge_renaming(!.Varset, ProcVarset, !:Varset, Renaming1),
+    Renaming = map.merge(Renaming0, Renaming1),
+
+    % Perform the renaming.
+    map.foldl((pred(OldVar::in, NewVar::in, VT0::in, VT::out) is det :-
+            lookup_var_type(ProcVartypes, OldVar, Type),
+            add_var_type(NewVar, Type, VT0, VT)
+        ), Renaming, !Vartypes),
+    module_info_pred_proc_info(!.ModuleInfo, PredId, ProcId,
+        _PredInfo, ProcInfo),
+
+    proc_info_get_goal(ProcInfo, Goal0),
+    must_rename_vars_in_goal(Renaming, Goal0, Goal),
+
+    proc_info_get_headvars(ProcInfo, HeadVars0),
+    rename_var_list(must_rename, Renaming, HeadVars0, HeadVars),
+
+    Proc = renamed_proc(proc(PredId, ProcId), Goal, HeadVars).
+
+%    module_info_set_pred_proc_info(PredId, ProcId, PredInfo, ProcInfo,
+%        !ModuleInfo).
+
+:- pred ml_gen_proc_in_tscc(renamed_proc::in, mlds_defn::out) is det.
+
+ml_gen_proc_in_tscc(ModuleInfo, Proc, Defn) :-
+    some [!Info] (
+        !:Info = ml_gen_info_init(ModuleInfo, ConstStructMap,
+            PredId, ProcId, PredInfo, !.GlobalData),
+
+        ml_det_copy_out_vars(ModuleInfo, CopiedOutputVars, !Info),
 
 %-----------------------------------------------------------------------------%
 %
