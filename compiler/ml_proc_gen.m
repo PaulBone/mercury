@@ -351,7 +351,7 @@ get_tailcall_options(ModuleInfo) = optimize_tailcalls(OptSelf, OptMutual) :-
     module_info::in, module_info::out,
     ml_global_data::in, ml_global_data::out) is det.
 
-ml_gen_scc(OptimizeTailcalls, ConstStructMap, SCC, !CodeDefns, !ModuleInfo,
+ml_gen_scc(OptimizeTailcalls, ConstStructMap, SCC, !FuncDefns, !ModuleInfo,
         !GlobalData) :-
     PredProcIds0 = SCC ^ swep_scc_procs,
     filter(ml_should_gen_proc(!.ModuleInfo), PredProcIds0, PredProcIds),
@@ -360,7 +360,7 @@ ml_gen_scc(OptimizeTailcalls, ConstStructMap, SCC, !CodeDefns, !ModuleInfo,
         OptimizeMutualTailcalls = dont_optimize_mutual_tailcalls,
 
         set.fold3(ml_gen_proc(ConstStructMap), PredProcIds,
-            !CodeDefns, !ModuleInfo, !GlobalData)
+            !FuncDefns, !ModuleInfo, !GlobalData)
     ;
         ( OptimizeMutualTailcalls = optimize_mutual_tailcalls_goto
         ; OptimizeMutualTailcalls = optimize_mutual_tailcalls_switch
@@ -376,7 +376,7 @@ ml_gen_scc(OptimizeTailcalls, ConstStructMap, SCC, !CodeDefns, !ModuleInfo,
 
         foldl3(ml_gen_tscc(OptimizeTailcalls, ConstStructMap,
                 ProcsCalledFromAbove),
-            TSCCsEntries, !CodeDefns, !ModuleInfo, !GlobalData)
+            TSCCsEntries, !FuncDefns, !ModuleInfo, !GlobalData)
     ).
 
 :- pred ml_should_gen_proc(module_info::in, pred_proc_id::in) is semidet.
@@ -412,18 +412,18 @@ ml_should_gen_proc(ModuleInfo, proc(PredId, ProcId)) :-
 
 :- pred ml_gen_tscc(optimize_tailcalls::in, ml_const_struct_map::in,
     set(pred_proc_id)::in, scc_with_entry_points::in,
-    list(mlds_defn)::in, list(mlds_defn)::out,
+    list(mlds_function_defn)::in, list(mlds_function_defn)::out,
     module_info::in, module_info::out,
     ml_global_data::in, ml_global_data::out) is det.
 
 ml_gen_tscc(OptimizeTailcalls, ConstStructMap, SCCProcsCalledFromAbove,
-        TSCC, !CodeDefns, !ModuleInfo, !GlobalData) :-
+        TSCC, !FuncDefns, !ModuleInfo, !GlobalData) :-
     Procs = TSCC ^ swep_scc_procs,
     ( if empty(Procs) then
         unexpected($file, $pred, "Empty TSCC")
     else if is_singleton(Procs, Proc) then
         % TODO: Do TCO
-        ml_gen_proc(ConstStructMap, Proc, !CodeDefns, !ModuleInfo,
+        ml_gen_proc(ConstStructMap, Proc, !FuncDefns, !ModuleInfo,
             !GlobalData)
     else if
         % We cannot perform mutual TCO if any of the procedures is nondet.
@@ -436,23 +436,23 @@ ml_gen_tscc(OptimizeTailcalls, ConstStructMap, SCCProcsCalledFromAbove,
             CodeModel = model_non
         )
     then
-        fold3(ml_gen_proc(ConstStructMap), Procs, !CodeDefns, !ModuleInfo,
+        fold3(ml_gen_proc(ConstStructMap), Procs, !FuncDefns, !ModuleInfo,
             !GlobalData)
     else
         % Do TCO for mutual recursion
         ml_gen_tscc_procs(OptimizeTailcalls, ConstStructMap,
-            SCCProcsCalledFromAbove, Procs, !CodeDefns, !ModuleInfo,
+            SCCProcsCalledFromAbove, Procs, !FuncDefns, !ModuleInfo,
             !GlobalData)
     ).
 
 :- pred ml_gen_tscc_procs(optimize_tailcalls::in, ml_const_struct_map::in,
     set(pred_proc_id)::in, set(pred_proc_id)::in,
-    list(mlds_defn)::in, list(mlds_defn)::out,
+    list(mlds_function_defn)::in, list(mlds_function_defn)::out,
     module_info::in, module_info::out,
     ml_global_data::in, ml_global_data::out) is det.
 
-ml_gen_tscc_procs(OptimizeTailcalls, ConstStructMap,
-        SCCProcsCalledFromAbove, ProcsSet, !CodeDefns, !ModuleInfo,
+ml_gen_tscc_procs(_OptimizeTailcalls, _ConstStructMap,
+        _SCCProcsCalledFromAbove, ProcsSet, !FuncDefns, !ModuleInfo,
         !GlobalData) :-
     % Find the common varsets and build a mapping to do renaming.
     Procs0 = set.to_sorted_list(ProcsSet),
@@ -462,7 +462,7 @@ ml_gen_tscc_procs(OptimizeTailcalls, ConstStructMap,
             Vartypes0, !ModuleInfo),
         % Rename the vars in the other procs as needed,
         map_foldl3(renaming_rest_proc(OutputVars), RestProcs0, RestProcs,
-            Varset0, Varset, Vartypes0, Vartypes, !ModuleInfo),
+            Varset0, _Varset, Vartypes0, _Vartypes, !ModuleInfo),
         Procs = [FirstProc | RestProcs]
     ;
         Procs0 = [],
@@ -473,7 +473,7 @@ ml_gen_tscc_procs(OptimizeTailcalls, ConstStructMap,
     foldl2((pred(P::in, M0::in, M::out, N0::in, N::out) is det :-
             det_insert(P ^ rp_pred_proc_id, N0, M0, M),
             N = N0 + 1
-        ), Procs, init, LabelMap, 0, NumProcs),
+        ), Procs, init, _LabelMap, 0, _NumProcs),
 
     % Build declrations for the output variables and the final return
     % statement.
@@ -482,10 +482,10 @@ ml_gen_tscc_procs(OptimizeTailcalls, ConstStructMap,
     % Figure out what the fields in !Info for output variables do.
 
     % Build the main body,
-    map(ml_gen_proc_in_tscc, Procs, Defns)
+    %map(ml_gen_proc_in_tscc, Procs, Defns)
 
     % For eacn entry procedure, build a wrapper and setup the inputs, give
-    % it the correct name..
+    % it the correct name. New variables for the inputs will be necessary.
 
     true.
 
@@ -562,17 +562,14 @@ renaming_rest_proc(TSCCOutputs, proc(PredId, ProcId), Proc, !Varset,
 
     Proc = renamed_proc(proc(PredId, ProcId), Goal, HeadVars).
 
-%    module_info_set_pred_proc_info(PredId, ProcId, PredInfo, ProcInfo,
-%        !ModuleInfo).
-
-:- pred ml_gen_proc_in_tscc(renamed_proc::in, mlds_defn::out) is det.
-
-ml_gen_proc_in_tscc(ModuleInfo, Proc, Defn) :-
-    some [!Info] (
-        !:Info = ml_gen_info_init(ModuleInfo, ConstStructMap,
-            PredId, ProcId, PredInfo, !.GlobalData),
-
-        ml_det_copy_out_vars(ModuleInfo, CopiedOutputVars, !Info),
+%:- pred ml_gen_proc_in_tscc(renamed_proc::in, mlds_defn::out) is det.
+%
+%ml_gen_proc_in_tscc(ModuleInfo, Proc, Defn) :-
+%    some [!Info] (
+%        !:Info = ml_gen_info_init(ModuleInfo, ConstStructMap,
+%            PredId, ProcId, PredInfo, !.GlobalData),
+%
+%        ml_det_copy_out_vars(ModuleInfo, CopiedOutputVars, !Info),
 
 %-----------------------------------------------------------------------------%
 %
