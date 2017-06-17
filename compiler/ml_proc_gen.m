@@ -430,10 +430,20 @@ ml_gen_tscc(OptimizeTailcalls, ConstStructMap, SCCProcsCalledFromAbove,
         some [EachProc] (
             set.member(EachProc, Procs),
             require_det (
-                module_info_proc_info(!.ModuleInfo, EachProc, ProcInfo),
-                CodeModel = proc_info_interface_code_model(ProcInfo)
+                module_info_pred_proc_info(!.ModuleInfo, EachProc, PredInfo,
+                    ProcInfo)
             ),
-            CodeModel = model_non
+            (
+                require_det (
+                    CodeModel = proc_info_interface_code_model(ProcInfo)
+                ),
+                CodeModel = model_non
+            ;
+                require_det (
+                    pred_info_get_status(PredInfo, PredStatus)
+                ),
+                PredStatus = pred_status(status_external(_))
+            )
         )
     then
         fold3(ml_gen_proc(ConstStructMap), Procs, !FuncDefns, !ModuleInfo,
@@ -451,8 +461,8 @@ ml_gen_tscc(OptimizeTailcalls, ConstStructMap, SCCProcsCalledFromAbove,
     module_info::in, module_info::out,
     ml_global_data::in, ml_global_data::out) is det.
 
-ml_gen_tscc_procs(_OptimizeTailcalls, _ConstStructMap,
-        _SCCProcsCalledFromAbove, ProcsSet, !FuncDefns, !ModuleInfo,
+ml_gen_tscc_procs(_OptimizeTailcalls, ConstStructMap,
+        SCCProcsCalledFromAbove, ProcsSet, !FuncDefns, !ModuleInfo,
         !GlobalData) :-
     % Find the common varsets and build a mapping to do renaming.
     Procs0 = set.to_sorted_list(ProcsSet),
@@ -468,6 +478,9 @@ ml_gen_tscc_procs(_OptimizeTailcalls, _ConstStructMap,
         Procs0 = [],
         unexpected($file, $pred, "empty TSCC")
     ),
+
+    % While generating code we can assume that none of the procs is external
+    % and all are either model_det or model_semi.
 
     % Allocate labels or tokens.
     foldl2((pred(P::in, M0::in, M::out, N0::in, N::out) is det :-
@@ -486,8 +499,51 @@ ml_gen_tscc_procs(_OptimizeTailcalls, _ConstStructMap,
 
     % For eacn entry procedure, build a wrapper and setup the inputs, give
     % it the correct name. New variables for the inputs will be necessary.
+    % XXX: Make sure that we do this for any procedures called from within
+    % the TSCC that aren't tail calls.
+    set.fold2(ml_gen_tscc_wrapper(ConstStructMap, !.ModuleInfo),
+        SCCProcsCalledFromAbove, !FuncDefns, !GlobalData).
 
-    true.
+:- pred ml_gen_tscc_wrapper(ml_const_struct_map::in, module_info::in,
+    pred_proc_id::in,
+    list(mlds_function_defn)::in, list(mlds_function_defn)::out,
+    ml_global_data::in, ml_global_data::out) is det.
+
+ml_gen_tscc_wrapper(ConstStructMap, ModuleInfo, PredProcId, !FuncDefns,
+        !GlobalData) :-
+    proc(PredId, ProcId) = PredProcId,
+    module_info_pred_proc_info(ModuleInfo, PredId, ProcId,
+        PredInfo, ProcInfo),
+
+    some [!Info] (
+        !:Info = ml_gen_info_init(ModuleInfo, ConstStructMap,
+            PredId, ProcId, ProcInfo, !.GlobalData),
+        ml_gen_proc_params(PredId, ProcId, MLDS_Params, !Info),
+
+        % These two are almost certainly empty.
+        ml_gen_info_get_env_var_names(!.Info, EnvVarNames),
+        ml_gen_info_get_closure_wrapper_defns(!.Info, ExtraDefns),
+
+        ml_gen_info_get_global_data(!.Info, !:GlobalData)
+    ),
+
+    ml_gen_proc_label(ModuleInfo, PredId, ProcId,
+        _ModuleName, PlainFuncName),
+    proc_info_get_context(ProcInfo, ProcContext),
+    Context = mlds_make_context(ProcContext),
+    DeclFlags = ml_gen_proc_decl_flags(ModuleInfo, PredId, ProcId),
+    MaybePredProcId = yes(PredProcId),
+    pred_info_get_attributes(PredInfo, Attributes),
+    attributes_to_attribute_list(Attributes, AttributeList),
+    MLDS_Attributes =
+        attributes_to_mlds_attributes(ModuleInfo, AttributeList),
+
+    MaybeRequireTailrecInfo = no,
+
+    FuncDefn = mlds_function_defn(mlds_function_name(PlainFuncName),
+        Context, DeclFlags, MaybePredProcId, MLDS_Params,
+        FunctionBody, MLDS_Attributes, EnvVarNames, MaybeRequireTailrecInfo),
+    !:FuncDefns = ExtraDefns ++ [FuncDefn | !.FuncDefns].
 
 :- type renamed_proc
     --->    renamed_proc(
